@@ -19,7 +19,7 @@ export default defineConfig({
     strictPort: true,
     proxy: {
       '/api': {
-        target: process.env.services__api__https__0 || process.env.services__api__http__0 || 'https://localhost:7100',
+        target: process.env.services__api__http__0 || process.env.services__api__https__0 || 'http://localhost:5208',
         changeOrigin: true,
         secure: false
       }

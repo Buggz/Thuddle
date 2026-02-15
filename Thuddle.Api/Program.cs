@@ -1,5 +1,6 @@
-using Keycloak.AuthServices.Authentication;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Thuddle.Api.Data;
+using Thuddle.Api.Endpoints;
 using Thuddle.Api.Services;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -12,20 +13,37 @@ builder.AddNpgsqlDbContext<ThuddleDbContext>("thuddledb");
 // Azure Blob Storage via Aspire
 builder.AddAzureBlobServiceClient("blobs");
 
-// Keycloak JWT Bearer authentication
+// JWT Bearer authentication against Keycloak
 // Keycloak__AuthServerUrl and Keycloak__Realm are injected by Aspire via WithReference(realm)
-builder.Services.AddKeycloakWebApiAuthentication(
-    builder.Configuration,
-    jwtBearerOptions =>
+var keycloakUrl = builder.Configuration["Keycloak:AuthServerUrl"];
+var realm = builder.Configuration["Keycloak:Realm"];
+var authority = $"{keycloakUrl}/realms/{realm}";
+
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
     {
-        jwtBearerOptions.RequireHttpsMetadata = false;
-        jwtBearerOptions.TokenValidationParameters.ValidateAudience = false;
+        options.Authority = authority;
+        options.RequireHttpsMetadata = false;
+        options.TokenValidationParameters.ValidateAudience = false;
+        options.TokenValidationParameters.NameClaimType = "email";
+        options.MapInboundClaims = false;
+        options.Events = new JwtBearerEvents
+        {
+            OnAuthenticationFailed = context =>
+            {
+                var logger = context.HttpContext.RequestServices.GetRequiredService<ILoggerFactory>()
+                    .CreateLogger("JwtBearer");
+                logger.LogError(context.Exception, "JWT authentication failed. Authority: {Authority}", authority);
+                return Task.CompletedTask;
+            }
+        };
     });
 
 builder.Services.AddAuthorization();
 
 builder.Services.AddSingleton<ImageScaler>();
 builder.Services.AddSingleton<ProfilePictureStorage>();
+builder.Services.AddMemoryCache();
 
 // CORS for local development
 builder.Services.AddCors(options =>
@@ -47,12 +65,12 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 }
 
-app.UseHttpsRedirection();
 app.UseCors();
 app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapDefaultEndpoints();
+app.MapProfileEndpoints();
 
 app.MapGet("/api/hello", () => Results.Ok(new { message = "Hello from Thuddle API!" }))
    .RequireAuthorization();

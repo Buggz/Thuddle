@@ -9,7 +9,11 @@ export const useAuthStore = defineStore('auth', () => {
 
   const userName = computed(() => {
     if (!user.value) return ''
-    return user.value.preferred_username || user.value.name || ''
+    return user.value.email || ''
+  })
+
+  const keycloakId = computed(() => {
+    return user.value?.sub || user.value?.sid || user.value?.email || ''
   })
 
   async function init() {
@@ -62,6 +66,7 @@ export const useAuthStore = defineStore('auth', () => {
     user,
     token,
     userName,
+    keycloakId,
     init,
     login,
     logout,
