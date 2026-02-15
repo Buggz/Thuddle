@@ -1,5 +1,6 @@
 using Keycloak.AuthServices.Authentication;
 using Thuddle.Api.Data;
+using Thuddle.Api.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -7,6 +8,9 @@ builder.AddServiceDefaults();
 
 // PostgreSQL via Aspire (connection string "thuddledb" injected by AppHost)
 builder.AddNpgsqlDbContext<ThuddleDbContext>("thuddledb");
+
+// Azure Blob Storage via Aspire
+builder.AddAzureBlobServiceClient("blobs");
 
 // Keycloak JWT Bearer authentication
 // Keycloak__AuthServerUrl and Keycloak__Realm are injected by Aspire via WithReference(realm)
@@ -19,6 +23,9 @@ builder.Services.AddKeycloakWebApiAuthentication(
     });
 
 builder.Services.AddAuthorization();
+
+builder.Services.AddSingleton<ImageScaler>();
+builder.Services.AddSingleton<ProfilePictureStorage>();
 
 // CORS for local development
 builder.Services.AddCors(options =>

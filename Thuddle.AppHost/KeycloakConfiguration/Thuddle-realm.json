@@ -7,22 +7,6 @@
   "duplicateEmailsAllowed": false,
   "resetPasswordAllowed": true,
   "bruteForceProtected": true,
-  "roles": {
-    "realm": [
-      {
-        "name": "user",
-        "description": "Standard user role",
-        "composite": false,
-        "clientRole": false
-      },
-      {
-        "name": "admin",
-        "description": "Administrator role",
-        "composite": false,
-        "clientRole": false
-      }
-    ]
-  },
   "clients": [
     {
       "clientId": "thuddle-web",
@@ -55,8 +39,8 @@
           }
         }
       ],
-      "defaultClientScopes": ["web-origins", "acr", "profile", "roles", "email"],
-      "optionalClientScopes": ["address", "phone", "offline_access"]
+      "defaultClientScopes": ["email"],
+      "optionalClientScopes": []
     },
     {
       "clientId": "thuddle-api",
@@ -66,7 +50,7 @@
       "publicClient": false,
       "standardFlowEnabled": false,
       "protocol": "openid-connect",
-      "defaultClientScopes": ["web-origins", "acr", "profile", "roles", "email"]
+      "defaultClientScopes": ["email"]
     }
   ],
   "users": [
@@ -83,8 +67,7 @@
           "value": "testpassword",
           "temporary": false
         }
-      ],
-      "realmRoles": ["user"]
+      ]
     },
     {
       "username": "admin",
@@ -99,8 +82,7 @@
           "value": "adminpassword",
           "temporary": false
         }
-      ],
-      "realmRoles": ["user", "admin"]
+      ]
     }
   ]
 }
