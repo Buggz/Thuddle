@@ -39,8 +39,20 @@ public class MigrationWorker(
         await strategy.ExecuteAsync(async () =>
         {
             logger.LogInformation("Applying pending migrations...");
-            await dbContext.Database.MigrateAsync(ct);
-            logger.LogInformation("Migrations applied successfully.");
+            try
+            {
+                // Ensure database exists first
+                await dbContext.Database.EnsureCreatedAsync(ct);
+                
+                // Then apply migrations
+                await dbContext.Database.MigrateAsync(ct);
+                logger.LogInformation("Migrations applied successfully.");
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error during migration: {Message}", ex.Message);
+                throw;
+            }
         });
     }
 }
