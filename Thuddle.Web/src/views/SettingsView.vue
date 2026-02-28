@@ -14,13 +14,14 @@ const hasProfilePicture = ref(false)
 const pictureUrl = ref(null)
 const pictureKey = ref(0)
 
-function authHeaders() {
-  return { Authorization: `Bearer ${auth.getToken()}` }
+async function authHeaders() {
+  const token = await auth.getAccessToken()
+  return { Authorization: `Bearer ${token}` }
 }
 
 async function loadProfile() {
   try {
-    const res = await fetch('/api/profile', { headers: authHeaders() })
+    const res = await fetch('/api/profile', { headers: await authHeaders() })
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     const data = await res.json()
     displayName.value = data.displayName || ''
@@ -41,7 +42,7 @@ async function saveDisplayName() {
   try {
     const res = await fetch('/api/profile/displayname', {
       method: 'PUT',
-      headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+      headers: { ...(await authHeaders()), 'Content-Type': 'application/json' },
       body: JSON.stringify({ displayName: displayName.value })
     })
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
@@ -69,7 +70,7 @@ async function uploadPicture(event) {
   try {
     const res = await fetch('/api/profile/picture', {
       method: 'POST',
-      headers: authHeaders(),
+      headers: await authHeaders(),
       body: formData
     })
     if (!res.ok) {

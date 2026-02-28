@@ -8,9 +8,10 @@ const error = ref(null)
 
 async function fetchHello() {
   try {
+    const token = await auth.getAccessToken()
     const response = await fetch('/api/hello', {
       headers: {
-        Authorization: `Bearer ${auth.getToken()}`
+        Authorization: `Bearer ${token}`
       }
     })
     if (!response.ok) throw new Error(`HTTP ${response.status}`)

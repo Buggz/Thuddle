@@ -1,7 +1,9 @@
 <script setup>
 import { RouterView, RouterLink } from 'vue-router'
+import { useKeycloak } from '@josempgon/vue-keycloak'
 import { useAuthStore } from '@/stores/auth'
 
+const { isPending } = useKeycloak()
 const auth = useAuthStore()
 </script>
 
@@ -62,7 +64,8 @@ const auth = useAuthStore()
       </div>
     </nav>
     <main class="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
-      <RouterView />
+      <div v-if="isPending" class="text-center py-12 text-gray-400">Loading...</div>
+      <RouterView v-else />
     </main>
   </div>
 </template>
