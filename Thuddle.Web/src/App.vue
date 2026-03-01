@@ -3,6 +3,7 @@ import { ref } from 'vue'
 import { RouterView, RouterLink } from 'vue-router'
 import { useKeycloak } from '@josempgon/vue-keycloak'
 import { useAuthStore } from '@/stores/auth'
+import { apiUrl } from '@/api'
 
 const { isPending } = useKeycloak()
 const auth = useAuthStore()
@@ -45,7 +46,7 @@ function closeMenu() {
                 >
                   <img
                     v-if="auth.keycloakId"
-                    :src="`/api/profile/picture/${auth.keycloakId}`"
+                    :src="apiUrl(`/api/profile/picture/${auth.keycloakId}`)"
                     alt=""
                     class="w-8 h-8 rounded-full object-cover"
                     @error="$event.target.style.display='none'"
