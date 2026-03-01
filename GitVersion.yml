@@ -1,9 +1,1 @@
-mode: ContinuousDeployment
-branches:
-  main:
-    regex: ^main$
-    increment: Patch
-    is-release-branch: true
-  feature:
-    regex: ^feature/
-    increment: Patch
+workflow: GitHubFlow/v1
