@@ -24,3 +24,6 @@ Desktop.ini
 
 # Aspire
 .dcproj.user
+
+# Infra deployment outputs (local, per-user)
+infra/.deploy-outputs.json
