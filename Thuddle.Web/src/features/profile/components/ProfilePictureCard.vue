@@ -2,7 +2,6 @@
 defineProps({
   hasProfilePicture: { type: Boolean, required: true },
   pictureUrl: { type: String, default: null },
-  pictureKey: { type: Number, default: 0 },
   uploading: { type: Boolean, default: false }
 })
 
@@ -19,7 +18,6 @@ const emit = defineEmits(['upload'])
         <img
           v-if="hasProfilePicture && pictureUrl"
           :src="pictureUrl"
-          :key="pictureKey"
           alt="Profile"
           class="w-full h-full object-cover"
         />

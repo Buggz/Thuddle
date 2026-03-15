@@ -2,9 +2,11 @@
 import { ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useAuthStore } from '@/features/auth/stores/auth'
+import { useProfileStore } from '@/features/profile/stores/profile'
 import { apiUrl } from '@/api'
 
 const auth = useAuthStore()
+const profile = useProfileStore()
 const menuOpen = ref(false)
 
 function toggleMenu() {
@@ -43,7 +45,7 @@ function closeMenu() {
               >
                 <img
                   v-if="auth.keycloakId"
-                  :src="apiUrl(`/api/profile/picture/${auth.keycloakId}`)"
+                  :src="apiUrl(`/api/profile/picture/${auth.keycloakId}?v=${profile.pictureVersion}`)"
                   alt=""
                   class="w-8 h-8 rounded-full object-cover"
                   @error="$event.target.style.display='none'"

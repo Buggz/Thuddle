@@ -13,7 +13,6 @@ const {
   error,
   hasProfilePicture,
   pictureUrl,
-  pictureKey,
   loadProfile,
   saveDisplayName,
   uploadPicture
@@ -42,7 +41,6 @@ onMounted(loadProfile)
     <ProfilePictureCard
       :has-profile-picture="hasProfilePicture"
       :picture-url="pictureUrl"
-      :picture-key="pictureKey"
       :uploading="uploading"
       @upload="uploadPicture"
     />
