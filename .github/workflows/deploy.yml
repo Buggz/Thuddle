@@ -1,0 +1,128 @@
+name: Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Image tag to deploy (SemVer from CI, e.g. 0.1.3)'
+        required: true
+        type: string
+
+env:
+  RESOURCE_GROUP: rg-thuddle
+  LOCATION: norwayeast
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy-infra:
+    runs-on: ubuntu-latest
+    outputs:
+      api-fqdn: ${{ steps.deploy.outputs.apiFqdn }}
+      keycloak-fqdn: ${{ steps.deploy.outputs.keycloakFqdn }}
+      swa-name: ${{ steps.deploy.outputs.staticWebAppName }}
+      swa-hostname: ${{ steps.deploy.outputs.staticWebAppDefaultHostname }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Create Resource Group
+        run: az group create -n ${{ env.RESOURCE_GROUP }} -l ${{ env.LOCATION }}
+
+      - name: Deploy Infrastructure
+        id: deploy
+        uses: azure/arm-deploy@v2
+        with:
+          resourceGroupName: ${{ env.RESOURCE_GROUP }}
+          template: ./infra/main.bicep
+          parameters: >
+            imageTag=${{ inputs.version }}
+            postgresAdminPassword=${{ secrets.POSTGRES_PASSWORD }}
+            keycloakAdminPassword=${{ secrets.KEYCLOAK_ADMIN_PASSWORD }}
+            containerRegistry=ghcr.io/${{ github.repository_owner }}
+          failOnStdErr: false
+
+  run-migrations:
+    needs: deploy-infra
+    runs-on: ubuntu-latest
+    steps:
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Start migration job
+        run: |
+          az containerapp job start \
+            -n thuddle-migrations \
+            -g ${{ env.RESOURCE_GROUP }}
+
+      - name: Wait for migration to complete
+        run: |
+          for i in $(seq 1 30); do
+            STATUS=$(az containerapp job execution list \
+              -n thuddle-migrations \
+              -g ${{ env.RESOURCE_GROUP }} \
+              --query "[0].properties.status" -o tsv)
+            echo "Migration status: $STATUS"
+            if [ "$STATUS" = "Succeeded" ]; then exit 0; fi
+            if [ "$STATUS" = "Failed" ]; then exit 1; fi
+            sleep 10
+          done
+          echo "Migration timed out"
+          exit 1
+
+  deploy-frontend:
+    needs: [deploy-infra, run-migrations]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Build frontend
+        working-directory: Thuddle.Web
+        env:
+          VITE_API_BASE_URL: https://${{ needs.deploy-infra.outputs.api-fqdn }}
+          VITE_KEYCLOAK_URL: https://${{ needs.deploy-infra.outputs.keycloak-fqdn }}
+          VITE_KEYCLOAK_REALM: Thuddle
+          VITE_KEYCLOAK_CLIENT_ID: thuddle-web
+        run: |
+          npm ci
+          npm run build
+
+      - name: Get SWA deployment token
+        id: swa-token
+        run: |
+          TOKEN=$(az staticwebapp secrets list \
+            -n ${{ needs.deploy-infra.outputs.swa-name }} \
+            -g ${{ env.RESOURCE_GROUP }} \
+            --query 'properties.apiKey' -o tsv)
+          echo "::add-mask::$TOKEN"
+          echo "token=$TOKEN" >> $GITHUB_OUTPUT
+
+      - name: Deploy to Static Web App
+        uses: azure/static-web-apps-deploy@v1
+        with:
+          azure_static_web_apps_api_token: ${{ steps.swa-token.outputs.token }}
+          action: upload
+          app_location: Thuddle.Web
+          output_location: dist
+          skip_app_build: true
+          skip_api_build: true

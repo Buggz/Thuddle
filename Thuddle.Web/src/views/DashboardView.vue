@@ -1,6 +1,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { useAuthStore } from '@/stores/auth'
+import { apiUrl } from '@/api'
 
 const auth = useAuthStore()
 const apiMessage = ref(null)
@@ -9,7 +10,7 @@ const error = ref(null)
 async function fetchHello() {
   try {
     const token = await auth.getAccessToken()
-    const response = await fetch('/api/hello', {
+    const response = await fetch(apiUrl('/api/hello'), {
       headers: {
         Authorization: `Bearer ${token}`
       }

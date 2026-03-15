@@ -1,6 +1,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { useAuthStore } from '@/stores/auth'
+import { apiUrl } from '@/api'
 
 const auth = useAuthStore()
 
@@ -21,14 +22,14 @@ async function authHeaders() {
 
 async function loadProfile() {
   try {
-    const res = await fetch('/api/profile', { headers: await authHeaders() })
+    const res = await fetch(apiUrl('/api/profile'), { headers: await authHeaders() })
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     const data = await res.json()
     displayName.value = data.displayName || ''
     savedName.value = data.displayName || ''
     hasProfilePicture.value = data.hasProfilePicture
     if (data.hasProfilePicture) {
-      pictureUrl.value = `/api/profile/picture/${auth.keycloakId}`
+      pictureUrl.value = apiUrl(`/api/profile/picture/${auth.keycloakId}`)
     }
   } catch (err) {
     error.value = 'Failed to load profile.'
@@ -40,7 +41,7 @@ async function saveDisplayName() {
   message.value = null
   error.value = null
   try {
-    const res = await fetch('/api/profile/displayname', {
+    const res = await fetch(apiUrl('/api/profile/displayname'), {
       method: 'PUT',
       headers: { ...(await authHeaders()), 'Content-Type': 'application/json' },
       body: JSON.stringify({ displayName: displayName.value })
@@ -68,7 +69,7 @@ async function uploadPicture(event) {
   formData.append('picture', file)
 
   try {
-    const res = await fetch('/api/profile/picture', {
+    const res = await fetch(apiUrl('/api/profile/picture'), {
       method: 'POST',
       headers: await authHeaders(),
       body: formData
@@ -79,7 +80,7 @@ async function uploadPicture(event) {
     }
     hasProfilePicture.value = true
     pictureKey.value++
-    pictureUrl.value = `/api/profile/picture/${auth.keycloakId}`
+    pictureUrl.value = apiUrl(`/api/profile/picture/${auth.keycloakId}`)
     message.value = 'Profile picture uploaded.'
   } catch (err) {
     error.value = err.message || 'Failed to upload picture.'
