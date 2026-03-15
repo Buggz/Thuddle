@@ -1,21 +1,14 @@
 <script setup>
 import { ref, onMounted } from 'vue'
-import { useAuthStore } from '@/stores/auth'
-import { apiUrl } from '@/api'
+import { useApi } from '@/shared/composables/useApi'
 
-const auth = useAuthStore()
+const { authFetch } = useApi()
 const apiMessage = ref(null)
 const error = ref(null)
 
 async function fetchHello() {
   try {
-    const token = await auth.getAccessToken()
-    const response = await fetch(apiUrl('/api/hello'), {
-      headers: {
-        Authorization: `Bearer ${token}`
-      }
-    })
-    if (!response.ok) throw new Error(`HTTP ${response.status}`)
+    const response = await authFetch('/api/hello')
     apiMessage.value = await response.json()
   } catch (err) {
     error.value = err.message
