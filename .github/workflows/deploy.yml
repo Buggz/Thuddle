@@ -11,6 +11,7 @@ on:
 env:
   RESOURCE_GROUP: rg-thuddle
   LOCATION: norwayeast
+  REGISTRY: ghcr.io
 
 permissions:
   id-token: write
@@ -36,6 +37,9 @@ jobs:
       - name: Create Resource Group
         run: az group create -n ${{ env.RESOURCE_GROUP }} -l ${{ env.LOCATION }}
 
+      - name: Lowercase owner
+        run: echo "OWNER=${GITHUB_REPOSITORY_OWNER,,}" >> $GITHUB_ENV
+
       - name: Deploy Infrastructure
         id: deploy
         uses: azure/arm-deploy@v2
@@ -46,7 +50,7 @@ jobs:
             imageTag=${{ inputs.version }}
             postgresAdminPassword=${{ secrets.POSTGRES_PASSWORD }}
             keycloakAdminPassword=${{ secrets.KEYCLOAK_ADMIN_PASSWORD }}
-            containerRegistry=ghcr.io/${{ github.repository_owner }}
+            containerRegistry=${{ env.REGISTRY }}/${{ env.OWNER }}
           failOnStdErr: false
 
   run-migrations:
