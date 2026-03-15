@@ -1,6 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import HomeView from '@/views/HomeView.vue'
-import { useAuthStore } from '@/stores/auth'
+import { useAuthStore } from '@/features/auth/stores/auth'
 
 export default function initRouter() {
   const router = createRouter({
@@ -14,13 +14,13 @@ export default function initRouter() {
       {
         path: '/dashboard',
         name: 'dashboard',
-        component: () => import('@/views/DashboardView.vue'),
+        component: () => import('@/features/dashboard/views/DashboardView.vue'),
         meta: { requiresAuth: true }
       },
       {
         path: '/profile',
         name: 'profile',
-        component: () => import('@/views/SettingsView.vue'),
+        component: () => import('@/features/profile/views/ProfileView.vue'),
         meta: { requiresAuth: true }
       }
     ]
