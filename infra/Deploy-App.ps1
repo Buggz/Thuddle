@@ -72,9 +72,9 @@ if (-not $SkipBuild) {
     Write-Host "`n=== Building Docker images ===" -ForegroundColor Cyan
 
     $images = @(
-        @{ Name = 'thuddle-api';        Dockerfile = 'Thuddle.Api/Dockerfile' }
-        @{ Name = 'thuddle-migrations'; Dockerfile = 'Thuddle.MigrationService/Dockerfile' }
-        @{ Name = 'thuddle-keycloak';   Dockerfile = 'Thuddle.AppHost/KeycloakConfiguration/Dockerfile' }
+        @{ Name = 'thuddle-api';        Dockerfile = 'src/Thuddle.Api/Dockerfile' }
+        @{ Name = 'thuddle-migrations'; Dockerfile = 'src/Thuddle.MigrationService/Dockerfile' }
+        @{ Name = 'thuddle-keycloak';   Dockerfile = 'src/Thuddle.AppHost/KeycloakConfiguration/Dockerfile' }
     )
 
     foreach ($img in $images) {
@@ -169,7 +169,7 @@ if (-not $SkipMigrations) {
 if (-not $SkipFrontend) {
     Write-Host "`n=== Building and deploying frontend ===" -ForegroundColor Cyan
 
-    $webDir = Join-Path $repoRoot 'Thuddle.Web'
+    $webDir = Join-Path $repoRoot 'src' 'Thuddle.Web'
 
     $env:VITE_API_BASE_URL = "https://$($outputs.apiFqdn)"
     $env:VITE_KEYCLOAK_URL = "https://$($outputs.keycloakFqdn)"

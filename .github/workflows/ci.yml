@@ -53,7 +53,7 @@ jobs:
           node-version: '22'
 
       - name: Build frontend
-        working-directory: Thuddle.Web
+        working-directory: src/Thuddle.Web
         run: |
           npm ci
           npm run build
@@ -69,11 +69,11 @@ jobs:
       matrix:
         include:
           - image: thuddle-api
-            dockerfile: Thuddle.Api/Dockerfile
+            dockerfile: src/Thuddle.Api/Dockerfile
           - image: thuddle-migrations
-            dockerfile: Thuddle.MigrationService/Dockerfile
+            dockerfile: src/Thuddle.MigrationService/Dockerfile
           - image: thuddle-keycloak
-            dockerfile: Thuddle.AppHost/KeycloakConfiguration/Dockerfile
+            dockerfile: src/Thuddle.AppHost/KeycloakConfiguration/Dockerfile
     steps:
       - uses: actions/checkout@v4
 
