@@ -50,7 +50,7 @@ async function submit() {
       body: JSON.stringify(body)
     })
 
-    router.push({ name: 'dashboard' })
+    router.push({ name: 'home' })
   } catch (err) {
     error.value = err.message || 'Failed to create event.'
   } finally {

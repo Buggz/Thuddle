@@ -28,13 +28,6 @@ function closeMenu() {
           <RouterLink to="/" class="text-xl font-bold text-indigo-600">
             Thuddle
           </RouterLink>
-          <RouterLink
-            v-if="auth.isAuthenticated"
-            to="/dashboard"
-            class="ml-8 text-gray-600 hover:text-gray-900"
-          >
-            Dashboard
-          </RouterLink>
         </div>
         <div class="flex items-center">
           <RouterLink
