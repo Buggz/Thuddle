@@ -3,10 +3,12 @@ import { ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useAuthStore } from '@/features/auth/stores/auth'
 import { useProfileStore } from '@/features/profile/stores/profile'
+import { usePermissionsStore } from '@/features/auth/stores/permissions'
 import { apiUrl } from '@/api'
 
 const auth = useAuthStore()
 const profile = useProfileStore()
+const permissionsStore = usePermissionsStore()
 const menuOpen = ref(false)
 
 function toggleMenu() {
@@ -35,6 +37,16 @@ function closeMenu() {
           </RouterLink>
         </div>
         <div class="flex items-center">
+          <RouterLink
+            v-if="auth.isAuthenticated && permissionsStore.hasPermission('events:write')"
+            to="/events/create"
+            class="mr-4 inline-flex items-center gap-1.5 bg-indigo-600 text-white px-3 py-1.5 rounded-md text-sm font-medium hover:bg-indigo-700 transition"
+          >
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+            </svg>
+            Create Event
+          </RouterLink>
           <template v-if="auth.isAuthenticated">
             <span class="text-sm text-gray-600 mr-3">{{ auth.userName }}</span>
             <div class="relative">

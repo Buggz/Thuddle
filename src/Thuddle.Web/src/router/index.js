@@ -22,6 +22,12 @@ export default function initRouter() {
         name: 'profile',
         component: () => import('@/features/profile/views/ProfileView.vue'),
         meta: { requiresAuth: true }
+      },
+      {
+        path: '/events/create',
+        name: 'create-event',
+        component: () => import('@/features/events/views/CreateEventView.vue'),
+        meta: { requiresAuth: true }
       }
     ]
   })

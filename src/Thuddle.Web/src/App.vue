@@ -1,9 +1,18 @@
 <script setup>
+import { watch } from 'vue'
 import { RouterView } from 'vue-router'
 import { useKeycloak } from '@josempgon/vue-keycloak'
 import AppNavbar from '@/features/layout/AppNavbar.vue'
+import { usePermissionsStore } from '@/features/auth/stores/permissions'
 
-const { isPending } = useKeycloak()
+const { isPending, isAuthenticated } = useKeycloak()
+const permissionsStore = usePermissionsStore()
+
+watch(isAuthenticated, (authenticated) => {
+  if (authenticated) {
+    permissionsStore.load()
+  }
+}, { immediate: true })
 </script>
 
 <template>

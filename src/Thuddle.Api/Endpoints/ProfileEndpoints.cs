@@ -65,7 +65,11 @@ public static class ProfileEndpoints
         {
             dbUser.DisplayName,
             dbUser.Email,
-            HasProfilePicture = dbUser.ScaledPicturePath is not null
+            HasProfilePicture = dbUser.ScaledPicturePath is not null,
+            Permissions = await db.UserPermissions
+                .Where(p => p.UserId == dbUser.Id)
+                .Select(p => p.Permission)
+                .ToListAsync(ct)
         });
     }
 
