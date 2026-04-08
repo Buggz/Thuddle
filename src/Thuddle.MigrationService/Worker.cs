@@ -18,6 +18,7 @@ public class MigrationWorker(
             var dbContext = scope.ServiceProvider.GetRequiredService<ThuddleDbContext>();
 
             await RunMigrationsAsync(dbContext, stoppingToken);
+            await SeedDataAsync(dbContext, stoppingToken);
 
             logger.LogInformation("Migration service completed successfully.");
         }
@@ -54,5 +55,43 @@ public class MigrationWorker(
                 throw;
             }
         });
+    }
+
+    private async Task SeedDataAsync(ThuddleDbContext dbContext, CancellationToken ct)
+    {
+        const string testEmail = "testuser@thuddle.dev";
+
+        var testUser = await dbContext.Users.FirstOrDefaultAsync(u => u.Email == testEmail, ct);
+        if (testUser is null)
+        {
+            testUser = new User
+            {
+                Id = Guid.NewGuid(),
+                KeycloakId = "testuser",
+                Email = testEmail,
+                DisplayName = "Test User",
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            };
+            dbContext.Users.Add(testUser);
+            await dbContext.SaveChangesAsync(ct);
+            logger.LogInformation("Seeded test user: {Email}", testEmail);
+        }
+
+        var hasPermission = await dbContext.UserPermissions
+            .AnyAsync(p => p.UserId == testUser.Id && p.Permission == "events:write", ct);
+
+        if (!hasPermission)
+        {
+            dbContext.UserPermissions.Add(new UserPermission
+            {
+                Id = Guid.NewGuid(),
+                UserId = testUser.Id,
+                Permission = "events:write",
+                GrantedAt = DateTime.UtcNow
+            });
+            await dbContext.SaveChangesAsync(ct);
+            logger.LogInformation("Seeded events:write permission for test user.");
+        }
     }
 }

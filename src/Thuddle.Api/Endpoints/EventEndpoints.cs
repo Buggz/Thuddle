@@ -9,7 +9,7 @@ public static class EventEndpoints
     public static void MapEventEndpoints(this WebApplication app)
     {
         app.MapGet("/api/events", GetEvents);
-        app.MapPost("/api/events", CreateEvent);
+        app.MapPost("/api/events", CreateEvent).RequireAuthorization("events:write");
     }
 
     private static string? GetKeycloakId(ClaimsPrincipal user)

@@ -6,6 +6,7 @@ public class ThuddleDbContext(DbContextOptions<ThuddleDbContext> options) : DbCo
 {
     public DbSet<User> Users => Set<User>();
     public DbSet<Event> Events => Set<Event>();
+    public DbSet<UserPermission> UserPermissions => Set<UserPermission>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -22,6 +23,15 @@ public class ThuddleDbContext(DbContextOptions<ThuddleDbContext> options) : DbCo
             entity.HasOne(e => e.Owner)
                 .WithMany()
                 .HasForeignKey(e => e.OwnerId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<UserPermission>(entity =>
+        {
+            entity.HasIndex(p => new { p.UserId, p.Permission }).IsUnique();
+            entity.HasOne(p => p.User)
+                .WithMany()
+                .HasForeignKey(p => p.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
     }
