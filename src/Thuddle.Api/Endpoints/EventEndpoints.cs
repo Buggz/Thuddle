@@ -42,7 +42,10 @@ public static class EventEndpoints
                 e.PicturePath,
                 e.Start,
                 e.End,
-                e.OwnerId
+                e.OwnerId,
+                e.Visibility,
+                e.JoinMode,
+                e.Capacity
             })
             .ToListAsync(ct);
 
@@ -74,6 +77,9 @@ public static class EventEndpoints
         if (request.End <= request.Start)
             return Results.BadRequest(new { error = "End must be after Start." });
 
+        if (request.Capacity is < 1)
+            return Results.BadRequest(new { error = "Capacity must be at least 1." });
+
         var evt = new Event
         {
             Id = Guid.NewGuid(),
@@ -82,6 +88,9 @@ public static class EventEndpoints
             Description = request.Description?.Trim() ?? "",
             Start = request.Start,
             End = request.End,
+            Visibility = request.Visibility,
+            JoinMode = request.JoinMode,
+            Capacity = request.Capacity,
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow
         };
@@ -95,9 +104,19 @@ public static class EventEndpoints
             evt.Title,
             evt.Description,
             evt.Start,
-            evt.End
+            evt.End,
+            evt.Visibility,
+            evt.JoinMode,
+            evt.Capacity
         });
     }
 }
 
-public record CreateEventRequest(string Title, string? Description, DateTime Start, DateTime End);
+public record CreateEventRequest(
+    string Title,
+    string? Description,
+    DateTime Start,
+    DateTime End,
+    EventVisibility Visibility,
+    JoinMode JoinMode,
+    int? Capacity);

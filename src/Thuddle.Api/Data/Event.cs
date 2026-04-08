@@ -1,5 +1,8 @@
 namespace Thuddle.Api.Data;
 
+public enum EventVisibility { Public, Unlisted }
+public enum JoinMode { Open, InviteOnly }
+
 public class Event
 {
     public Guid Id { get; set; }
@@ -9,6 +12,9 @@ public class Event
     public string? PicturePath { get; set; }
     public required DateTime Start { get; set; }
     public required DateTime End { get; set; }
+    public required EventVisibility Visibility { get; set; }
+    public required JoinMode JoinMode { get; set; }
+    public int? Capacity { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
 
