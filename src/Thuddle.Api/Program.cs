@@ -71,6 +71,7 @@ app.UseAuthorization();
 
 app.MapDefaultEndpoints();
 app.MapProfileEndpoints();
+app.MapEventEndpoints();
 
 app.MapGet("/api/hello", () => Results.Ok(new { message = "Hello from Thuddle API!" }))
    .RequireAuthorization();
