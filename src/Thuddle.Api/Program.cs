@@ -39,7 +39,10 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         };
     });
 
-builder.Services.AddAuthorization();
+builder.Services.AddAuthorizationBuilder()
+    .SetFallbackPolicy(new Microsoft.AspNetCore.Authorization.AuthorizationPolicyBuilder()
+        .RequireAuthenticatedUser()
+        .Build());
 
 builder.Services.AddSingleton<ImageScaler>();
 builder.Services.AddSingleton<ProfilePictureStorage>();
@@ -73,8 +76,7 @@ app.MapDefaultEndpoints();
 app.MapProfileEndpoints();
 app.MapEventEndpoints();
 
-app.MapGet("/api/hello", () => Results.Ok(new { message = "Hello from Thuddle API!" }))
-   .RequireAuthorization();
+app.MapGet("/api/hello", () => Results.Ok(new { message = "Hello from Thuddle API!" }));
 
 app.MapGet("/api/status", () => Results.Ok(new { status = "ok", timestamp = DateTime.UtcNow }));
 

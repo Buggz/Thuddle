@@ -10,9 +10,9 @@ public static class ProfileEndpoints
 {
     public static void MapProfileEndpoints(this WebApplication app)
     {
-        app.MapGet("/api/profile", GetProfile).RequireAuthorization();
-        app.MapPut("/api/profile/displayname", UpdateDisplayName).RequireAuthorization();
-        app.MapPost("/api/profile/picture", UploadPicture).RequireAuthorization().DisableAntiforgery();
+        app.MapGet("/api/profile", GetProfile);
+        app.MapPut("/api/profile/displayname", UpdateDisplayName);
+        app.MapPost("/api/profile/picture", UploadPicture).DisableAntiforgery();
         app.MapGet("/api/profile/picture/{keycloakId}", GetProfilePicture);
     }
 

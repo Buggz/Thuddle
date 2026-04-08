@@ -8,7 +8,8 @@ public static class EventEndpoints
 {
     public static void MapEventEndpoints(this WebApplication app)
     {
-        app.MapPost("/api/events", CreateEvent).RequireAuthorization();
+        app.MapGet("/api/events", GetEvents);
+        app.MapPost("/api/events", CreateEvent);
     }
 
     private static string? GetKeycloakId(ClaimsPrincipal user)
@@ -16,6 +17,43 @@ public static class EventEndpoints
         return user.FindFirstValue("sub")
             ?? user.FindFirstValue("sid")
             ?? user.FindFirstValue("email");
+    }
+
+    private static async Task<IResult> GetEvents(
+        int? page,
+        int? pageSize,
+        ThuddleDbContext db,
+        CancellationToken ct)
+    {
+        var p = Math.Max(page ?? 1, 1);
+        var size = Math.Clamp(pageSize ?? 20, 1, 100);
+
+        var totalCount = await db.Events.CountAsync(ct);
+
+        var events = await db.Events
+            .OrderBy(e => e.Start)
+            .Skip((p - 1) * size)
+            .Take(size)
+            .Select(e => new
+            {
+                e.Id,
+                e.Title,
+                e.Description,
+                e.PicturePath,
+                e.Start,
+                e.End,
+                e.OwnerId
+            })
+            .ToListAsync(ct);
+
+        return Results.Ok(new
+        {
+            items = events,
+            page = p,
+            pageSize = size,
+            totalCount,
+            totalPages = (int)Math.Ceiling((double)totalCount / size)
+        });
     }
 
     private static async Task<IResult> CreateEvent(
