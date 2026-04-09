@@ -152,6 +152,12 @@ onMounted(loadEvent)
           </div>
         </div>
 
+        <!-- Description -->
+        <div v-if="event.description" class="px-6 py-5 border-t border-gray-100">
+          <h2 class="text-sm font-medium text-gray-500 uppercase tracking-wide mb-3">About this event</h2>
+          <div class="prose prose-sm max-w-none text-gray-700" v-html="event.description" />
+        </div>
+
         <!-- Footer / Action -->
         <div class="px-6 py-4 bg-gray-50 border-t border-gray-100 flex items-center gap-3">
           <RouterLink

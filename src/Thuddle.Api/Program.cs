@@ -52,6 +52,7 @@ builder.Services.AddScoped<IAuthorizationHandler, PermissionHandler>();
 
 builder.Services.AddSingleton<ImageScaler>();
 builder.Services.AddSingleton<ProfilePictureStorage>();
+builder.Services.AddSingleton<EventImageStorage>();
 builder.Services.AddMemoryCache();
 
 // CORS for local development

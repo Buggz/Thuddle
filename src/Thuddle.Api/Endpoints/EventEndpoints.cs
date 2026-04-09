@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using Microsoft.EntityFrameworkCore;
 using Thuddle.Api.Data;
+using Thuddle.Api.Services;
 
 namespace Thuddle.Api.Endpoints;
 
@@ -18,6 +19,7 @@ public static class EventEndpoints
         app.MapDelete("/api/events/{eventId:guid}/co-admins/{userId:guid}", RemoveCoAdmin).RequireAuthorization();
         app.MapGet("/api/events/{eventId:guid}/attendees", GetAttendees).RequireAuthorization();
         app.MapPut("/api/events/{eventId:guid}/attendees/{userId:guid}/payment", UpdatePayment).RequireAuthorization();
+        app.MapPost("/api/events/{eventId:guid}/images", UploadEventImage).RequireAuthorization().DisableAntiforgery();
     }
 
     private static string? GetKeycloakId(ClaimsPrincipal user)
@@ -61,6 +63,7 @@ public static class EventEndpoints
                 e.Id,
                 e.Title,
                 e.Location,
+                e.Description,
                 e.PicturePath,
                 e.Start,
                 e.End,
@@ -101,6 +104,7 @@ public static class EventEndpoints
                 e.Id,
                 e.Title,
                 e.Location,
+                e.Description,
                 e.PicturePath,
                 e.Start,
                 e.End,
@@ -137,6 +141,7 @@ public static class EventEndpoints
                 e.Id,
                 e.Title,
                 e.Location,
+                e.Description,
                 e.PicturePath,
                 e.Start,
                 e.End,
@@ -175,6 +180,7 @@ public static class EventEndpoints
             evt.Id,
             evt.Title,
             evt.Location,
+            evt.Description,
             evt.PicturePath,
             evt.Start,
             evt.End,
@@ -218,6 +224,7 @@ public static class EventEndpoints
             OwnerId = dbUser.Id,
             Title = request.Title.Trim(),
             Location = request.Location?.Trim() ?? "",
+            Description = request.Description,
             Start = request.Start,
             End = request.End,
             Visibility = request.Visibility,
@@ -236,6 +243,7 @@ public static class EventEndpoints
             evt.Id,
             evt.Title,
             evt.Location,
+            evt.Description,
             evt.Start,
             evt.End,
             evt.Visibility,
@@ -378,6 +386,7 @@ public static class EventEndpoints
 
         evt.Title = request.Title.Trim();
         evt.Location = request.Location?.Trim() ?? "";
+        evt.Description = request.Description;
         evt.Start = request.Start;
         evt.End = request.End;
         evt.Visibility = request.Visibility;
@@ -394,6 +403,7 @@ public static class EventEndpoints
             evt.Id,
             evt.Title,
             evt.Location,
+            evt.Description,
             evt.Start,
             evt.End,
             evt.Visibility,
@@ -543,11 +553,44 @@ public static class EventEndpoints
 
         return Results.Ok(new { userId, hasPaid = request.HasPaid });
     }
+
+    private static async Task<IResult> UploadEventImage(
+        Guid eventId,
+        IFormFile file,
+        ClaimsPrincipal user,
+        ThuddleDbContext db,
+        EventImageStorage imageStorage,
+        CancellationToken ct)
+    {
+        var keycloakId = GetKeycloakId(user);
+        if (keycloakId is null) return Results.Unauthorized();
+
+        var dbUser = await db.Users.FirstOrDefaultAsync(u => u.KeycloakId == keycloakId, ct);
+        if (dbUser is null) return Results.Unauthorized();
+
+        if (!await IsEventAdmin(db, eventId, dbUser.Id, ct))
+            return Results.Forbid();
+
+        if (file.Length == 0)
+            return Results.BadRequest(new { error = "File is empty." });
+
+        try
+        {
+            await using var stream = file.OpenReadStream();
+            var url = await imageStorage.UploadAsync(eventId, stream, file.ContentType, ct);
+            return Results.Ok(new { url });
+        }
+        catch (ArgumentException ex)
+        {
+            return Results.BadRequest(new { error = ex.Message });
+        }
+    }
 }
 
 public record CreateEventRequest(
     string Title,
     string? Location,
+    string? Description,
     DateTime Start,
     DateTime End,
     EventVisibility Visibility,
@@ -560,6 +603,7 @@ public record InviteUsersRequest(List<string> Emails);
 public record UpdateEventRequest(
     string Title,
     string? Location,
+    string? Description,
     DateTime Start,
     DateTime End,
     EventVisibility Visibility,

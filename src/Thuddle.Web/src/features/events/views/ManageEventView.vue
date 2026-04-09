@@ -2,6 +2,7 @@
 import { shallowRef, ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useApi } from '@/shared/composables/useApi'
+import RichTextEditor from '@/shared/components/RichTextEditor.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -13,6 +14,7 @@ const eventId = route.params.id
 const form = ref({
   title: '',
   location: '',
+  description: '',
   start: '',
   end: '',
   visibility: 0,
@@ -59,6 +61,7 @@ async function loadEvent() {
     form.value = {
       title: data.title,
       location: data.location || '',
+      description: data.description || '',
       start: toLocalDatetime(data.start),
       end: toLocalDatetime(data.end),
       visibility: data.visibility,
@@ -84,6 +87,7 @@ async function saveEvent() {
       body: JSON.stringify({
         title: form.value.title,
         location: form.value.location,
+        description: form.value.description,
         start: new Date(form.value.start).toISOString(),
         end: new Date(form.value.end).toISOString(),
         visibility: form.value.visibility,
@@ -158,6 +162,17 @@ async function removeCoAdmin(admin) {
   }
 }
 
+async function uploadDescriptionImage(file) {
+  const formData = new FormData()
+  formData.append('file', file)
+  const res = await authFetch(`/api/events/${eventId}/images`, {
+    method: 'POST',
+    body: formData
+  })
+  const data = await res.json()
+  return data.url
+}
+
 onMounted(async () => {
   await loadEvent()
   if (!error.value) await loadAttendees()
@@ -198,6 +213,10 @@ onMounted(async () => {
             <label class="block text-sm font-medium text-gray-700 mb-1">Location</label>
             <textarea v-model="form.location" rows="3"
               class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Description</label>
+            <RichTextEditor v-model="form.description" :upload-image="uploadDescriptionImage" />
           </div>
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
