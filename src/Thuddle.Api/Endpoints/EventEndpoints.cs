@@ -9,6 +9,7 @@ public static class EventEndpoints
     public static void MapEventEndpoints(this WebApplication app)
     {
         app.MapGet("/api/events", GetEvents);
+        app.MapGet("/api/events/{eventId:guid}", GetEvent);
         app.MapPost("/api/events", CreateEvent).RequireAuthorization("events:write");
         app.MapPost("/api/events/{eventId:guid}/invitations", InviteUsers).RequireAuthorization();
         app.MapPost("/api/events/{eventId:guid}/join", JoinEvent).RequireAuthorization();
@@ -24,11 +25,17 @@ public static class EventEndpoints
     private static async Task<IResult> GetEvents(
         int? page,
         int? pageSize,
+        ClaimsPrincipal user,
         ThuddleDbContext db,
         CancellationToken ct)
     {
         var p = Math.Max(page ?? 1, 1);
         var size = Math.Clamp(pageSize ?? 20, 1, 100);
+
+        var keycloakId = GetKeycloakId(user);
+        var dbUser = keycloakId is not null
+            ? await db.Users.FirstOrDefaultAsync(u => u.KeycloakId == keycloakId, ct)
+            : null;
 
         var totalCount = await db.Events.CountAsync(ct);
 
@@ -52,13 +59,118 @@ public static class EventEndpoints
             })
             .ToListAsync(ct);
 
+        var eventIds = events.Select(e => e.Id).ToList();
+
+        var joinedEventIds = dbUser is not null
+            ? (await db.EventParticipants
+                .Where(p2 => eventIds.Contains(p2.EventId) && p2.UserId == dbUser.Id)
+                .Select(p2 => p2.EventId)
+                .ToListAsync(ct))
+                .ToHashSet()
+            : new HashSet<Guid>();
+
+        var invitedEventIds = dbUser is not null
+            ? (await db.EventInvitations
+                .Where(i => eventIds.Contains(i.EventId) && i.Email == dbUser.Email)
+                .Select(i => i.EventId)
+                .ToListAsync(ct))
+                .ToHashSet()
+            : new HashSet<Guid>();
+
+        var result = events.Select(e =>
+        {
+            var hasJoined = joinedEventIds.Contains(e.Id);
+            var canJoin = !hasJoined && dbUser is not null
+                && (e.JoinMode == JoinMode.Open || invitedEventIds.Contains(e.Id));
+
+            return new
+            {
+                e.Id,
+                e.Title,
+                e.Description,
+                e.PicturePath,
+                e.Start,
+                e.End,
+                e.OwnerId,
+                e.Visibility,
+                e.JoinMode,
+                e.Capacity,
+                e.Cost,
+                HasJoined = hasJoined,
+                CanJoin = canJoin
+            };
+        });
+
         return Results.Ok(new
         {
-            items = events,
+            items = result,
             page = p,
             pageSize = size,
             totalCount,
             totalPages = (int)Math.Ceiling((double)totalCount / size)
+        });
+    }
+
+    private static async Task<IResult> GetEvent(
+        Guid eventId,
+        ClaimsPrincipal user,
+        ThuddleDbContext db,
+        CancellationToken ct)
+    {
+        var evt = await db.Events
+            .Where(e => e.Id == eventId)
+            .Select(e => new
+            {
+                e.Id,
+                e.Title,
+                e.Description,
+                e.PicturePath,
+                e.Start,
+                e.End,
+                e.OwnerId,
+                e.Visibility,
+                e.JoinMode,
+                e.Capacity,
+                e.Cost,
+                OwnerName = e.Owner.DisplayName ?? e.Owner.Email
+            })
+            .FirstOrDefaultAsync(ct);
+
+        if (evt is null) return Results.NotFound(new { error = "Event not found." });
+
+        var keycloakId = GetKeycloakId(user);
+        var dbUser = keycloakId is not null
+            ? await db.Users.FirstOrDefaultAsync(u => u.KeycloakId == keycloakId, ct)
+            : null;
+
+        var hasJoined = dbUser is not null && await db.EventParticipants
+            .AnyAsync(p => p.EventId == eventId && p.UserId == dbUser.Id, ct);
+
+        var hasInvitation = dbUser is not null && await db.EventInvitations
+            .AnyAsync(i => i.EventId == eventId && i.Email == dbUser.Email, ct);
+
+        var canJoin = !hasJoined && dbUser is not null
+            && (evt.JoinMode == JoinMode.Open || hasInvitation);
+
+        var participantCount = await db.EventParticipants.CountAsync(p => p.EventId == eventId, ct);
+
+        return Results.Ok(new
+        {
+            evt.Id,
+            evt.Title,
+            evt.Description,
+            evt.PicturePath,
+            evt.Start,
+            evt.End,
+            evt.OwnerId,
+            evt.OwnerName,
+            evt.Visibility,
+            evt.JoinMode,
+            evt.Capacity,
+            evt.Cost,
+            ParticipantCount = participantCount,
+            HasJoined = hasJoined,
+            CanJoin = canJoin
         });
     }
 

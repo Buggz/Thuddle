@@ -1,5 +1,6 @@
 <script setup>
 import { shallowRef, ref, onMounted, computed } from 'vue'
+import { RouterLink } from 'vue-router'
 import { useApi } from '@/shared/composables/useApi'
 import { useAuthStore } from '@/features/auth/stores/auth'
 
@@ -76,10 +77,11 @@ onMounted(loadEvents)
 
     <template v-else>
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-        <div
+        <RouterLink
           v-for="event in events"
           :key="event.id"
-          class="bg-white shadow rounded-lg p-5 flex flex-col"
+          :to="{ name: 'event', params: { id: event.id } }"
+          class="bg-white shadow rounded-lg p-5 flex flex-col hover:shadow-md transition-shadow"
         >
           <h3 class="text-lg font-semibold text-gray-900 mb-1">{{ event.title }}</h3>
           <p v-if="event.description" class="text-sm text-gray-500 mb-3 line-clamp-2">{{ event.description }}</p>
@@ -111,7 +113,7 @@ onMounted(loadEvents)
               </span>
             </div>
           </div>
-        </div>
+        </RouterLink>
       </div>
 
       <div v-if="totalPages > 1" class="flex items-center justify-center gap-4 mt-8">
