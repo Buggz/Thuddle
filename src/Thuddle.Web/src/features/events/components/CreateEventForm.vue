@@ -8,7 +8,7 @@ const { authFetch } = useApi()
 
 const form = reactive({
   title: '',
-  description: '',
+  location: '',
   start: '',
   end: '',
   visibility: 'Public',
@@ -36,7 +36,7 @@ async function submit() {
   try {
     const body = {
       title: form.title.trim(),
-      description: form.description.trim(),
+      location: form.location.trim(),
       start: new Date(form.start).toISOString(),
       end: new Date(form.end).toISOString(),
       visibility: form.visibility === 'Public' ? 0 : 1,
@@ -74,13 +74,13 @@ async function submit() {
     </div>
 
     <div>
-      <label for="description" class="block text-sm font-medium text-gray-700 mb-1">Description</label>
+      <label for="location" class="block text-sm font-medium text-gray-700 mb-1">Location</label>
       <textarea
-        id="description"
-        v-model="form.description"
+        id="location"
+        v-model="form.location"
         rows="3"
         class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
-        placeholder="What's this event about?"
+        placeholder="Where is this event?"
       />
     </div>
 

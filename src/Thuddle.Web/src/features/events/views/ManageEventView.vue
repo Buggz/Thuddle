@@ -12,7 +12,7 @@ const eventId = route.params.id
 // Event details (editable)
 const form = ref({
   title: '',
-  description: '',
+  location: '',
   start: '',
   end: '',
   visibility: 0,
@@ -58,7 +58,7 @@ async function loadEvent() {
     eventData.value = data
     form.value = {
       title: data.title,
-      description: data.description || '',
+      location: data.location || '',
       start: toLocalDatetime(data.start),
       end: toLocalDatetime(data.end),
       visibility: data.visibility,
@@ -83,7 +83,7 @@ async function saveEvent() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         title: form.value.title,
-        description: form.value.description,
+        location: form.value.location,
         start: new Date(form.value.start).toISOString(),
         end: new Date(form.value.end).toISOString(),
         visibility: form.value.visibility,
@@ -195,8 +195,8 @@ onMounted(async () => {
               class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
           </div>
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Description</label>
-            <textarea v-model="form.description" rows="3"
+            <label class="block text-sm font-medium text-gray-700 mb-1">Location</label>
+            <textarea v-model="form.location" rows="3"
               class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
           </div>
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">

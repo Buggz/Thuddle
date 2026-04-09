@@ -84,7 +84,7 @@ onMounted(loadEvents)
           class="bg-white shadow rounded-lg p-5 flex flex-col hover:shadow-md transition-shadow"
         >
           <h3 class="text-lg font-semibold text-gray-900 mb-1">{{ event.title }}</h3>
-          <p v-if="event.description" class="text-sm text-gray-500 mb-3 line-clamp-2">{{ event.description }}</p>
+          <p v-if="event.location" class="text-sm text-gray-500 mb-3 line-clamp-2">{{ event.location }}</p>
           <div class="mt-auto space-y-1 text-xs text-gray-400">
             <div class="flex items-center gap-1.5">
               <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">

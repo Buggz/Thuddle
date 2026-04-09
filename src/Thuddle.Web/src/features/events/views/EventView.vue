@@ -82,10 +82,10 @@ onMounted(loadEvent)
 
         <!-- Body -->
         <div class="px-6 py-5 space-y-5">
-          <!-- Description -->
-          <div v-if="event.description">
-            <h2 class="text-sm font-medium text-gray-500 uppercase tracking-wide mb-1">About</h2>
-            <p class="text-gray-700 whitespace-pre-line">{{ event.description }}</p>
+          <!-- Location -->
+          <div v-if="event.location">
+            <h2 class="text-sm font-medium text-gray-500 uppercase tracking-wide mb-1">Location</h2>
+            <p class="text-gray-700 whitespace-pre-line">{{ event.location }}</p>
           </div>
 
           <!-- Details grid -->

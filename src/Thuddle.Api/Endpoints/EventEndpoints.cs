@@ -60,7 +60,7 @@ public static class EventEndpoints
             {
                 e.Id,
                 e.Title,
-                e.Description,
+                e.Location,
                 e.PicturePath,
                 e.Start,
                 e.End,
@@ -100,7 +100,7 @@ public static class EventEndpoints
             {
                 e.Id,
                 e.Title,
-                e.Description,
+                e.Location,
                 e.PicturePath,
                 e.Start,
                 e.End,
@@ -136,7 +136,7 @@ public static class EventEndpoints
             {
                 e.Id,
                 e.Title,
-                e.Description,
+                e.Location,
                 e.PicturePath,
                 e.Start,
                 e.End,
@@ -174,7 +174,7 @@ public static class EventEndpoints
         {
             evt.Id,
             evt.Title,
-            evt.Description,
+            evt.Location,
             evt.PicturePath,
             evt.Start,
             evt.End,
@@ -217,7 +217,7 @@ public static class EventEndpoints
             Id = Guid.NewGuid(),
             OwnerId = dbUser.Id,
             Title = request.Title.Trim(),
-            Description = request.Description?.Trim() ?? "",
+            Location = request.Location?.Trim() ?? "",
             Start = request.Start,
             End = request.End,
             Visibility = request.Visibility,
@@ -235,7 +235,7 @@ public static class EventEndpoints
         {
             evt.Id,
             evt.Title,
-            evt.Description,
+            evt.Location,
             evt.Start,
             evt.End,
             evt.Visibility,
@@ -377,7 +377,7 @@ public static class EventEndpoints
             return Results.BadRequest(new { error = "Capacity must be at least 1." });
 
         evt.Title = request.Title.Trim();
-        evt.Description = request.Description?.Trim() ?? "";
+        evt.Location = request.Location?.Trim() ?? "";
         evt.Start = request.Start;
         evt.End = request.End;
         evt.Visibility = request.Visibility;
@@ -393,7 +393,7 @@ public static class EventEndpoints
         {
             evt.Id,
             evt.Title,
-            evt.Description,
+            evt.Location,
             evt.Start,
             evt.End,
             evt.Visibility,
@@ -547,7 +547,7 @@ public static class EventEndpoints
 
 public record CreateEventRequest(
     string Title,
-    string? Description,
+    string? Location,
     DateTime Start,
     DateTime End,
     EventVisibility Visibility,
@@ -559,7 +559,7 @@ public record InviteUsersRequest(List<string> Emails);
 
 public record UpdateEventRequest(
     string Title,
-    string? Description,
+    string? Location,
     DateTime Start,
     DateTime End,
     EventVisibility Visibility,
