@@ -43,6 +43,8 @@ param(
 
     [string]$ResourceGroup = 'rg-thuddle',
 
+    [string]$AdminEmail,
+
     [switch]$SkipBuild,
     [switch]$SkipMigrations,
     [switch]$SkipFrontend
@@ -122,14 +124,22 @@ if ($LASTEXITCODE -ne 0) { Write-Error "Failed to update Keycloak container app"
 if (-not $SkipMigrations) {
     Write-Host "`n=== Running database migrations ===" -ForegroundColor Cyan
 
-    # Update the migration job image first
+    # Update the migration job image and admin email env var
     $migrationImage = "$ContainerRegistry/thuddle-migrations:$ImageTag"
     Write-Host "Updating migration job image to $migrationImage ..." -ForegroundColor Yellow
-    az containerapp job update `
-        --name thuddle-migrations `
-        --resource-group $ResourceGroup `
-        --image $migrationImage `
-        --output none
+
+    $updateArgs = @(
+        'containerapp', 'job', 'update',
+        '--name', 'thuddle-migrations',
+        '--resource-group', $ResourceGroup,
+        '--image', $migrationImage,
+        '--output', 'none'
+    )
+    if ($AdminEmail) {
+        $updateArgs += @('--set-env-vars', "Seed__AdminEmail=$AdminEmail")
+        Write-Host "  Admin email: $AdminEmail" -ForegroundColor White
+    }
+    az @updateArgs
     if ($LASTEXITCODE -ne 0) { Write-Error "Failed to update migration job image"; exit 1 }
 
     Write-Host "Starting migration job..." -ForegroundColor Yellow

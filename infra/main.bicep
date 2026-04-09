@@ -18,6 +18,9 @@ param postgresAdminPassword string
 @description('Keycloak administrator password')
 param keycloakAdminPassword string
 
+@description('Admin user email to seed with events:write permission (optional)')
+param adminEmail string = ''
+
 var postgresAdminUser = 'thuddleadmin'
 var suffix = uniqueString(resourceGroup().id)
 
@@ -115,7 +118,7 @@ resource storageAccount 'Microsoft.Storage/storageAccounts@2023-05-01' = {
   properties: {
     accessTier: 'Hot'
     minimumTlsVersion: 'TLS1_2'
-    allowBlobPublicAccess: false
+    allowBlobPublicAccess: true
   }
 }
 
@@ -127,6 +130,14 @@ resource blobService 'Microsoft.Storage/storageAccounts/blobServices@2023-05-01'
 resource profilePicsContainer 'Microsoft.Storage/storageAccounts/blobServices/containers@2023-05-01' = {
   name: 'profile-pictures'
   parent: blobService
+}
+
+resource eventImagesContainer 'Microsoft.Storage/storageAccounts/blobServices/containers@2023-05-01' = {
+  name: 'event-images'
+  parent: blobService
+  properties: {
+    publicAccess: 'Blob'
+  }
 }
 
 // ─── Keycloak Container App ──────────────────────────────────────────────────
@@ -322,6 +333,7 @@ resource migrationsJob 'Microsoft.App/jobs@2024-03-01' = {
           }
           env: [
             { name: 'ConnectionStrings__thuddledb', secretRef: 'db-connection-string' }
+            { name: 'Seed__AdminEmail', value: adminEmail }
           ]
         }
       ]

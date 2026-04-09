@@ -6,6 +6,7 @@ namespace Thuddle.MigrationService;
 public class MigrationWorker(
     IServiceProvider serviceProvider,
     IHostApplicationLifetime hostApplicationLifetime,
+    IConfiguration configuration,
     ILogger<MigrationWorker> logger) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -59,39 +60,38 @@ public class MigrationWorker(
 
     private async Task SeedDataAsync(ThuddleDbContext dbContext, CancellationToken ct)
     {
-        const string testEmail = "testuser@thuddle.dev";
-
-        var testUser = await dbContext.Users.FirstOrDefaultAsync(u => u.Email == testEmail, ct);
-        if (testUser is null)
+        var adminEmail = configuration["Seed:AdminEmail"];
+        if (string.IsNullOrWhiteSpace(adminEmail))
         {
-            testUser = new User
-            {
-                Id = Guid.NewGuid(),
-                KeycloakId = "testuser",
-                Email = testEmail,
-                DisplayName = "Test User",
-                CreatedAt = DateTime.UtcNow,
-                UpdatedAt = DateTime.UtcNow
-            };
-            dbContext.Users.Add(testUser);
-            await dbContext.SaveChangesAsync(ct);
-            logger.LogInformation("Seeded test user: {Email}", testEmail);
+            logger.LogInformation("No Seed:AdminEmail configured, skipping admin seed.");
+            return;
+        }
+
+        var user = await dbContext.Users.FirstOrDefaultAsync(u => u.Email == adminEmail, ct);
+        if (user is null)
+        {
+            logger.LogInformation("Admin user {Email} not found in database yet — permission will be granted on first login.", adminEmail);
+            return;
         }
 
         var hasPermission = await dbContext.UserPermissions
-            .AnyAsync(p => p.UserId == testUser.Id && p.Permission == "events:write", ct);
+            .AnyAsync(p => p.UserId == user.Id && p.Permission == "events:write", ct);
 
         if (!hasPermission)
         {
             dbContext.UserPermissions.Add(new UserPermission
             {
                 Id = Guid.NewGuid(),
-                UserId = testUser.Id,
+                UserId = user.Id,
                 Permission = "events:write",
                 GrantedAt = DateTime.UtcNow
             });
             await dbContext.SaveChangesAsync(ct);
-            logger.LogInformation("Seeded events:write permission for test user.");
+            logger.LogInformation("Granted events:write permission to {Email}.", adminEmail);
+        }
+        else
+        {
+            logger.LogInformation("Admin {Email} already has events:write permission.", adminEmail);
         }
     }
 }

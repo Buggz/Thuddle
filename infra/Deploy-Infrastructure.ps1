@@ -29,7 +29,8 @@ param(
     [string]$ContainerRegistry,
 
     [string]$Location = 'norwayeast',
-    [string]$ResourceGroup = 'rg-thuddle'
+    [string]$ResourceGroup = 'rg-thuddle',
+    [string]$AdminEmail
 )
 
 $ErrorActionPreference = 'Stop'
@@ -83,6 +84,7 @@ $result = az deployment group create `
         containerRegistry=$ContainerRegistry `
         postgresAdminPassword=$postgresPassword `
         keycloakAdminPassword=$keycloakPassword `
+        adminEmail=$($AdminEmail ?? '') `
     --output json
 
 if ($LASTEXITCODE -ne 0) {
