@@ -112,7 +112,7 @@ onMounted(loadEvent)
               </div>
               <div>
                 <p class="text-sm font-medium text-gray-900">
-                  {{ event.cost ? `$${event.cost.toFixed(2)}` : 'Free' }}
+                  {{ event.cost ? event.cost.toFixed(2) : 'Free' }}
                 </p>
                 <p class="text-sm text-gray-500">{{ event.cost ? 'Per person' : 'No cost to attend' }}</p>
               </div>

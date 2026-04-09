@@ -109,7 +109,7 @@ onMounted(loadEvents)
                 Max {{ event.capacity }}
               </span>
               <span class="font-medium" :class="event.cost ? 'text-gray-700' : 'text-green-600'">
-                {{ event.cost ? `$${event.cost.toFixed(2)}` : 'Free' }}
+                {{ event.cost ? event.cost.toFixed(2) : 'Free' }}
               </span>
             </div>
           </div>
