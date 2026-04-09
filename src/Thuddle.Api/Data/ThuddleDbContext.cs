@@ -7,6 +7,8 @@ public class ThuddleDbContext(DbContextOptions<ThuddleDbContext> options) : DbCo
     public DbSet<User> Users => Set<User>();
     public DbSet<Event> Events => Set<Event>();
     public DbSet<UserPermission> UserPermissions => Set<UserPermission>();
+    public DbSet<EventInvitation> EventInvitations => Set<EventInvitation>();
+    public DbSet<EventParticipant> EventParticipants => Set<EventParticipant>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -29,6 +31,28 @@ public class ThuddleDbContext(DbContextOptions<ThuddleDbContext> options) : DbCo
         modelBuilder.Entity<UserPermission>(entity =>
         {
             entity.HasIndex(p => new { p.UserId, p.Permission }).IsUnique();
+            entity.HasOne(p => p.User)
+                .WithMany()
+                .HasForeignKey(p => p.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<EventInvitation>(entity =>
+        {
+            entity.HasIndex(i => new { i.EventId, i.Email }).IsUnique();
+            entity.HasOne(i => i.Event)
+                .WithMany()
+                .HasForeignKey(i => i.EventId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<EventParticipant>(entity =>
+        {
+            entity.HasIndex(p => new { p.EventId, p.UserId }).IsUnique();
+            entity.HasOne(p => p.Event)
+                .WithMany()
+                .HasForeignKey(p => p.EventId)
+                .OnDelete(DeleteBehavior.Cascade);
             entity.HasOne(p => p.User)
                 .WithMany()
                 .HasForeignKey(p => p.UserId)

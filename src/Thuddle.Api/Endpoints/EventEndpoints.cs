@@ -10,6 +10,8 @@ public static class EventEndpoints
     {
         app.MapGet("/api/events", GetEvents);
         app.MapPost("/api/events", CreateEvent).RequireAuthorization("events:write");
+        app.MapPost("/api/events/{eventId:guid}/invitations", InviteUsers).RequireAuthorization();
+        app.MapPost("/api/events/{eventId:guid}/join", JoinEvent).RequireAuthorization();
     }
 
     private static string? GetKeycloakId(ClaimsPrincipal user)
@@ -110,6 +112,109 @@ public static class EventEndpoints
             evt.Capacity
         });
     }
+
+    private static async Task<IResult> InviteUsers(
+        Guid eventId,
+        InviteUsersRequest request,
+        ClaimsPrincipal user,
+        ThuddleDbContext db,
+        CancellationToken ct)
+    {
+        var keycloakId = GetKeycloakId(user);
+        if (keycloakId is null) return Results.Unauthorized();
+
+        var dbUser = await db.Users.FirstOrDefaultAsync(u => u.KeycloakId == keycloakId, ct);
+        if (dbUser is null) return Results.Unauthorized();
+
+        var evt = await db.Events.FirstOrDefaultAsync(e => e.Id == eventId, ct);
+        if (evt is null) return Results.NotFound(new { error = "Event not found." });
+
+        if (evt.OwnerId != dbUser.Id)
+            return Results.Forbid();
+
+        if (request.Emails is not { Count: > 0 })
+            return Results.BadRequest(new { error = "At least one email is required." });
+
+        var existingEmails = await db.EventInvitations
+            .Where(i => i.EventId == eventId)
+            .Select(i => i.Email)
+            .ToListAsync(ct);
+
+        var existingSet = existingEmails.ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var newInvitations = request.Emails
+            .Where(e => !string.IsNullOrWhiteSpace(e) && !existingSet.Contains(e))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Select(email => new EventInvitation
+            {
+                Id = Guid.NewGuid(),
+                EventId = eventId,
+                Email = email.Trim(),
+                CreatedAt = DateTime.UtcNow
+            })
+            .ToList();
+
+        if (newInvitations.Count > 0)
+        {
+            db.EventInvitations.AddRange(newInvitations);
+            await db.SaveChangesAsync(ct);
+        }
+
+        return Results.Ok(new { invited = newInvitations.Count });
+    }
+
+    private static async Task<IResult> JoinEvent(
+        Guid eventId,
+        ClaimsPrincipal user,
+        ThuddleDbContext db,
+        CancellationToken ct)
+    {
+        var keycloakId = GetKeycloakId(user);
+        if (keycloakId is null) return Results.Unauthorized();
+
+        var dbUser = await db.Users.FirstOrDefaultAsync(u => u.KeycloakId == keycloakId, ct);
+        if (dbUser is null) return Results.Unauthorized();
+
+        var evt = await db.Events.FirstOrDefaultAsync(e => e.Id == eventId, ct);
+        if (evt is null) return Results.NotFound(new { error = "Event not found." });
+
+        var alreadyJoined = await db.EventParticipants
+            .AnyAsync(p => p.EventId == eventId && p.UserId == dbUser.Id, ct);
+
+        if (alreadyJoined)
+            return Results.Conflict(new { error = "You have already joined this event." });
+
+        if (evt.JoinMode == JoinMode.InviteOnly)
+        {
+            var hasInvitation = await db.EventInvitations
+                .AnyAsync(i => i.EventId == eventId && i.Email == dbUser.Email, ct);
+
+            if (!hasInvitation)
+                return Results.Forbid();
+        }
+
+        if (evt.Capacity.HasValue)
+        {
+            var currentCount = await db.EventParticipants
+                .CountAsync(p => p.EventId == eventId, ct);
+
+            if (currentCount >= evt.Capacity.Value)
+                return Results.Conflict(new { error = "Event is at full capacity." });
+        }
+
+        var participant = new EventParticipant
+        {
+            Id = Guid.NewGuid(),
+            EventId = eventId,
+            UserId = dbUser.Id,
+            JoinedAt = DateTime.UtcNow
+        };
+
+        db.EventParticipants.Add(participant);
+        await db.SaveChangesAsync(ct);
+
+        return Results.Ok(new { joined = true, eventId });
+    }
 }
 
 public record CreateEventRequest(
@@ -120,3 +225,5 @@ public record CreateEventRequest(
     EventVisibility Visibility,
     JoinMode JoinMode,
     int? Capacity);
+
+public record InviteUsersRequest(List<string> Emails);
