@@ -9,6 +9,7 @@ public class ThuddleDbContext(DbContextOptions<ThuddleDbContext> options) : DbCo
     public DbSet<UserPermission> UserPermissions => Set<UserPermission>();
     public DbSet<EventInvitation> EventInvitations => Set<EventInvitation>();
     public DbSet<EventParticipant> EventParticipants => Set<EventParticipant>();
+    public DbSet<EventCoAdmin> EventCoAdmins => Set<EventCoAdmin>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -56,6 +57,19 @@ public class ThuddleDbContext(DbContextOptions<ThuddleDbContext> options) : DbCo
             entity.HasOne(p => p.User)
                 .WithMany()
                 .HasForeignKey(p => p.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<EventCoAdmin>(entity =>
+        {
+            entity.HasIndex(c => new { c.EventId, c.UserId }).IsUnique();
+            entity.HasOne(c => c.Event)
+                .WithMany()
+                .HasForeignKey(c => c.EventId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(c => c.User)
+                .WithMany()
+                .HasForeignKey(c => c.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
     }

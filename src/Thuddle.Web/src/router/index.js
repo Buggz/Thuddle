@@ -26,6 +26,12 @@ export default function initRouter() {
         path: '/events/:id',
         name: 'event',
         component: () => import('@/features/events/views/EventView.vue')
+      },
+      {
+        path: '/events/:id/manage',
+        name: 'manage-event',
+        component: () => import('@/features/events/views/ManageEventView.vue'),
+        meta: { requiresAuth: true }
       }
     ]
   })

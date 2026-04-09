@@ -1,6 +1,6 @@
 <script setup>
 import { shallowRef, ref, onMounted } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRoute, useRouter, RouterLink } from 'vue-router'
 import { useApi } from '@/shared/composables/useApi'
 
 const route = useRoute()
@@ -154,6 +154,13 @@ onMounted(loadEvent)
 
         <!-- Footer / Action -->
         <div class="px-6 py-4 bg-gray-50 border-t border-gray-100 flex items-center gap-3">
+          <RouterLink
+            v-if="event.isAdmin"
+            :to="{ name: 'manage-event', params: { id: event.id } }"
+            class="px-5 py-2.5 text-sm font-semibold rounded-lg bg-gray-800 text-white hover:bg-gray-900 transition-colors"
+          >
+            Manage Event
+          </RouterLink>
           <button
             v-if="event.canJoin"
             :disabled="joining"

@@ -11,8 +11,13 @@ public static class EventEndpoints
         app.MapGet("/api/events", GetEvents);
         app.MapGet("/api/events/{eventId:guid}", GetEvent);
         app.MapPost("/api/events", CreateEvent).RequireAuthorization("events:write");
+        app.MapPut("/api/events/{eventId:guid}", UpdateEvent).RequireAuthorization();
         app.MapPost("/api/events/{eventId:guid}/invitations", InviteUsers).RequireAuthorization();
         app.MapPost("/api/events/{eventId:guid}/join", JoinEvent).RequireAuthorization();
+        app.MapPost("/api/events/{eventId:guid}/co-admins", AddCoAdmin).RequireAuthorization();
+        app.MapDelete("/api/events/{eventId:guid}/co-admins/{userId:guid}", RemoveCoAdmin).RequireAuthorization();
+        app.MapGet("/api/events/{eventId:guid}/attendees", GetAttendees).RequireAuthorization();
+        app.MapPut("/api/events/{eventId:guid}/attendees/{userId:guid}/payment", UpdatePayment).RequireAuthorization();
     }
 
     private static string? GetKeycloakId(ClaimsPrincipal user)
@@ -20,6 +25,14 @@ public static class EventEndpoints
         return user.FindFirstValue("sub")
             ?? user.FindFirstValue("sid")
             ?? user.FindFirstValue("email");
+    }
+
+    private static async Task<bool> IsEventAdmin(ThuddleDbContext db, Guid eventId, Guid userId, CancellationToken ct)
+    {
+        var evt = await db.Events.FirstOrDefaultAsync(e => e.Id == eventId, ct);
+        if (evt is null) return false;
+        if (evt.OwnerId == userId) return true;
+        return await db.EventCoAdmins.AnyAsync(c => c.EventId == eventId && c.UserId == userId, ct);
     }
 
     private static async Task<IResult> GetEvents(
@@ -154,6 +167,9 @@ public static class EventEndpoints
 
         var participantCount = await db.EventParticipants.CountAsync(p => p.EventId == eventId, ct);
 
+        var isAdmin = dbUser is not null
+            && await IsEventAdmin(db, eventId, dbUser.Id, ct);
+
         return Results.Ok(new
         {
             evt.Id,
@@ -170,7 +186,8 @@ public static class EventEndpoints
             evt.Cost,
             ParticipantCount = participantCount,
             HasJoined = hasJoined,
-            CanJoin = canJoin
+            CanJoin = canJoin,
+            IsAdmin = isAdmin
         });
     }
 
@@ -244,7 +261,7 @@ public static class EventEndpoints
         var evt = await db.Events.FirstOrDefaultAsync(e => e.Id == eventId, ct);
         if (evt is null) return Results.NotFound(new { error = "Event not found." });
 
-        if (evt.OwnerId != dbUser.Id)
+        if (!await IsEventAdmin(db, eventId, dbUser.Id, ct))
             return Results.Forbid();
 
         if (request.Emails is not { Count: > 0 })
@@ -330,6 +347,202 @@ public static class EventEndpoints
 
         return Results.Ok(new { joined = true, eventId });
     }
+
+    private static async Task<IResult> UpdateEvent(
+        Guid eventId,
+        UpdateEventRequest request,
+        ClaimsPrincipal user,
+        ThuddleDbContext db,
+        CancellationToken ct)
+    {
+        var keycloakId = GetKeycloakId(user);
+        if (keycloakId is null) return Results.Unauthorized();
+
+        var dbUser = await db.Users.FirstOrDefaultAsync(u => u.KeycloakId == keycloakId, ct);
+        if (dbUser is null) return Results.Unauthorized();
+
+        if (!await IsEventAdmin(db, eventId, dbUser.Id, ct))
+            return Results.Forbid();
+
+        var evt = await db.Events.FirstOrDefaultAsync(e => e.Id == eventId, ct);
+        if (evt is null) return Results.NotFound(new { error = "Event not found." });
+
+        if (string.IsNullOrWhiteSpace(request.Title))
+            return Results.BadRequest(new { error = "Title is required." });
+
+        if (request.End <= request.Start)
+            return Results.BadRequest(new { error = "End must be after Start." });
+
+        if (request.Capacity is < 1)
+            return Results.BadRequest(new { error = "Capacity must be at least 1." });
+
+        evt.Title = request.Title.Trim();
+        evt.Description = request.Description?.Trim() ?? "";
+        evt.Start = request.Start;
+        evt.End = request.End;
+        evt.Visibility = request.Visibility;
+        evt.JoinMode = request.JoinMode;
+        evt.Capacity = request.Capacity;
+        evt.Cost = request.Cost;
+        evt.UpdatedAt = DateTime.UtcNow;
+
+        db.Events.Update(evt);
+        await db.SaveChangesAsync(ct);
+
+        return Results.Ok(new
+        {
+            evt.Id,
+            evt.Title,
+            evt.Description,
+            evt.Start,
+            evt.End,
+            evt.Visibility,
+            evt.JoinMode,
+            evt.Capacity,
+            evt.Cost
+        });
+    }
+
+    private static async Task<IResult> AddCoAdmin(
+        Guid eventId,
+        AddCoAdminRequest request,
+        ClaimsPrincipal user,
+        ThuddleDbContext db,
+        CancellationToken ct)
+    {
+        var keycloakId = GetKeycloakId(user);
+        if (keycloakId is null) return Results.Unauthorized();
+
+        var dbUser = await db.Users.FirstOrDefaultAsync(u => u.KeycloakId == keycloakId, ct);
+        if (dbUser is null) return Results.Unauthorized();
+
+        if (!await IsEventAdmin(db, eventId, dbUser.Id, ct))
+            return Results.Forbid();
+
+        var targetUser = await db.Users.FirstOrDefaultAsync(u => u.Email == request.Email, ct);
+        if (targetUser is null)
+            return Results.NotFound(new { error = "User not found." });
+
+        var already = await db.EventCoAdmins
+            .AnyAsync(c => c.EventId == eventId && c.UserId == targetUser.Id, ct);
+
+        if (already)
+            return Results.Conflict(new { error = "User is already a co-admin." });
+
+        var evt = await db.Events.FirstOrDefaultAsync(e => e.Id == eventId, ct);
+        if (evt is not null && evt.OwnerId == targetUser.Id)
+            return Results.BadRequest(new { error = "The owner is already an admin." });
+
+        db.EventCoAdmins.Add(new EventCoAdmin
+        {
+            Id = Guid.NewGuid(),
+            EventId = eventId,
+            UserId = targetUser.Id,
+            CreatedAt = DateTime.UtcNow
+        });
+        await db.SaveChangesAsync(ct);
+
+        return Results.Ok(new { userId = targetUser.Id, email = targetUser.Email, displayName = targetUser.DisplayName });
+    }
+
+    private static async Task<IResult> RemoveCoAdmin(
+        Guid eventId,
+        Guid userId,
+        ClaimsPrincipal user,
+        ThuddleDbContext db,
+        CancellationToken ct)
+    {
+        var keycloakId = GetKeycloakId(user);
+        if (keycloakId is null) return Results.Unauthorized();
+
+        var dbUser = await db.Users.FirstOrDefaultAsync(u => u.KeycloakId == keycloakId, ct);
+        if (dbUser is null) return Results.Unauthorized();
+
+        if (!await IsEventAdmin(db, eventId, dbUser.Id, ct))
+            return Results.Forbid();
+
+        var coAdmin = await db.EventCoAdmins
+            .FirstOrDefaultAsync(c => c.EventId == eventId && c.UserId == userId, ct);
+
+        if (coAdmin is null)
+            return Results.NotFound(new { error = "Co-admin not found." });
+
+        db.EventCoAdmins.Remove(coAdmin);
+        await db.SaveChangesAsync(ct);
+
+        return Results.Ok(new { removed = true });
+    }
+
+    private static async Task<IResult> GetAttendees(
+        Guid eventId,
+        ClaimsPrincipal user,
+        ThuddleDbContext db,
+        CancellationToken ct)
+    {
+        var keycloakId = GetKeycloakId(user);
+        if (keycloakId is null) return Results.Unauthorized();
+
+        var dbUser = await db.Users.FirstOrDefaultAsync(u => u.KeycloakId == keycloakId, ct);
+        if (dbUser is null) return Results.Unauthorized();
+
+        if (!await IsEventAdmin(db, eventId, dbUser.Id, ct))
+            return Results.Forbid();
+
+        var attendees = await db.EventParticipants
+            .Where(p => p.EventId == eventId)
+            .Select(p => new
+            {
+                p.UserId,
+                p.User.Email,
+                DisplayName = p.User.DisplayName ?? p.User.Email,
+                p.JoinedAt,
+                p.HasPaid
+            })
+            .OrderBy(a => a.JoinedAt)
+            .ToListAsync(ct);
+
+        var coAdmins = await db.EventCoAdmins
+            .Where(c => c.EventId == eventId)
+            .Select(c => new
+            {
+                c.UserId,
+                c.User.Email,
+                DisplayName = c.User.DisplayName ?? c.User.Email
+            })
+            .ToListAsync(ct);
+
+        return Results.Ok(new { attendees, coAdmins });
+    }
+
+    private static async Task<IResult> UpdatePayment(
+        Guid eventId,
+        Guid userId,
+        UpdatePaymentRequest request,
+        ClaimsPrincipal user,
+        ThuddleDbContext db,
+        CancellationToken ct)
+    {
+        var keycloakId = GetKeycloakId(user);
+        if (keycloakId is null) return Results.Unauthorized();
+
+        var dbUser = await db.Users.FirstOrDefaultAsync(u => u.KeycloakId == keycloakId, ct);
+        if (dbUser is null) return Results.Unauthorized();
+
+        if (!await IsEventAdmin(db, eventId, dbUser.Id, ct))
+            return Results.Forbid();
+
+        var participant = await db.EventParticipants
+            .FirstOrDefaultAsync(p => p.EventId == eventId && p.UserId == userId, ct);
+
+        if (participant is null)
+            return Results.NotFound(new { error = "Attendee not found." });
+
+        participant.HasPaid = request.HasPaid;
+        db.EventParticipants.Update(participant);
+        await db.SaveChangesAsync(ct);
+
+        return Results.Ok(new { userId, hasPaid = request.HasPaid });
+    }
 }
 
 public record CreateEventRequest(
@@ -343,3 +556,17 @@ public record CreateEventRequest(
     decimal? Cost);
 
 public record InviteUsersRequest(List<string> Emails);
+
+public record UpdateEventRequest(
+    string Title,
+    string? Description,
+    DateTime Start,
+    DateTime End,
+    EventVisibility Visibility,
+    JoinMode JoinMode,
+    int? Capacity,
+    decimal? Cost);
+
+public record AddCoAdminRequest(string Email);
+
+public record UpdatePaymentRequest(bool HasPaid);
