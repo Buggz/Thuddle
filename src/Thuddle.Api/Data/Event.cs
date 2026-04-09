@@ -15,6 +15,7 @@ public class Event
     public required EventVisibility Visibility { get; set; }
     public required JoinMode JoinMode { get; set; }
     public int? Capacity { get; set; }
+    public decimal? Cost { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
 

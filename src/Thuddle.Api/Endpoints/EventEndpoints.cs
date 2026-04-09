@@ -47,7 +47,8 @@ public static class EventEndpoints
                 e.OwnerId,
                 e.Visibility,
                 e.JoinMode,
-                e.Capacity
+                e.Capacity,
+                e.Cost
             })
             .ToListAsync(ct);
 
@@ -93,6 +94,7 @@ public static class EventEndpoints
             Visibility = request.Visibility,
             JoinMode = request.JoinMode,
             Capacity = request.Capacity,
+            Cost = request.Cost,
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow
         };
@@ -109,7 +111,8 @@ public static class EventEndpoints
             evt.End,
             evt.Visibility,
             evt.JoinMode,
-            evt.Capacity
+            evt.Capacity,
+            evt.Cost
         });
     }
 
@@ -224,6 +227,7 @@ public record CreateEventRequest(
     DateTime End,
     EventVisibility Visibility,
     JoinMode JoinMode,
-    int? Capacity);
+    int? Capacity,
+    decimal? Cost);
 
 public record InviteUsersRequest(List<string> Emails);
