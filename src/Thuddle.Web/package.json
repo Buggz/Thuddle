@@ -1,0 +1,40 @@
+{
+  "name": "thuddle-web",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "lint": "eslint . --fix",
+    "format": "prettier --write src/"
+  },
+  "dependencies": {
+    "@josempgon/vue-keycloak": "^3.3.5",
+    "@tailwindcss/typography": "^0.5.19",
+    "@tiptap/extension-font-size": "^3.0.0-next.3",
+    "@tiptap/extension-heading": "^3.22.3",
+    "@tiptap/extension-image": "^3.22.3",
+    "@tiptap/extension-strike": "^3.22.3",
+    "@tiptap/extension-text-style": "^3.22.3",
+    "@tiptap/extension-underline": "^3.22.3",
+    "@tiptap/pm": "^3.22.3",
+    "@tiptap/starter-kit": "^3.22.3",
+    "@tiptap/vue-3": "^3.22.3",
+    "pinia": "^2.3.0",
+    "vue": "^3.5.13",
+    "vue-router": "^4.5.1"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.21.0",
+    "@tailwindcss/vite": "^4.1.0",
+    "@vitejs/plugin-basic-ssl": "^1.2.0",
+    "@vitejs/plugin-vue": "^5.2.0",
+    "eslint": "^9.21.0",
+    "eslint-plugin-vue": "^9.32.0",
+    "prettier": "^3.5.3",
+    "tailwindcss": "^4.1.0",
+    "vite": "^5.4.0"
+  }
+}
