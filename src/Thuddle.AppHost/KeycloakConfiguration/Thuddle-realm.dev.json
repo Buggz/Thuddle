@@ -39,7 +39,7 @@
           }
         }
       ],
-      "defaultClientScopes": ["email"],
+      "defaultClientScopes": ["email", "profile"],
       "optionalClientScopes": []
     },
     {
@@ -50,7 +50,7 @@
       "publicClient": false,
       "standardFlowEnabled": false,
       "protocol": "openid-connect",
-      "defaultClientScopes": ["email"]
+      "defaultClientScopes": ["email", "profile"]
     }
   ],
   "users": [

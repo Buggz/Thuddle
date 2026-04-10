@@ -5,6 +5,7 @@ import { useApi } from '@/shared/composables/useApi'
 export const usePermissionsStore = defineStore('permissions', () => {
   const permissions = ref([])
   const loaded = ref(false)
+  const profileComplete = ref(true)
 
   const { authFetch } = useApi()
 
@@ -13,8 +14,10 @@ export const usePermissionsStore = defineStore('permissions', () => {
       const res = await authFetch('/api/profile')
       const data = await res.json()
       permissions.value = data.permissions || []
+      profileComplete.value = !!data.displayName
     } catch {
       permissions.value = []
+      profileComplete.value = true
     } finally {
       loaded.value = true
     }
@@ -24,10 +27,16 @@ export const usePermissionsStore = defineStore('permissions', () => {
     return permissions.value.includes(permission)
   }
 
+  function markProfileComplete() {
+    profileComplete.value = true
+  }
+
   return {
     permissions: readonly(permissions),
     loaded: readonly(loaded),
+    profileComplete: readonly(profileComplete),
     load,
-    hasPermission
+    hasPermission,
+    markProfileComplete
   }
 })

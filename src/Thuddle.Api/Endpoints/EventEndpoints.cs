@@ -10,7 +10,7 @@ public static class EventEndpoints
     public static void MapEventEndpoints(this WebApplication app)
     {
         app.MapGet("/api/events", GetEvents).AllowAnonymous();
-        app.MapGet("/api/events/{eventId:guid}", GetEvent);
+        app.MapGet("/api/events/{eventId:guid}", GetEvent).AllowAnonymous();
         app.MapPost("/api/events", CreateEvent).RequireAuthorization("events:write");
         app.MapPut("/api/events/{eventId:guid}", UpdateEvent).RequireAuthorization();
         app.MapPost("/api/events/{eventId:guid}/invitations", InviteUsers).RequireAuthorization();
@@ -52,9 +52,15 @@ public static class EventEndpoints
             ? await db.Users.FirstOrDefaultAsync(u => u.KeycloakId == keycloakId, ct)
             : null;
 
-        var totalCount = await db.Events.CountAsync(ct);
+        var isAnonymous = dbUser is null;
 
-        var events = await db.Events
+        var query = db.Events.AsQueryable();
+        if (isAnonymous)
+            query = query.Where(e => e.Visibility == EventVisibility.Public);
+
+        var totalCount = await query.CountAsync(ct);
+
+        var events = await query
             .OrderBy(e => e.Start)
             .Skip((p - 1) * size)
             .Take(size)
@@ -160,6 +166,9 @@ public static class EventEndpoints
         var dbUser = keycloakId is not null
             ? await db.Users.FirstOrDefaultAsync(u => u.KeycloakId == keycloakId, ct)
             : null;
+
+        if (dbUser is null && evt.Visibility != EventVisibility.Public)
+            return Results.NotFound(new { error = "Event not found." });
 
         var hasJoined = dbUser is not null && await db.EventParticipants
             .AnyAsync(p => p.EventId == eventId && p.UserId == dbUser.Id, ct);

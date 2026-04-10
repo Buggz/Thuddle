@@ -1,8 +1,13 @@
 <script setup>
-import { onMounted } from 'vue'
+import { onMounted, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import { useProfileApi } from '@/features/profile/composables/useProfileApi'
+import { usePermissionsStore } from '@/features/auth/stores/permissions'
 import ProfilePictureCard from '@/features/profile/components/ProfilePictureCard.vue'
 import DisplayNameCard from '@/features/profile/components/DisplayNameCard.vue'
+
+const router = useRouter()
+const permissionsStore = usePermissionsStore()
 
 const {
   displayName,
@@ -17,6 +22,13 @@ const {
   saveDisplayName,
   uploadPicture
 } = useProfileApi()
+
+watch(savedName, (name) => {
+  if (name) {
+    permissionsStore.markProfileComplete()
+    router.push({ name: 'home' })
+  }
+})
 
 onMounted(loadProfile)
 </script>

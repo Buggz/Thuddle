@@ -32,6 +32,15 @@ public static class ProfileEndpoints
         if (keycloakId is null) return Results.Unauthorized();
 
         var email = user.FindFirstValue("email") ?? "";
+        var givenName = user.FindFirstValue("given_name");
+        var familyName = user.FindFirstValue("family_name");
+        var displayName = (givenName, familyName) switch
+        {
+            (not null, not null) => $"{givenName} {familyName}",
+            (not null, null) => givenName,
+            (null, not null) => familyName,
+            _ => null
+        };
 
         var dbUser = await db.Users.FirstOrDefaultAsync(u => u.KeycloakId == keycloakId, ct);
 
@@ -43,6 +52,7 @@ public static class ProfileEndpoints
             if (dbUser is not null)
             {
                 dbUser.KeycloakId = keycloakId;
+                dbUser.DisplayName ??= displayName;
                 dbUser.UpdatedAt = DateTime.UtcNow;
                 await db.SaveChangesAsync(ct);
             }
@@ -53,6 +63,7 @@ public static class ProfileEndpoints
                     Id = Guid.NewGuid(),
                     KeycloakId = keycloakId,
                     Email = email,
+                    DisplayName = displayName,
                     CreatedAt = DateTime.UtcNow,
                     UpdatedAt = DateTime.UtcNow
                 };
