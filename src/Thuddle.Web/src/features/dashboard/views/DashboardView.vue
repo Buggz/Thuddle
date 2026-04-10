@@ -3,15 +3,36 @@ import { shallowRef, ref, onMounted, computed } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useApi } from '@/shared/composables/useApi'
 import { useAuthStore } from '@/features/auth/stores/auth'
+import { usePermissionsStore } from '@/features/auth/stores/permissions'
 
 const { authFetch } = useApi()
 const auth = useAuthStore()
+const perms = usePermissionsStore()
 
 const events = ref([])
 const loading = shallowRef(true)
 const error = shallowRef(null)
 const page = shallowRef(1)
 const totalPages = shallowRef(1)
+const hintDismissed = shallowRef(localStorage.getItem('thuddle:profile-hint-dismissed') === 'true')
+
+const showProfileHint = computed(() =>
+  auth.isAuthenticated
+  && perms.loaded
+  && !hintDismissed.value
+  && (!perms.hasDisplayName || !perms.hasProfilePicture)
+)
+
+const profileHintMessage = computed(() => {
+  if (!perms.hasDisplayName && !perms.hasProfilePicture) return 'Set your display name and upload a profile picture'
+  if (!perms.hasDisplayName) return 'Set your display name'
+  return 'Upload a profile picture'
+})
+
+function dismissProfileHint() {
+  hintDismissed.value = true
+  localStorage.setItem('thuddle:profile-hint-dismissed', 'true')
+}
 
 const hasPrev = computed(() => page.value > 1)
 const hasNext = computed(() => page.value < totalPages.value)
@@ -74,6 +95,23 @@ onMounted(() => {
     </div>
 
     <template v-else>
+      <!-- Profile setup hint -->
+      <div
+        v-if="showProfileHint"
+        class="mb-6 flex items-center justify-between gap-4 rounded-lg border border-indigo-200 bg-indigo-50 px-4 py-3"
+      >
+        <p class="text-sm text-indigo-800">
+          {{ profileHintMessage }} to help others recognise you.
+          <RouterLink :to="{ name: 'profile' }" class="font-semibold underline hover:text-indigo-600">Go to profile</RouterLink>
+        </p>
+        <button
+          @click="dismissProfileHint"
+          class="shrink-0 text-xs font-medium text-indigo-500 hover:text-indigo-700"
+        >
+          Don't remind me again
+        </button>
+      </div>
+
       <div class="flex items-center justify-between mb-6">
         <h2 class="text-2xl font-bold text-gray-900">Events</h2>
       </div>
@@ -119,8 +157,9 @@ onMounted(() => {
               >
                 {{ event.joinMode === 0 ? 'Open' : 'Invite only' }}
               </span>
-              <span v-if="event.capacity" class="text-gray-400">
-                Max {{ event.capacity }}
+              <span class="text-gray-400">
+                <template v-if="event.capacity">{{ event.participantCount }}/{{ event.capacity }}</template>
+                <template v-else>{{ event.participantCount }} attending</template>
               </span>
               <span class="font-medium" :class="event.cost ? 'text-gray-700' : 'text-green-600'">
                 {{ event.cost ? event.cost.toFixed(2) : 'Free' }}

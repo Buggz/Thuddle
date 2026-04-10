@@ -2,26 +2,69 @@
 import { shallowRef, ref, onMounted } from 'vue'
 import { useRoute, useRouter, RouterLink } from 'vue-router'
 import { useApi } from '@/shared/composables/useApi'
+import { useAuthStore } from '@/features/auth/stores/auth'
+import { apiUrl } from '@/api'
 
 const route = useRoute()
 const router = useRouter()
 const { authFetch } = useApi()
+const auth = useAuthStore()
 
 const event = ref(null)
 const loading = shallowRef(true)
 const error = shallowRef(null)
 const joining = shallowRef(false)
 
+const activeTab = shallowRef('about')
+const participants = ref([])
+const participantsLoading = shallowRef(false)
+const participantsLoaded = shallowRef(false)
+
 async function loadEvent() {
   loading.value = true
   error.value = null
   try {
-    const res = await authFetch(`/api/events/${route.params.id}`)
+    const url = apiUrl(`/api/events/${route.params.id}`)
+    let res
+    if (auth.isAuthenticated) {
+      res = await authFetch(`/api/events/${route.params.id}`)
+    } else {
+      res = await fetch(url)
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data.error || `HTTP ${res.status}`)
+      }
+    }
     event.value = await res.json()
   } catch (err) {
     error.value = err.message || 'Failed to load event.'
   } finally {
     loading.value = false
+  }
+}
+
+async function loadParticipants() {
+  if (participantsLoaded.value) return
+  participantsLoading.value = true
+  try {
+    const res = await fetch(apiUrl(`/api/events/${route.params.id}/participants`))
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}))
+      throw new Error(data.error || `HTTP ${res.status}`)
+    }
+    participants.value = await res.json()
+    participantsLoaded.value = true
+  } catch (err) {
+    error.value = err.message || 'Failed to load participants.'
+  } finally {
+    participantsLoading.value = false
+  }
+}
+
+function selectTab(tab) {
+  activeTab.value = tab
+  if (tab === 'attendees' && !participantsLoaded.value) {
+    loadParticipants()
   }
 }
 
@@ -33,11 +76,18 @@ async function joinEvent() {
     event.value.hasJoined = true
     event.value.canJoin = false
     event.value.participantCount++
+    // Refresh attendee list if already loaded
+    participantsLoaded.value = false
+    if (activeTab.value === 'attendees') loadParticipants()
   } catch (err) {
     error.value = err.message || 'Failed to join event.'
   } finally {
     joining.value = false
   }
+}
+
+function profilePictureUrl(keycloakId) {
+  return apiUrl(`/api/profile/picture/${keycloakId}`)
 }
 
 function formatDate(iso) {
@@ -161,7 +211,15 @@ onMounted(loadEvent)
               Manage Event
             </RouterLink>
             <button
-              v-if="event.canJoin"
+              v-if="!auth.isAuthenticated"
+              disabled
+              class="px-5 py-2.5 text-sm font-semibold rounded-lg bg-gray-300 text-gray-500 cursor-not-allowed"
+              title="Sign in to join this event"
+            >
+              Join this event
+            </button>
+            <button
+              v-else-if="event.canJoin"
               :disabled="joining"
               @click="joinEvent"
               class="px-5 py-2.5 text-sm font-semibold rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
@@ -187,10 +245,66 @@ onMounted(loadEvent)
           </div>
         </div>
 
-        <!-- Description -->
-        <div v-if="event.description" class="px-6 py-5 border-t border-gray-100">
-          <h2 class="text-sm font-medium text-gray-500 uppercase tracking-wide mb-3">About this event</h2>
-          <div class="prose prose-sm max-w-none text-gray-700" v-html="event.description" />
+        <!-- Tabs -->
+        <div class="border-t border-gray-100">
+          <nav class="flex px-6" aria-label="Tabs">
+            <button
+              @click="selectTab('about')"
+              class="px-4 py-3 text-sm font-medium border-b-2 transition-colors"
+              :class="activeTab === 'about'
+                ? 'border-indigo-600 text-indigo-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
+            >
+              About this event
+            </button>
+            <button
+              @click="selectTab('attendees')"
+              class="px-4 py-3 text-sm font-medium border-b-2 transition-colors"
+              :class="activeTab === 'attendees'
+                ? 'border-indigo-600 text-indigo-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
+            >
+              Attendees
+              <span class="ml-1.5 inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600">
+                {{ event.participantCount }}
+              </span>
+            </button>
+          </nav>
+        </div>
+
+        <!-- Tab: About -->
+        <div v-if="activeTab === 'about'" class="px-6 py-5">
+          <div v-if="event.description" class="prose prose-sm max-w-none text-gray-700" v-html="event.description" />
+          <p v-else class="text-sm text-gray-400">No description provided.</p>
+        </div>
+
+        <!-- Tab: Attendees -->
+        <div v-if="activeTab === 'attendees'" class="px-6 py-5">
+          <div v-if="participantsLoading" class="text-center py-8 text-gray-400 text-sm">Loading attendees...</div>
+          <div v-else-if="participants.length === 0" class="text-center py-8">
+            <p class="text-gray-400 text-sm">No attendees yet.</p>
+          </div>
+          <ul v-else class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <li
+              v-for="p in participants"
+              :key="p.keycloakId"
+              class="flex items-center gap-3 rounded-lg border border-gray-100 px-3 py-2.5"
+            >
+              <img
+                v-if="p.hasProfilePicture"
+                :src="profilePictureUrl(p.keycloakId)"
+                :alt="p.displayName"
+                class="w-9 h-9 rounded-full object-cover bg-gray-100"
+              />
+              <span
+                v-else
+                class="w-9 h-9 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center text-sm font-semibold"
+              >
+                {{ p.displayName.charAt(0).toUpperCase() }}
+              </span>
+              <span class="text-sm font-medium text-gray-700 truncate">{{ p.displayName }}</span>
+            </li>
+          </ul>
         </div>
       </div>
     </template>
