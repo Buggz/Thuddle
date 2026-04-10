@@ -1,12 +1,10 @@
 <script setup>
-import { onMounted, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { onMounted } from 'vue'
 import { useProfileApi } from '@/features/profile/composables/useProfileApi'
 import { usePermissionsStore } from '@/features/auth/stores/permissions'
 import ProfilePictureCard from '@/features/profile/components/ProfilePictureCard.vue'
 import DisplayNameCard from '@/features/profile/components/DisplayNameCard.vue'
 
-const router = useRouter()
 const permissionsStore = usePermissionsStore()
 
 const {
@@ -23,12 +21,19 @@ const {
   uploadPicture
 } = useProfileApi()
 
-watch(savedName, (name) => {
-  if (name) {
+async function handleSaveDisplayName() {
+  await saveDisplayName()
+  if (savedName.value) {
     permissionsStore.markProfileComplete()
-    router.push({ name: 'home' })
   }
-})
+}
+
+async function handleUploadPicture(event) {
+  await uploadPicture(event)
+  if (hasProfilePicture.value) {
+    permissionsStore.markProfilePictureUploaded()
+  }
+}
 
 onMounted(loadProfile)
 </script>
@@ -54,14 +59,14 @@ onMounted(loadProfile)
       :has-profile-picture="hasProfilePicture"
       :picture-url="pictureUrl"
       :uploading="uploading"
-      @upload="uploadPicture"
+      @upload="handleUploadPicture"
     />
 
     <DisplayNameCard
       v-model:display-name="displayName"
       :saved-name="savedName"
       :saving="saving"
-      @save="saveDisplayName"
+      @save="handleSaveDisplayName"
     />
   </div>
 </template>

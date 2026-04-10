@@ -35,6 +35,11 @@ export const usePermissionsStore = defineStore('permissions', () => {
 
   function markProfileComplete() {
     profileComplete.value = true
+    hasDisplayName.value = true
+  }
+
+  function markProfilePictureUploaded() {
+    hasProfilePicture.value = true
   }
 
   return {
@@ -45,6 +50,7 @@ export const usePermissionsStore = defineStore('permissions', () => {
     hasProfilePicture: readonly(hasProfilePicture),
     load,
     hasPermission,
-    markProfileComplete
+    markProfileComplete,
+    markProfilePictureUploaded
   }
 })

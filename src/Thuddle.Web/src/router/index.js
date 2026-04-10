@@ -1,6 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '@/features/auth/stores/auth'
-import { usePermissionsStore } from '@/features/auth/stores/permissions'
 
 export default function initRouter() {
   const router = createRouter({
@@ -43,13 +42,6 @@ export default function initRouter() {
     if (to.meta.requiresAuth && !auth.isAuthenticated) {
       auth.login(to.fullPath)
       return false
-    }
-
-    if (auth.isAuthenticated && to.name !== 'profile') {
-      const perms = usePermissionsStore()
-      if (perms.loaded && !perms.profileComplete) {
-        return { name: 'profile' }
-      }
     }
   })
 
