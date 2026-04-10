@@ -95,36 +95,6 @@ if (-not $SkipBuild) {
     Write-Host "`nAll images built and pushed." -ForegroundColor Green
 }
 
-# ─── Update Container App images ─────────────────────────────────────────────
-
-Write-Host "`n=== Updating Container Apps ===" -ForegroundColor Cyan
-
-$apiImage = "$ContainerRegistry/thuddle-api:$ImageTag"
-Write-Host "Updating thuddle-api to $apiImage ..." -ForegroundColor Yellow
-$apiUpdateArgs = @(
-    'containerapp', 'update',
-    '--name', 'thuddle-api',
-    '--resource-group', $ResourceGroup,
-    '--image', $apiImage,
-    '--output', 'none'
-)
-$keycloakDomain = if ($outputs.PSObject.Properties['keycloakCustomDomain'] -and $outputs.keycloakCustomDomain) { $outputs.keycloakCustomDomain } else { $null }
-if ($keycloakDomain) {
-    $apiUpdateArgs += @('--set-env-vars', "Keycloak__AuthServerUrl=https://$keycloakDomain")
-    Write-Host "  Keycloak URL: https://$keycloakDomain" -ForegroundColor White
-}
-az @apiUpdateArgs
-if ($LASTEXITCODE -ne 0) { Write-Error "Failed to update API container app"; exit 1 }
-
-$keycloakImage = "$ContainerRegistry/thuddle-keycloak:$ImageTag"
-Write-Host "Updating thuddle-keycloak to $keycloakImage ..." -ForegroundColor Yellow
-az containerapp update `
-    --name thuddle-keycloak `
-    --resource-group $ResourceGroup `
-    --image $keycloakImage `
-    --output none
-if ($LASTEXITCODE -ne 0) { Write-Error "Failed to update Keycloak container app"; exit 1 }
-
 # ─── Run migrations ──────────────────────────────────────────────────────────
 
 if (-not $SkipMigrations) {
@@ -172,6 +142,36 @@ if (-not $SkipMigrations) {
         exit 1
     }
 }
+
+# ─── Update Container App images ─────────────────────────────────────────────
+
+Write-Host "`n=== Updating Container Apps ===" -ForegroundColor Cyan
+
+$apiImage = "$ContainerRegistry/thuddle-api:$ImageTag"
+Write-Host "Updating thuddle-api to $apiImage ..." -ForegroundColor Yellow
+$apiUpdateArgs = @(
+    'containerapp', 'update',
+    '--name', 'thuddle-api',
+    '--resource-group', $ResourceGroup,
+    '--image', $apiImage,
+    '--output', 'none'
+)
+$keycloakDomain = if ($outputs.PSObject.Properties['keycloakCustomDomain'] -and $outputs.keycloakCustomDomain) { $outputs.keycloakCustomDomain } else { $null }
+if ($keycloakDomain) {
+    $apiUpdateArgs += @('--set-env-vars', "Keycloak__AuthServerUrl=https://$keycloakDomain")
+    Write-Host "  Keycloak URL: https://$keycloakDomain" -ForegroundColor White
+}
+az @apiUpdateArgs
+if ($LASTEXITCODE -ne 0) { Write-Error "Failed to update API container app"; exit 1 }
+
+$keycloakImage = "$ContainerRegistry/thuddle-keycloak:$ImageTag"
+Write-Host "Updating thuddle-keycloak to $keycloakImage ..." -ForegroundColor Yellow
+az containerapp update `
+    --name thuddle-keycloak `
+    --resource-group $ResourceGroup `
+    --image $keycloakImage `
+    --output none
+if ($LASTEXITCODE -ne 0) { Write-Error "Failed to update Keycloak container app"; exit 1 }
 
 # ─── Build and deploy frontend ───────────────────────────────────────────────
 

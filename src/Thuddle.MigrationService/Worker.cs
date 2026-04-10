@@ -23,6 +23,7 @@ public class MigrationWorker(
         catch (Exception ex)
         {
             logger.LogError(ex, "Migration failed: {Error}", ex.Message);
+            throw;
         }
 
         try
@@ -50,10 +51,103 @@ public class MigrationWorker(
 
         await strategy.ExecuteAsync(async () =>
         {
+            // Repair: if history table exists but is empty while the database has tables,
+            // re-baseline by marking already-applied migrations as applied.
+            await RepairMigrationHistoryAsync(dbContext, ct);
+
             logger.LogInformation("Applying pending migrations...");
             await dbContext.Database.MigrateAsync(ct);
             logger.LogInformation("Migrations applied successfully.");
         });
+    }
+
+    private async Task RepairMigrationHistoryAsync(ThuddleDbContext dbContext, CancellationToken ct)
+    {
+        var conn = dbContext.Database.GetDbConnection();
+        await conn.OpenAsync(ct);
+
+        // Check if __EFMigrationsHistory exists
+        await using var historyCmd = conn.CreateCommand();
+        historyCmd.CommandText = """
+            SELECT COUNT(*) FROM information_schema.tables
+            WHERE table_name = '__EFMigrationsHistory'
+            """;
+        var historyExists = (long)(await historyCmd.ExecuteScalarAsync(ct))! > 0;
+        if (!historyExists)
+        {
+            await conn.CloseAsync();
+            return;
+        }
+
+        // Check if history is empty
+        await using var countCmd = conn.CreateCommand();
+        countCmd.CommandText = """SELECT COUNT(*) FROM "__EFMigrationsHistory" """;
+        var historyCount = (long)(await countCmd.ExecuteScalarAsync(ct))!;
+        if (historyCount > 0)
+        {
+            await conn.CloseAsync();
+            return;
+        }
+
+        // Check if the Users table already exists (proxy for "database was previously migrated")
+        await using var tableCmd = conn.CreateCommand();
+        tableCmd.CommandText = """
+            SELECT COUNT(*) FROM information_schema.tables
+            WHERE table_name = 'Users'
+            """;
+        var tablesExist = (long)(await tableCmd.ExecuteScalarAsync(ct))! > 0;
+        if (!tablesExist)
+        {
+            await conn.CloseAsync();
+            return;
+        }
+
+        logger.LogWarning("Migration history is empty but database tables exist. Re-baselining...");
+
+        // Get all migrations known to EF, mark all but the pending ones as applied
+        var allMigrations = dbContext.Database.GetMigrations().ToList();
+        var pendingMigrations = (await dbContext.Database.GetPendingMigrationsAsync(ct)).ToHashSet();
+
+        // Since history is empty, ALL migrations are "pending". We need to figure out which
+        // ones are actually already applied by checking the schema.
+        // Strategy: insert all migrations EXCEPT the truly new ones (those that add columns/tables
+        // that don't exist yet). We detect this by checking for the FullName column.
+        await using var fullNameCmd = conn.CreateCommand();
+        fullNameCmd.CommandText = """
+            SELECT COUNT(*) FROM information_schema.columns
+            WHERE table_name = 'Users' AND column_name = 'FullName'
+            """;
+        var fullNameExists = (long)(await fullNameCmd.ExecuteScalarAsync(ct))! > 0;
+
+        // All migrations that existed before AddUserFullName are already applied
+        var baselineMigrations = allMigrations
+            .TakeWhile(m => !m.Contains("AddUserFullName"))
+            .ToList();
+
+        // If FullName column exists, AddUserFullName is also already applied
+        if (fullNameExists)
+        {
+            var addUserFullName = allMigrations.FirstOrDefault(m => m.Contains("AddUserFullName"));
+            if (addUserFullName is not null)
+                baselineMigrations.Add(addUserFullName);
+        }
+
+        var version = typeof(DbContext).Assembly.GetName().Version?.ToString() ?? "10.0.5";
+
+        foreach (var migration in baselineMigrations)
+        {
+            await using var insertCmd = conn.CreateCommand();
+            insertCmd.CommandText = $"""
+                INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
+                VALUES ('{migration}', '{version}')
+                ON CONFLICT DO NOTHING
+                """;
+            await insertCmd.ExecuteNonQueryAsync(ct);
+            logger.LogInformation("Baselined migration: {MigrationId}", migration);
+        }
+
+        logger.LogInformation("Re-baseline complete. {Count} migrations marked as applied.", baselineMigrations.Count);
+        await conn.CloseAsync();
     }
 
     private async Task SeedDataAsync(ThuddleDbContext dbContext, CancellationToken ct)

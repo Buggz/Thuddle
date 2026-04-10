@@ -528,18 +528,35 @@ public static class EventEndpoints
         if (evt.Visibility != EventVisibility.Public)
             return Results.NotFound(new { error = "Event not found." });
 
-        var participants = await db.EventParticipants
+        var participantsRaw = await db.EventParticipants
             .Where(p => p.EventId == eventId)
             .OrderBy(p => p.JoinedAt)
             .Select(p => new
             {
                 p.User.KeycloakId,
-                DisplayName = p.User.DisplayName ?? p.User.FullName ?? p.User.Email,
+                p.User.DisplayName,
+                p.User.FullName,
+                p.User.Email,
                 HasProfilePicture = p.User.ScaledPicturePath != null
             })
             .ToListAsync(ct);
 
+        var participants = participantsRaw.Select(p => new
+        {
+            p.KeycloakId,
+            DisplayName = p.DisplayName ?? p.FullName ?? (p.Email != null ? MaskEmail(p.Email) : "Anonymous Attendee"),
+            p.HasProfilePicture
+        });
+
         return Results.Ok(participants);
+
+        // Local function to mask email addresses (e.g. t***@gmail.com)
+        static string MaskEmail(string email)
+        {
+            var at = email.IndexOf('@');
+            if (at <= 1) return "***@" + email.Split('@').Last();
+            return email[0] + new string('*', Math.Max(1, at - 1)) + email.Substring(at);
+        }
     }
 
     private static async Task<IResult> UpdatePayment(
