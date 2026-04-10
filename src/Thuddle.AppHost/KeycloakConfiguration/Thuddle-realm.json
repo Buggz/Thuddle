@@ -1,0 +1,138 @@
+{
+  "realm": "Thuddle",
+  "enabled": true,
+  "sslRequired": "external",
+  "registrationAllowed": true,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "resetPasswordAllowed": true,
+  "bruteForceProtected": true,
+  "verifyEmail": true,
+  "emailTheme": "thuddle",
+  "browserSecurityHeaders": {
+    "contentSecurityPolicy": "frame-src 'self' https://www.google.com; frame-ancestors 'self'; object-src 'none'; script-src 'self' https://www.google.com https://www.gstatic.com; style-src 'self' 'unsafe-inline'"
+  },
+  "smtpServer": {
+    "host": "smtp-relay.brevo.com",
+    "port": "587",
+    "from": "noreply@thuddle.app",
+    "fromDisplayName": "Thuddle",
+    "replyTo": "noreply@thuddle.app",
+    "starttls": "true",
+    "auth": "true",
+    "user": "REPLACE_WITH_SMTP_USER",
+    "password": "REPLACE_WITH_SMTP_PASSWORD"
+  },
+  "browserFlow": "browser",
+  "registrationFlow": "registration",
+  "authenticationFlows": [
+    {
+      "alias": "registration",
+      "providerId": "basic-flow",
+      "topLevel": true,
+      "builtIn": false,
+      "authenticationExecutions": [
+        {
+          "authenticator": "registration-page-form",
+          "authenticatorFlow": true,
+          "requirement": "REQUIRED",
+          "flowAlias": "registration form",
+          "priority": 0
+        }
+      ]
+    },
+    {
+      "alias": "registration form",
+      "providerId": "form-flow",
+      "topLevel": false,
+      "builtIn": false,
+      "authenticationExecutions": [
+        {
+          "authenticator": "registration-user-creation",
+          "requirement": "REQUIRED",
+          "priority": 20
+        },
+        {
+          "authenticator": "registration-password-action",
+          "requirement": "REQUIRED",
+          "priority": 50
+        },
+        {
+          "authenticator": "registration-recaptcha-action",
+          "requirement": "REQUIRED",
+          "priority": 60,
+          "authenticatorConfig": "recaptcha"
+        }
+      ]
+    }
+  ],
+  "clients": [
+    {
+      "clientId": "thuddle-web",
+      "name": "Thuddle Web Application",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "redirectUris": ["https://thuddle.app/*", "https://www.thuddle.app/*"],
+      "webOrigins": ["https://thuddle.app", "https://www.thuddle.app"],
+      "protocol": "openid-connect",
+      "attributes": {
+        "post.logout.redirect.uris": "https://thuddle.app/*##https://www.thuddle.app/*",
+        "pkce.code.challenge.method": "S256"
+      },
+      "protocolMappers": [
+        {
+          "name": "thuddle-web-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "thuddle-web",
+            "id.token.claim": "false",
+            "lightweight.claim": "false",
+            "access.token.claim": "true",
+            "introspection.token.claim": "true"
+          }
+        }
+      ],
+      "defaultClientScopes": ["email"],
+      "optionalClientScopes": []
+    },
+    {
+      "clientId": "thuddle-api",
+      "name": "Thuddle API",
+      "enabled": true,
+      "bearerOnly": true,
+      "publicClient": false,
+      "standardFlowEnabled": false,
+      "protocol": "openid-connect",
+      "defaultClientScopes": ["email"]
+    }
+  ],
+  "users": [],
+  "components": {
+    "org.keycloak.services.clientregistration.policy.ClientRegistrationPolicy": [
+      {
+        "name": "Allowed Protocol Mapper Types",
+        "providerId": "allowed-protocol-mappers",
+        "subType": "anonymous",
+        "config": {
+          "allowed-protocol-mapper-types": ["oidc-sha256-pairwise-sub-mapper"]
+        }
+      }
+    ]
+  },
+  "authenticatorConfig": [
+    {
+      "alias": "recaptcha",
+      "config": {
+        "site.key": "REPLACE_WITH_RECAPTCHA_SITE_KEY",
+        "secret": "REPLACE_WITH_RECAPTCHA_SECRET",
+        "useRecaptchaNet": "false"
+      }
+    }
+  ]
+}
