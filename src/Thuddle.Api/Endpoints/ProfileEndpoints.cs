@@ -32,10 +32,38 @@ public static class ProfileEndpoints
         if (keycloakId is null) return Results.Unauthorized();
 
         var email = user.FindFirstValue("email") ?? "";
+        var givenName = user.FindFirstValue("given_name");
+        var familyName = user.FindFirstValue("family_name");
+        var fullName = (givenName, familyName) switch
+        {
+            (not null, not null) => $"{givenName} {familyName}",
+            (not null, null) => givenName,
+            (null, not null) => familyName,
+            _ => null
+        };
 
         var dbUser = await db.Users.FirstOrDefaultAsync(u => u.KeycloakId == keycloakId, ct);
 
-        if (dbUser is null)
+        if (dbUser is not null)
+        {
+            var changed = false;
+            if (fullName is not null && dbUser.FullName != fullName)
+            {
+                dbUser.FullName = fullName;
+                changed = true;
+            }
+            if (dbUser.DisplayName is null && fullName is not null)
+            {
+                dbUser.DisplayName = fullName;
+                changed = true;
+            }
+            if (changed)
+            {
+                dbUser.UpdatedAt = DateTime.UtcNow;
+                await db.SaveChangesAsync(ct);
+            }
+        }
+        else
         {
             // User may already exist with a different KeycloakId (e.g. fresh Keycloak instance)
             dbUser = await db.Users.FirstOrDefaultAsync(u => u.Email == email, ct);
@@ -43,6 +71,8 @@ public static class ProfileEndpoints
             if (dbUser is not null)
             {
                 dbUser.KeycloakId = keycloakId;
+                dbUser.FullName = fullName ?? dbUser.FullName;
+                dbUser.DisplayName ??= fullName;
                 dbUser.UpdatedAt = DateTime.UtcNow;
                 await db.SaveChangesAsync(ct);
             }
@@ -53,6 +83,8 @@ public static class ProfileEndpoints
                     Id = Guid.NewGuid(),
                     KeycloakId = keycloakId,
                     Email = email,
+                    FullName = fullName,
+                    DisplayName = fullName,
                     CreatedAt = DateTime.UtcNow,
                     UpdatedAt = DateTime.UtcNow
                 };

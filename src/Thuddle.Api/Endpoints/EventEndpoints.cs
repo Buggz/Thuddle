@@ -10,7 +10,7 @@ public static class EventEndpoints
     public static void MapEventEndpoints(this WebApplication app)
     {
         app.MapGet("/api/events", GetEvents).AllowAnonymous();
-        app.MapGet("/api/events/{eventId:guid}", GetEvent);
+        app.MapGet("/api/events/{eventId:guid}", GetEvent).AllowAnonymous();
         app.MapPost("/api/events", CreateEvent).RequireAuthorization("events:write");
         app.MapPut("/api/events/{eventId:guid}", UpdateEvent).RequireAuthorization();
         app.MapPost("/api/events/{eventId:guid}/invitations", InviteUsers).RequireAuthorization();
@@ -18,6 +18,7 @@ public static class EventEndpoints
         app.MapPost("/api/events/{eventId:guid}/co-admins", AddCoAdmin).RequireAuthorization();
         app.MapDelete("/api/events/{eventId:guid}/co-admins/{userId:guid}", RemoveCoAdmin).RequireAuthorization();
         app.MapGet("/api/events/{eventId:guid}/attendees", GetAttendees).RequireAuthorization();
+        app.MapGet("/api/events/{eventId:guid}/participants", GetParticipants).AllowAnonymous();
         app.MapPut("/api/events/{eventId:guid}/attendees/{userId:guid}/payment", UpdatePayment).RequireAuthorization();
         app.MapPost("/api/events/{eventId:guid}/images", UploadEventImage).RequireAuthorization().DisableAntiforgery();
     }
@@ -49,12 +50,20 @@ public static class EventEndpoints
 
         var keycloakId = GetKeycloakId(user);
         var dbUser = keycloakId is not null
-            ? await db.Users.FirstOrDefaultAsync(u => u.KeycloakId == keycloakId, ct)
+            ? await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.KeycloakId == keycloakId, ct)
             : null;
 
-        var totalCount = await db.Events.CountAsync(ct);
+        var isAnonymous = dbUser is null;
+        var userId = dbUser?.Id ?? Guid.Empty;
+        var userEmail = dbUser?.Email ?? "";
 
-        var events = await db.Events
+        var query = db.Events.AsNoTracking();
+        if (isAnonymous)
+            query = query.Where(e => e.Visibility == EventVisibility.Public);
+
+        var totalCount = await query.CountAsync(ct);
+
+        var events = await query
             .OrderBy(e => e.Start)
             .Skip((p - 1) * size)
             .Take(size)
@@ -71,51 +80,31 @@ public static class EventEndpoints
                 e.Visibility,
                 e.JoinMode,
                 e.Capacity,
-                e.Cost
+                e.Cost,
+                ParticipantCount = db.EventParticipants.Count(ep => ep.EventId == e.Id),
+                HasJoined = !isAnonymous && db.EventParticipants.Any(ep => ep.EventId == e.Id && ep.UserId == userId),
+                HasInvitation = !isAnonymous && db.EventInvitations.Any(i => i.EventId == e.Id && i.Email == userEmail)
             })
             .ToListAsync(ct);
 
-        var eventIds = events.Select(e => e.Id).ToList();
-
-        var joinedEventIds = dbUser is not null
-            ? (await db.EventParticipants
-                .Where(p2 => eventIds.Contains(p2.EventId) && p2.UserId == dbUser.Id)
-                .Select(p2 => p2.EventId)
-                .ToListAsync(ct))
-                .ToHashSet()
-            : new HashSet<Guid>();
-
-        var invitedEventIds = dbUser is not null
-            ? (await db.EventInvitations
-                .Where(i => eventIds.Contains(i.EventId) && i.Email == dbUser.Email)
-                .Select(i => i.EventId)
-                .ToListAsync(ct))
-                .ToHashSet()
-            : new HashSet<Guid>();
-
-        var result = events.Select(e =>
+        var result = events.Select(e => new
         {
-            var hasJoined = joinedEventIds.Contains(e.Id);
-            var canJoin = !hasJoined && dbUser is not null
-                && (e.JoinMode == JoinMode.Open || invitedEventIds.Contains(e.Id));
-
-            return new
-            {
-                e.Id,
-                e.Title,
-                e.Location,
-                e.Description,
-                e.PicturePath,
-                e.Start,
-                e.End,
-                e.OwnerId,
-                e.Visibility,
-                e.JoinMode,
-                e.Capacity,
-                e.Cost,
-                HasJoined = hasJoined,
-                CanJoin = canJoin
-            };
+            e.Id,
+            e.Title,
+            e.Location,
+            e.Description,
+            e.PicturePath,
+            e.Start,
+            e.End,
+            e.OwnerId,
+            e.Visibility,
+            e.JoinMode,
+            e.Capacity,
+            e.Cost,
+            e.ParticipantCount,
+            e.HasJoined,
+            CanJoin = !e.HasJoined && !isAnonymous
+                && (e.JoinMode == JoinMode.Open || e.HasInvitation)
         });
 
         return Results.Ok(new
@@ -160,6 +149,9 @@ public static class EventEndpoints
         var dbUser = keycloakId is not null
             ? await db.Users.FirstOrDefaultAsync(u => u.KeycloakId == keycloakId, ct)
             : null;
+
+        if (dbUser is null && evt.Visibility != EventVisibility.Public)
+            return Results.NotFound(new { error = "Event not found." });
 
         var hasJoined = dbUser is not null && await db.EventParticipants
             .AnyAsync(p => p.EventId == eventId && p.UserId == dbUser.Id, ct);
@@ -504,7 +496,8 @@ public static class EventEndpoints
             {
                 p.UserId,
                 p.User.Email,
-                DisplayName = p.User.DisplayName ?? p.User.Email,
+                FullName = p.User.FullName,
+                DisplayName = p.User.DisplayName ?? p.User.FullName ?? p.User.Email,
                 p.JoinedAt,
                 p.HasPaid
             })
@@ -517,11 +510,36 @@ public static class EventEndpoints
             {
                 c.UserId,
                 c.User.Email,
-                DisplayName = c.User.DisplayName ?? c.User.Email
+                FullName = c.User.FullName,
+                DisplayName = c.User.DisplayName ?? c.User.FullName ?? c.User.Email
             })
             .ToListAsync(ct);
 
         return Results.Ok(new { attendees, coAdmins });
+    }
+
+    private static async Task<IResult> GetParticipants(
+        Guid eventId,
+        ThuddleDbContext db,
+        CancellationToken ct)
+    {
+        var evt = await db.Events.AsNoTracking().FirstOrDefaultAsync(e => e.Id == eventId, ct);
+        if (evt is null) return Results.NotFound(new { error = "Event not found." });
+        if (evt.Visibility != EventVisibility.Public)
+            return Results.NotFound(new { error = "Event not found." });
+
+        var participants = await db.EventParticipants
+            .Where(p => p.EventId == eventId)
+            .OrderBy(p => p.JoinedAt)
+            .Select(p => new
+            {
+                p.User.KeycloakId,
+                DisplayName = p.User.DisplayName ?? p.User.FullName ?? p.User.Email,
+                HasProfilePicture = p.User.ScaledPicturePath != null
+            })
+            .ToListAsync(ct);
+
+        return Results.Ok(participants);
     }
 
     private static async Task<IResult> UpdatePayment(

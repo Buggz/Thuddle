@@ -37,12 +37,11 @@ export default function initRouter() {
   })
 
   router.beforeEach((to) => {
-    if (to.meta.requiresAuth) {
-      const auth = useAuthStore()
-      if (!auth.isAuthenticated) {
-        auth.login(to.fullPath)
-        return false
-      }
+    const auth = useAuthStore()
+
+    if (to.meta.requiresAuth && !auth.isAuthenticated) {
+      auth.login(to.fullPath)
+      return false
     }
   })
 

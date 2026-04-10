@@ -1,8 +1,11 @@
 <script setup>
 import { onMounted } from 'vue'
 import { useProfileApi } from '@/features/profile/composables/useProfileApi'
+import { usePermissionsStore } from '@/features/auth/stores/permissions'
 import ProfilePictureCard from '@/features/profile/components/ProfilePictureCard.vue'
 import DisplayNameCard from '@/features/profile/components/DisplayNameCard.vue'
+
+const permissionsStore = usePermissionsStore()
 
 const {
   displayName,
@@ -17,6 +20,20 @@ const {
   saveDisplayName,
   uploadPicture
 } = useProfileApi()
+
+async function handleSaveDisplayName() {
+  await saveDisplayName()
+  if (savedName.value) {
+    permissionsStore.markProfileComplete()
+  }
+}
+
+async function handleUploadPicture(event) {
+  await uploadPicture(event)
+  if (hasProfilePicture.value) {
+    permissionsStore.markProfilePictureUploaded()
+  }
+}
 
 onMounted(loadProfile)
 </script>
@@ -42,14 +59,14 @@ onMounted(loadProfile)
       :has-profile-picture="hasProfilePicture"
       :picture-url="pictureUrl"
       :uploading="uploading"
-      @upload="uploadPicture"
+      @upload="handleUploadPicture"
     />
 
     <DisplayNameCard
       v-model:display-name="displayName"
       :saved-name="savedName"
       :saving="saving"
-      @save="saveDisplayName"
+      @save="handleSaveDisplayName"
     />
   </div>
 </template>

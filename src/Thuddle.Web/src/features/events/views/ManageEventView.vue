@@ -297,7 +297,11 @@ onMounted(async () => {
           <li v-for="admin in coAdmins" :key="admin.userId" class="flex items-center justify-between py-2.5">
             <div>
               <p class="text-sm font-medium text-gray-900">{{ admin.displayName }}</p>
-              <p class="text-xs text-gray-500">{{ admin.email }}</p>
+              <p class="text-xs text-gray-500">
+                <span v-if="admin.fullName">{{ admin.fullName }}</span>
+                <span v-else class="text-gray-400 italic cursor-default select-none" title="Will be updated next time the user logs in">(Not available)</span>
+                · {{ admin.email }}
+              </p>
             </div>
             <button
               @click="removeCoAdmin(admin)"
@@ -323,17 +327,21 @@ onMounted(async () => {
         <table v-else class="w-full text-sm">
           <thead>
             <tr class="text-left text-xs text-gray-500 uppercase tracking-wide border-b border-gray-200">
-              <th class="pb-2 font-medium">Name</th>
+              <th class="pb-2 font-medium">Display Name</th>
+              <th class="pb-2 font-medium">Full Name</th>
+              <th class="pb-2 font-medium">Email</th>
               <th class="pb-2 font-medium">Joined</th>
               <th v-if="hasCost" class="pb-2 font-medium text-center">Paid</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-gray-100">
             <tr v-for="a in attendees" :key="a.userId">
+              <td class="py-2.5 font-medium text-gray-900">{{ a.displayName }}</td>
               <td class="py-2.5">
-                <p class="font-medium text-gray-900">{{ a.displayName }}</p>
-                <p class="text-xs text-gray-500">{{ a.email }}</p>
+                <span v-if="a.fullName" class="text-gray-700">{{ a.fullName }}</span>
+                <span v-else class="text-gray-400 italic cursor-default select-none" title="Will be updated next time the user logs in">(Not available)</span>
               </td>
+              <td class="py-2.5 text-gray-500">{{ a.email }}</td>
               <td class="py-2.5 text-gray-500">
                 {{ new Date(a.joinedAt).toLocaleDateString() }}
               </td>
