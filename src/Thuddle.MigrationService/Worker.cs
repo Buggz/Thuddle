@@ -19,13 +19,23 @@ public class MigrationWorker(
             var dbContext = scope.ServiceProvider.GetRequiredService<ThuddleDbContext>();
 
             await RunMigrationsAsync(dbContext, stoppingToken);
-            await SeedDataAsync(dbContext, stoppingToken);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Migration failed: {Error}", ex.Message);
+        }
 
+        try
+        {
+            using var scope = serviceProvider.CreateScope();
+            var dbContext = scope.ServiceProvider.GetRequiredService<ThuddleDbContext>();
+
+            await SeedDataAsync(dbContext, stoppingToken);
             logger.LogInformation("Migration service completed successfully.");
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Migration service failed: {Error}", ex.Message);
+            logger.LogError(ex, "Seeding failed: {Error}", ex.Message);
             throw;
         }
         finally
@@ -41,20 +51,8 @@ public class MigrationWorker(
         await strategy.ExecuteAsync(async () =>
         {
             logger.LogInformation("Applying pending migrations...");
-            try
-            {
-                // Ensure database exists first
-                await dbContext.Database.EnsureCreatedAsync(ct);
-                
-                // Then apply migrations
-                await dbContext.Database.MigrateAsync(ct);
-                logger.LogInformation("Migrations applied successfully.");
-            }
-            catch (Exception ex)
-            {
-                logger.LogError(ex, "Error during migration: {Message}", ex.Message);
-                throw;
-            }
+            await dbContext.Database.MigrateAsync(ct);
+            logger.LogInformation("Migrations applied successfully.");
         });
     }
 
@@ -67,7 +65,8 @@ public class MigrationWorker(
             return;
         }
 
-        var user = await dbContext.Users.FirstOrDefaultAsync(u => u.Email == adminEmail, ct);
+        var user = await dbContext.Users.FirstOrDefaultAsync(
+            u => u.Email.ToLower() == adminEmail.ToLower(), ct);
         if (user is null)
         {
             logger.LogInformation("Admin user {Email} not found in database yet — permission will be granted on first login.", adminEmail);

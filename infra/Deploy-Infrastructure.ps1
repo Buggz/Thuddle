@@ -30,7 +30,8 @@ param(
 
     [string]$Location = 'norwayeast',
     [string]$ResourceGroup = 'rg-thuddle',
-    [string]$AdminEmail
+    [string]$ApiCustomDomain,
+    [string]$KeycloakCustomDomain
 )
 
 $ErrorActionPreference = 'Stop'
@@ -76,16 +77,30 @@ if ($LASTEXITCODE -ne 0) { exit 1 }
 $bicepFile = Join-Path $PSScriptRoot 'main.bicep'
 
 Write-Host "Deploying Bicep template..." -ForegroundColor Cyan
-$result = az deployment group create `
-    --resource-group $ResourceGroup `
-    --template-file $bicepFile `
-    --parameters `
-        imageTag=$ImageTag `
-        containerRegistry=$ContainerRegistry `
-        postgresAdminPassword=$postgresPassword `
-        keycloakAdminPassword=$keycloakPassword `
-        adminEmail=$($AdminEmail ?? '') `
-    --output json
+
+$paramsObj = @{
+    '$schema'      = 'https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#'
+    contentVersion = '1.0.0.0'
+    parameters     = @{
+        imageTag              = @{ value = $ImageTag }
+        containerRegistry     = @{ value = $ContainerRegistry }
+        postgresAdminPassword = @{ value = $postgresPassword }
+        keycloakAdminPassword = @{ value = $keycloakPassword }
+        keycloakCustomDomain  = @{ value = ($KeycloakCustomDomain ?? '') }
+    }
+}
+$paramsFile = Join-Path $PSScriptRoot '.deploy-params.json'
+$paramsObj | ConvertTo-Json -Depth 4 | Set-Content $paramsFile -Encoding UTF8
+
+try {
+    $result = az deployment group create `
+        --resource-group $ResourceGroup `
+        --template-file $bicepFile `
+        --parameters "@$paramsFile" `
+        --output json
+} finally {
+    Remove-Item $paramsFile -ErrorAction SilentlyContinue
+}
 
 if ($LASTEXITCODE -ne 0) {
     Write-Error "Bicep deployment failed."
@@ -109,10 +124,12 @@ Write-Host "  SWA Name: $swaName" -ForegroundColor White
 
 $outputFile = Join-Path $PSScriptRoot '.deploy-outputs.json'
 @{
-    apiFqdn     = $apiFqdn
-    keycloakFqdn = $keycloakFqdn
-    swaName     = $swaName
-    swaHostname = $swaHostname
+    apiFqdn              = $apiFqdn
+    keycloakFqdn         = $keycloakFqdn
+    apiCustomDomain      = ($ApiCustomDomain ?? '')
+    keycloakCustomDomain = ($KeycloakCustomDomain ?? '')
+    swaName              = $swaName
+    swaHostname          = $swaHostname
 } | ConvertTo-Json | Set-Content $outputFile -Encoding UTF8
 
 Write-Host "`nOutputs saved to $outputFile" -ForegroundColor Gray

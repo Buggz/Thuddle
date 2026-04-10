@@ -150,48 +150,47 @@ onMounted(loadEvent)
               </div>
             </div>
           </div>
+
+          <!-- Join / Status -->
+          <div class="flex items-center gap-3 pt-2">
+            <RouterLink
+              v-if="event.isAdmin"
+              :to="{ name: 'manage-event', params: { id: event.id } }"
+              class="px-5 py-2.5 text-sm font-semibold rounded-lg bg-gray-800 text-white hover:bg-gray-900 transition-colors"
+            >
+              Manage Event
+            </RouterLink>
+            <button
+              v-if="event.canJoin"
+              :disabled="joining"
+              @click="joinEvent"
+              class="px-5 py-2.5 text-sm font-semibold rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              {{ joining ? 'Joining…' : 'Join this event' }}
+            </button>
+            <span
+              v-else-if="event.hasJoined"
+              class="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-green-700 bg-green-100 rounded-lg"
+            >
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+              </svg>
+              You've joined
+            </span>
+            <span
+              v-else-if="event.joinMode === 1"
+              class="text-sm text-gray-500"
+            >
+              This event is invite only
+            </span>
+            <div v-if="error" class="ml-auto text-sm text-red-600">{{ error }}</div>
+          </div>
         </div>
 
         <!-- Description -->
         <div v-if="event.description" class="px-6 py-5 border-t border-gray-100">
           <h2 class="text-sm font-medium text-gray-500 uppercase tracking-wide mb-3">About this event</h2>
           <div class="prose prose-sm max-w-none text-gray-700" v-html="event.description" />
-        </div>
-
-        <!-- Footer / Action -->
-        <div class="px-6 py-4 bg-gray-50 border-t border-gray-100 flex items-center gap-3">
-          <RouterLink
-            v-if="event.isAdmin"
-            :to="{ name: 'manage-event', params: { id: event.id } }"
-            class="px-5 py-2.5 text-sm font-semibold rounded-lg bg-gray-800 text-white hover:bg-gray-900 transition-colors"
-          >
-            Manage Event
-          </RouterLink>
-          <button
-            v-if="event.canJoin"
-            :disabled="joining"
-            @click="joinEvent"
-            class="px-5 py-2.5 text-sm font-semibold rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          >
-            {{ joining ? 'Joining…' : 'Join this event' }}
-          </button>
-          <span
-            v-else-if="event.hasJoined"
-            class="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-green-700 bg-green-100 rounded-lg"
-          >
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-            </svg>
-            You've joined
-          </span>
-          <span
-            v-else-if="event.joinMode === 1"
-            class="text-sm text-gray-500"
-          >
-            This event is invite only
-          </span>
-
-          <div v-if="error" class="ml-auto text-sm text-red-600">{{ error }}</div>
         </div>
       </div>
     </template>

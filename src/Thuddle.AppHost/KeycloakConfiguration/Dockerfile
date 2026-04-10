@@ -3,6 +3,8 @@ FROM quay.io/keycloak/keycloak:26.1 AS builder
 ENV KC_DB=postgres
 ENV KC_HEALTH_ENABLED=true
 
+COPY src/Thuddle.AppHost/KeycloakConfiguration/themes/thuddle/ /opt/keycloak/themes/thuddle/
+
 RUN /opt/keycloak/bin/kc.sh build
 
 FROM quay.io/keycloak/keycloak:26.1

@@ -20,7 +20,7 @@ import './assets/main.css'
     },
     initOptions: {
       onLoad: 'check-sso',
-      silentCheckSsoRedirectUri: `${window.location.origin}/silent-check-sso.html`,
+      silentCheckSsoFallback: false,
       pkceMethod: 'S256',
     },
   })
