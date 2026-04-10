@@ -43,8 +43,6 @@ param(
 
     [string]$ResourceGroup = 'rg-thuddle',
 
-    [string]$AdminEmail,
-
     [switch]$SkipBuild,
     [switch]$SkipMigrations,
     [switch]$SkipFrontend
@@ -103,11 +101,19 @@ Write-Host "`n=== Updating Container Apps ===" -ForegroundColor Cyan
 
 $apiImage = "$ContainerRegistry/thuddle-api:$ImageTag"
 Write-Host "Updating thuddle-api to $apiImage ..." -ForegroundColor Yellow
-az containerapp update `
-    --name thuddle-api `
-    --resource-group $ResourceGroup `
-    --image $apiImage `
-    --output none
+$apiUpdateArgs = @(
+    'containerapp', 'update',
+    '--name', 'thuddle-api',
+    '--resource-group', $ResourceGroup,
+    '--image', $apiImage,
+    '--output', 'none'
+)
+$keycloakDomain = if ($outputs.PSObject.Properties['keycloakCustomDomain'] -and $outputs.keycloakCustomDomain) { $outputs.keycloakCustomDomain } else { $null }
+if ($keycloakDomain) {
+    $apiUpdateArgs += @('--set-env-vars', "Keycloak__AuthServerUrl=https://$keycloakDomain")
+    Write-Host "  Keycloak URL: https://$keycloakDomain" -ForegroundColor White
+}
+az @apiUpdateArgs
 if ($LASTEXITCODE -ne 0) { Write-Error "Failed to update API container app"; exit 1 }
 
 $keycloakImage = "$ContainerRegistry/thuddle-keycloak:$ImageTag"
@@ -124,22 +130,15 @@ if ($LASTEXITCODE -ne 0) { Write-Error "Failed to update Keycloak container app"
 if (-not $SkipMigrations) {
     Write-Host "`n=== Running database migrations ===" -ForegroundColor Cyan
 
-    # Update the migration job image and admin email env var
+    # Update the migration job image
     $migrationImage = "$ContainerRegistry/thuddle-migrations:$ImageTag"
     Write-Host "Updating migration job image to $migrationImage ..." -ForegroundColor Yellow
 
-    $updateArgs = @(
-        'containerapp', 'job', 'update',
-        '--name', 'thuddle-migrations',
-        '--resource-group', $ResourceGroup,
-        '--image', $migrationImage,
-        '--output', 'none'
-    )
-    if ($AdminEmail) {
-        $updateArgs += @('--set-env-vars', "Seed__AdminEmail=$AdminEmail")
-        Write-Host "  Admin email: $AdminEmail" -ForegroundColor White
-    }
-    az @updateArgs
+    az containerapp job update `
+        --name thuddle-migrations `
+        --resource-group $ResourceGroup `
+        --image $migrationImage `
+        --output none
     if ($LASTEXITCODE -ne 0) { Write-Error "Failed to update migration job image"; exit 1 }
 
     Write-Host "Starting migration job..." -ForegroundColor Yellow
@@ -181,8 +180,10 @@ if (-not $SkipFrontend) {
 
     $webDir = Join-Path $repoRoot 'src' 'Thuddle.Web'
 
-    $env:VITE_API_BASE_URL = "https://$($outputs.apiFqdn)"
-    $env:VITE_KEYCLOAK_URL = "https://$($outputs.keycloakFqdn)"
+    $apiUrl = if ($outputs.PSObject.Properties['apiCustomDomain'] -and $outputs.apiCustomDomain) { $outputs.apiCustomDomain } else { $outputs.apiFqdn }
+    $keycloakUrl = if ($outputs.PSObject.Properties['keycloakCustomDomain'] -and $outputs.keycloakCustomDomain) { $outputs.keycloakCustomDomain } else { $outputs.keycloakFqdn }
+    $env:VITE_API_BASE_URL = "https://$apiUrl"
+    $env:VITE_KEYCLOAK_URL = "https://$keycloakUrl"
     $env:VITE_KEYCLOAK_REALM = 'Thuddle'
     $env:VITE_KEYCLOAK_CLIENT_ID = 'thuddle-web'
 

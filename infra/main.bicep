@@ -18,8 +18,8 @@ param postgresAdminPassword string
 @description('Keycloak administrator password')
 param keycloakAdminPassword string
 
-@description('Admin user email to seed with events:write permission (optional)')
-param adminEmail string = ''
+@description('Custom domain for Keycloak (e.g. auth.thuddle.app). Falls back to auto-generated FQDN if empty.')
+param keycloakCustomDomain string = ''
 
 var postgresAdminUser = 'thuddleadmin'
 var suffix = uniqueString(resourceGroup().id)
@@ -192,7 +192,7 @@ resource keycloakApp 'Microsoft.App/containerApps@2024-03-01' = {
               type: 'Startup'
               httpGet: {
                 path: '/health/started'
-                port: 8080
+                port: 9000
               }
               initialDelaySeconds: 15
               periodSeconds: 10
@@ -202,7 +202,7 @@ resource keycloakApp 'Microsoft.App/containerApps@2024-03-01' = {
               type: 'Liveness'
               httpGet: {
                 path: '/health/live'
-                port: 8080
+                port: 9000
               }
               periodSeconds: 30
             }
@@ -261,7 +261,7 @@ resource apiApp 'Microsoft.App/containerApps@2024-03-01' = {
             { name: 'ASPNETCORE_ENVIRONMENT', value: 'Production' }
             { name: 'ConnectionStrings__thuddledb', secretRef: 'db-connection-string' }
             { name: 'ConnectionStrings__blobs', secretRef: 'storage-connection-string' }
-            { name: 'Keycloak__AuthServerUrl', value: 'https://${keycloakApp.properties.configuration.ingress.fqdn}' }
+            { name: 'Keycloak__AuthServerUrl', value: 'https://${keycloakCustomDomain != '' ? keycloakCustomDomain : keycloakApp.properties.configuration.ingress.fqdn}' }
             { name: 'Keycloak__Realm', value: 'Thuddle' }
           ]
           probes: [
@@ -333,7 +333,6 @@ resource migrationsJob 'Microsoft.App/jobs@2024-03-01' = {
           }
           env: [
             { name: 'ConnectionStrings__thuddledb', secretRef: 'db-connection-string' }
-            { name: 'Seed__AdminEmail', value: adminEmail }
           ]
         }
       ]

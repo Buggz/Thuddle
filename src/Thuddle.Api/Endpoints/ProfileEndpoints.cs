@@ -13,7 +13,7 @@ public static class ProfileEndpoints
         app.MapGet("/api/profile", GetProfile);
         app.MapPut("/api/profile/displayname", UpdateDisplayName);
         app.MapPost("/api/profile/picture", UploadPicture).DisableAntiforgery();
-        app.MapGet("/api/profile/picture/{keycloakId}", GetProfilePicture);
+        app.MapGet("/api/profile/picture/{keycloakId}", GetProfilePicture).AllowAnonymous();
     }
 
     private static string? GetKeycloakId(ClaimsPrincipal user)

@@ -11,7 +11,7 @@ var thuddleDb = postgres.AddDatabase("thuddledb");
 // Keycloak: using PostgreSQL as backing store, importing the Thuddle realm
 var keycloak = builder.AddKeycloakContainer("keycloak")
     .WithDataVolume()
-    .WithImport("./KeycloakConfiguration/Thuddle-realm.json")
+    .WithImport("./KeycloakConfiguration/Thuddle-realm.dev.json")
     .WithEnvironment("KC_DB", "postgres")
     .WithEnvironment(context =>
     {
