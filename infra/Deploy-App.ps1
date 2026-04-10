@@ -220,6 +220,12 @@ if (-not $SkipFrontend) {
 
 # ─── Done ─────────────────────────────────────────────────────────────────────
 
+# Clean up VITE env vars so they don't leak into local dev
+Remove-Item Env:VITE_API_BASE_URL -ErrorAction SilentlyContinue
+Remove-Item Env:VITE_KEYCLOAK_URL -ErrorAction SilentlyContinue
+Remove-Item Env:VITE_KEYCLOAK_REALM -ErrorAction SilentlyContinue
+Remove-Item Env:VITE_KEYCLOAK_CLIENT_ID -ErrorAction SilentlyContinue
+
 Write-Host "`n=== Deployment complete ===" -ForegroundColor Green
 Write-Host "  API:      https://$($outputs.apiFqdn)" -ForegroundColor White
 Write-Host "  Keycloak: https://$($outputs.keycloakFqdn)" -ForegroundColor White

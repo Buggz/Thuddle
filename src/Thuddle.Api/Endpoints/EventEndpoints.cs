@@ -9,7 +9,7 @@ public static class EventEndpoints
 {
     public static void MapEventEndpoints(this WebApplication app)
     {
-        app.MapGet("/api/events", GetEvents);
+        app.MapGet("/api/events", GetEvents).AllowAnonymous();
         app.MapGet("/api/events/{eventId:guid}", GetEvent);
         app.MapPost("/api/events", CreateEvent).RequireAuthorization("events:write");
         app.MapPut("/api/events/{eventId:guid}", UpdateEvent).RequireAuthorization();

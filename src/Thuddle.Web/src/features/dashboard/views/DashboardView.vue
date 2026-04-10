@@ -55,27 +55,41 @@ function formatDate(iso) {
   })
 }
 
-onMounted(loadEvents)
+onMounted(() => {
+  if (auth.isAuthenticated) loadEvents()
+})
 </script>
 
 <template>
   <div>
-    <div class="flex items-center justify-between mb-6">
-      <h2 class="text-2xl font-bold text-gray-900">Events</h2>
-    </div>
-
-    <div v-if="loading" class="text-center py-12 text-gray-400">Loading events...</div>
-
-    <div v-else-if="error" class="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
-      {{ error }}
-    </div>
-
-    <div v-else-if="events.length === 0" class="text-center py-12">
-      <p class="text-gray-500 text-lg">No events yet.</p>
-      <p v-if="auth.isAuthenticated" class="text-gray-400 text-sm mt-1">Create one to get started!</p>
+    <div v-if="!auth.isAuthenticated" class="text-center py-16">
+      <h2 class="text-2xl font-bold text-gray-900 mb-2">Sign in to see events</h2>
+      <p class="text-gray-500 mb-6">Create an account or sign in to browse and join events.</p>
+      <button
+        @click="auth.login()"
+        class="bg-indigo-600 text-white px-6 py-3 rounded-lg text-lg hover:bg-indigo-700 transition"
+      >
+        Sign In
+      </button>
     </div>
 
     <template v-else>
+      <div class="flex items-center justify-between mb-6">
+        <h2 class="text-2xl font-bold text-gray-900">Events</h2>
+      </div>
+
+      <div v-if="loading" class="text-center py-12 text-gray-400">Loading events...</div>
+
+      <div v-else-if="error" class="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+        {{ error }}
+      </div>
+
+      <div v-else-if="events.length === 0" class="text-center py-12">
+        <p class="text-gray-500 text-lg">No events yet.</p>
+        <p class="text-gray-400 text-sm mt-1">Create one to get started!</p>
+      </div>
+
+      <template v-else>
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
         <RouterLink
           v-for="event in events"
@@ -133,6 +147,7 @@ onMounted(loadEvents)
           Next
         </button>
       </div>
+      </template>
     </template>
   </div>
 </template>

@@ -10,7 +10,7 @@ RUN /opt/keycloak/bin/kc.sh build
 FROM quay.io/keycloak/keycloak:26.1
 
 COPY --from=builder /opt/keycloak/ /opt/keycloak/
-COPY src/Thuddle.AppHost/KeycloakConfiguration/Thuddle-realm.json /opt/keycloak/data/import/
+COPY src/Thuddle.AppHost/KeycloakConfiguration/production/Thuddle-realm.json /opt/keycloak/data/import/
 
 ENTRYPOINT ["/opt/keycloak/bin/kc.sh"]
 CMD ["start", "--optimized", "--import-realm"]
