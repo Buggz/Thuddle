@@ -4,6 +4,7 @@ import { RouterLink } from 'vue-router'
 import { useApi } from '@/shared/composables/useApi'
 import { useAuthStore } from '@/features/auth/stores/auth'
 import { usePermissionsStore } from '@/features/auth/stores/permissions'
+import { apiUrl } from '@/api'
 
 const { authFetch } = useApi()
 const auth = useAuthStore()
@@ -41,7 +42,17 @@ async function loadEvents() {
   loading.value = true
   error.value = null
   try {
-    const res = await authFetch(`/api/events?page=${page.value}&pageSize=12`)
+    const url = apiUrl(`/api/events?page=${page.value}&pageSize=12`)
+    let res
+    if (auth.isAuthenticated) {
+      res = await authFetch(`/api/events?page=${page.value}&pageSize=12`)
+    } else {
+      res = await fetch(url)
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data.error || `HTTP ${res.status}`)
+      }
+    }
     const data = await res.json()
     events.value = data.items
     totalPages.value = data.totalPages
@@ -76,47 +87,33 @@ function formatDate(iso) {
   })
 }
 
-onMounted(() => {
-  if (auth.isAuthenticated) loadEvents()
-})
+onMounted(loadEvents)
 </script>
 
 <template>
   <div>
-    <div v-if="!auth.isAuthenticated" class="text-center py-16">
-      <h2 class="text-2xl font-bold text-gray-900 mb-2">Sign in to see events</h2>
-      <p class="text-gray-500 mb-6">Create an account or sign in to browse and join events.</p>
+    <!-- Profile setup hint -->
+    <div
+      v-if="showProfileHint"
+      class="mb-6 flex items-center justify-between gap-4 rounded-lg border border-indigo-200 bg-indigo-50 px-4 py-3"
+    >
+      <p class="text-sm text-indigo-800">
+        {{ profileHintMessage }} to help others recognise you.
+        <RouterLink :to="{ name: 'profile' }" class="font-semibold underline hover:text-indigo-600">Go to profile</RouterLink>
+      </p>
       <button
-        @click="auth.login()"
-        class="bg-indigo-600 text-white px-6 py-3 rounded-lg text-lg hover:bg-indigo-700 transition"
+        @click="dismissProfileHint"
+        class="shrink-0 text-xs font-medium text-indigo-500 hover:text-indigo-700"
       >
-        Sign In
+        Don't remind me again
       </button>
     </div>
 
-    <template v-else>
-      <!-- Profile setup hint -->
-      <div
-        v-if="showProfileHint"
-        class="mb-6 flex items-center justify-between gap-4 rounded-lg border border-indigo-200 bg-indigo-50 px-4 py-3"
-      >
-        <p class="text-sm text-indigo-800">
-          {{ profileHintMessage }} to help others recognise you.
-          <RouterLink :to="{ name: 'profile' }" class="font-semibold underline hover:text-indigo-600">Go to profile</RouterLink>
-        </p>
-        <button
-          @click="dismissProfileHint"
-          class="shrink-0 text-xs font-medium text-indigo-500 hover:text-indigo-700"
-        >
-          Don't remind me again
-        </button>
-      </div>
+    <div class="flex items-center justify-between mb-6">
+      <h2 class="text-2xl font-bold text-gray-900">Events</h2>
+    </div>
 
-      <div class="flex items-center justify-between mb-6">
-        <h2 class="text-2xl font-bold text-gray-900">Events</h2>
-      </div>
-
-      <div v-if="loading" class="text-center py-12 text-gray-400">Loading events...</div>
+    <div v-if="loading" class="text-center py-12 text-gray-400">Loading events...</div>
 
       <div v-else-if="error" class="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
         {{ error }}
@@ -186,7 +183,6 @@ onMounted(() => {
           Next
         </button>
       </div>
-      </template>
     </template>
   </div>
 </template>

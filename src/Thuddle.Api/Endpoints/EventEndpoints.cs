@@ -496,7 +496,8 @@ public static class EventEndpoints
             {
                 p.UserId,
                 p.User.Email,
-                DisplayName = p.User.DisplayName ?? p.User.Email,
+                FullName = p.User.FullName,
+                DisplayName = p.User.DisplayName ?? p.User.FullName ?? p.User.Email,
                 p.JoinedAt,
                 p.HasPaid
             })
@@ -509,7 +510,8 @@ public static class EventEndpoints
             {
                 c.UserId,
                 c.User.Email,
-                DisplayName = c.User.DisplayName ?? c.User.Email
+                FullName = c.User.FullName,
+                DisplayName = c.User.DisplayName ?? c.User.FullName ?? c.User.Email
             })
             .ToListAsync(ct);
 
@@ -532,7 +534,7 @@ public static class EventEndpoints
             .Select(p => new
             {
                 p.User.KeycloakId,
-                DisplayName = p.User.DisplayName ?? p.User.Email,
+                DisplayName = p.User.DisplayName ?? p.User.FullName ?? p.User.Email,
                 HasProfilePicture = p.User.ScaledPicturePath != null
             })
             .ToListAsync(ct);
