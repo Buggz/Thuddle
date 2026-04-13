@@ -28,8 +28,8 @@ async function handleSaveDisplayName() {
   }
 }
 
-async function handleUploadPicture(event) {
-  await uploadPicture(event)
+async function handleUploadPicture(blob) {
+  await uploadPicture(blob)
   if (hasProfilePicture.value) {
     permissionsStore.markProfilePictureUploaded()
   }

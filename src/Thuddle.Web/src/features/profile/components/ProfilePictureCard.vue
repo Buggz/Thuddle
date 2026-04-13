@@ -1,4 +1,7 @@
 <script setup>
+import { ref } from 'vue'
+import ImageCropper from './ImageCropper.vue'
+
 defineProps({
   hasProfilePicture: { type: Boolean, required: true },
   pictureUrl: { type: String, default: null },
@@ -6,6 +9,23 @@ defineProps({
 })
 
 const emit = defineEmits(['upload'])
+
+const selectedFile = ref(null)
+
+function onFileChange(event) {
+  const file = event.target.files?.[0]
+  if (file) selectedFile.value = file
+  event.target.value = ''
+}
+
+function onCrop(blob) {
+  selectedFile.value = null
+  emit('upload', blob)
+}
+
+function onCancelCrop() {
+  selectedFile.value = null
+}
 </script>
 
 <template>
@@ -42,12 +62,19 @@ const emit = defineEmits(['upload'])
             type="file"
             accept="image/*"
             class="hidden"
-            @change="emit('upload', $event)"
+            @change="onFileChange"
             :disabled="uploading"
           />
         </label>
-        <p class="mt-2 text-xs text-gray-500">PNG, JPG up to 5MB. Will be cropped to square.</p>
+        <p class="mt-2 text-xs text-gray-500">PNG, JPG up to 10MB</p>
       </div>
     </div>
+
+    <ImageCropper
+      v-if="selectedFile"
+      :image-file="selectedFile"
+      @crop="onCrop"
+      @cancel="onCancelCrop"
+    />
   </div>
 </template>

@@ -53,16 +53,15 @@ export function useProfileApi() {
     }
   }
 
-  async function uploadPicture(event) {
-    const file = event.target.files?.[0]
-    if (!file) return
+  async function uploadPicture(blob) {
+    if (!blob) return
 
     uploading.value = true
     message.value = null
     error.value = null
 
     const formData = new FormData()
-    formData.append('picture', file)
+    formData.append('picture', blob, 'profile.png')
 
     try {
       await authFetch('/api/profile/picture', {
@@ -77,7 +76,6 @@ export function useProfileApi() {
       error.value = err.message || 'Failed to upload picture.'
     } finally {
       uploading.value = false
-      event.target.value = ''
     }
   }
 
