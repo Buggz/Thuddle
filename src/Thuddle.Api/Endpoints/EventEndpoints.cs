@@ -21,6 +21,18 @@ public static class EventEndpoints
         app.MapGet("/api/events/{eventId:guid}/participants", GetParticipants).AllowAnonymous();
         app.MapPut("/api/events/{eventId:guid}/attendees/{userId:guid}/payment", UpdatePayment).RequireAuthorization();
         app.MapPost("/api/events/{eventId:guid}/images", UploadEventImage).RequireAuthorization().DisableAntiforgery();
+
+        app.MapGet("/api/users/exists", UserExistsByEmail).RequireAuthorization();
+    }
+
+    // GET /api/users/exists?email=...
+    private static async Task<IResult> UserExistsByEmail(string email, ThuddleDbContext db, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(email))
+            return Results.BadRequest(new { error = "Email is required." });
+
+        var exists = await db.Users.AsNoTracking().AnyAsync(u => u.Email == email, ct);
+        return Results.Ok(new { exists });
     }
 
     private static string? GetKeycloakId(ClaimsPrincipal user)
@@ -250,6 +262,9 @@ public static class EventEndpoints
         InviteUsersRequest request,
         ClaimsPrincipal user,
         ThuddleDbContext db,
+        SmtpEmailSender emailSender,
+        RazorTemplateService templateService,
+        IConfiguration config,
         CancellationToken ct)
     {
         var keycloakId = GetKeycloakId(user);
@@ -290,6 +305,28 @@ public static class EventEndpoints
         {
             db.EventInvitations.AddRange(newInvitations);
             await db.SaveChangesAsync(ct);
+
+            // Send email invitations
+            var baseUrl = config["App:BaseUrl"] ?? "https://thuddle.app";
+            foreach (var inv in newInvitations)
+            {
+                var joinUrl = $"{baseUrl}/events/{eventId}";
+                var subject = $"You're invited to the event: {evt.Title}";
+                var model = new Thuddle.Api.EmailTemplates.InviteEmailModel {
+                    EventTitle = evt.Title,
+                    Start = evt.Start.ToString("f"),
+                    End = evt.End.ToString("f"),
+                    Location = evt.Location,
+                    JoinUrl = joinUrl
+                };
+                string htmlBody;
+                try {
+                    htmlBody = await templateService.RenderAsync("InviteEmail.cshtml", model);
+                } catch {
+                    htmlBody = $"You have been invited to the event {System.Net.WebUtility.HtmlEncode(evt.Title)}. Join: {System.Net.WebUtility.HtmlEncode(joinUrl)}";
+                }
+                try { await emailSender.SendEmailAsync(inv.Email, subject, htmlBody); } catch { /* ignore errors for now */ }
+            }
         }
 
         return Results.Ok(new { invited = newInvitations.Count });

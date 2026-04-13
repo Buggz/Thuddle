@@ -24,4 +24,8 @@
     <ProjectReference Include="..\Thuddle.ServiceDefaults\Thuddle.ServiceDefaults.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Content Update="EmailTemplates\**" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

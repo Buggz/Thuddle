@@ -7,13 +7,14 @@ using Thuddle.Api.Services;
 namespace Thuddle.Api.Endpoints;
 
 public static class ProfileEndpoints
+{
     public static void MapProfileEndpoints(this WebApplication app)
     {
         app.MapGet("/api/profile", GetProfile);
         app.MapPut("/api/profile/displayname", UpdateDisplayName);
         app.MapPost("/api/profile/picture", UploadPicture).DisableAntiforgery();
         app.MapGet("/api/profile/picture/{keycloakId}", GetProfilePicture).AllowAnonymous();
-        app.MapPost("/api/profile/init", InitProfile); // New endpoint
+        app.MapPost("/api/profile/init", InitProfile);
     }
 
     // POST /api/profile/init - creates user if missing, idempotent
@@ -56,14 +57,6 @@ public static class ProfileEndpoints
         }
 
         return Results.Ok(new { dbUser.Id });
-    }
-{
-    public static void MapProfileEndpoints(this WebApplication app)
-    {
-        app.MapGet("/api/profile", GetProfile);
-        app.MapPut("/api/profile/displayname", UpdateDisplayName);
-        app.MapPost("/api/profile/picture", UploadPicture).DisableAntiforgery();
-        app.MapGet("/api/profile/picture/{keycloakId}", GetProfilePicture).AllowAnonymous();
     }
 
     private static string? GetKeycloakId(ClaimsPrincipal user)

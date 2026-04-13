@@ -54,6 +54,9 @@ builder.Services.AddSingleton<ImageScaler>();
 builder.Services.AddSingleton<ProfilePictureStorage>();
 builder.Services.AddSingleton<EventImageStorage>();
 builder.Services.AddMemoryCache();
+builder.Services.AddSingleton<SmtpEmailSender>();
+builder.Services.AddSingleton(provider =>
+    new RazorTemplateService(Path.Combine(AppContext.BaseDirectory, "EmailTemplates")));
 
 // CORS for local development
 builder.Services.AddCors(options =>

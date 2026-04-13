@@ -3,6 +3,7 @@ import { shallowRef, ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useApi } from '@/shared/composables/useApi'
 import RichTextEditor from '@/shared/components/RichTextEditor.vue'
+import Spinner from '@/shared/components/Spinner.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -43,6 +44,76 @@ const loading = shallowRef(true)
 const error = shallowRef(null)
 
 const hasCost = computed(() => eventData.value?.cost != null && eventData.value.cost > 0)
+
+// Invitation form state
+let nextInviteeId = 1
+const invitees = ref([
+  { id: nextInviteeId++, email: '', exists: null, loading: false, error: null }
+])
+const inviting = shallowRef(false)
+const inviteError = shallowRef(null)
+const inviteSuccess = shallowRef(false)
+
+function addInvitee() {
+  invitees.value.push({ id: nextInviteeId++, email: '', exists: null, loading: false, error: null })
+}
+function removeInvitee(invitee) {
+  if (inviteeTimers.has(invitee.id)) clearTimeout(inviteeTimers.get(invitee.id))
+  inviteeTimers.delete(invitee.id)
+  if (invitees.value.length > 1) invitees.value = invitees.value.filter(i => i.id !== invitee.id)
+}
+
+const inviteeTimers = new Map()
+function onInviteeInput(invitee) {
+  invitee.exists = null
+  invitee.error = null
+  if (inviteeTimers.has(invitee.id)) clearTimeout(inviteeTimers.get(invitee.id))
+  if (!invitee.email || !invitee.email.includes('@')) {
+    invitee.loading = false
+    return
+  }
+  invitee.loading = true
+  inviteeTimers.set(invitee.id, setTimeout(async () => {
+    try {
+      const res = await authFetch(`/api/users/exists?email=${encodeURIComponent(invitee.email)}`)
+      const data = await res.json()
+      invitee.exists = !!data.exists
+      invitee.error = null
+    } catch (err) {
+      invitee.error = 'Error checking user.'
+      invitee.exists = null
+    } finally {
+      invitee.loading = false
+    }
+  }, 500))
+}
+
+async function inviteUsers() {
+  inviting.value = true
+  inviteError.value = null
+  inviteSuccess.value = false
+  const emails = invitees.value.map(i => i.email.trim()).filter(e => e)
+  if (emails.length === 0) {
+    inviteError.value = 'Please enter at least one email.'
+    inviting.value = false
+    return
+  }
+  try {
+    await authFetch(`/api/events/${eventId}/invitations`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ emails })
+    })
+    inviteSuccess.value = true
+    setTimeout(() => { inviteSuccess.value = false }, 3000)
+    // Reset invitees
+    invitees.value = [{ id: nextInviteeId++, email: '', exists: null, loading: false, error: null }]
+  } catch (err) {
+    inviteError.value = err.message || 'Failed to send invitations.'
+  } finally {
+    inviting.value = false
+  }
+}
 
 function toLocalDatetime(iso) {
   if (!iso) return ''
@@ -359,6 +430,35 @@ onMounted(async () => {
             </tr>
           </tbody>
         </table>
+      </section>
+
+      <!-- Invite Users -->
+      <section class="bg-white shadow rounded-xl p-6 mt-6">
+        <h2 class="text-lg font-semibold text-gray-900 mb-4">Invite by Email</h2>
+        <div v-for="invitee in invitees" :key="invitee.id" class="flex items-center gap-2 mb-2">
+          <input
+            v-model="invitee.email"
+            @input="onInviteeInput(invitee)"
+            type="email"
+            placeholder="Email address"
+            class="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+            autocomplete="off"
+          />
+          <span v-if="invitee.loading" class="ml-1"><Spinner /></span>
+          <span v-else-if="invitee.exists === true" class="ml-1 text-green-600 text-xs">User exists</span>
+          <span v-else-if="invitee.exists === false" class="ml-1 text-gray-400 text-xs">No user</span>
+          <span v-if="invitee.error" class="ml-1 text-red-600 text-xs">{{ invitee.error }}</span>
+          <button type="button" @click="removeInvitee(invitee)" class="text-xs text-gray-400 hover:text-red-500 px-2">✕</button>
+        </div>
+        <button type="button" @click="addInvitee" class="mt-1 mb-4 px-3 py-1 text-xs rounded bg-gray-100 hover:bg-gray-200 text-gray-700">+ Add another</button>
+        <div class="flex items-center gap-3 pt-2">
+          <button @click="inviteUsers" :disabled="inviting || invitees.every(i => !i.email.trim())"
+            class="px-5 py-2 text-sm font-semibold rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 transition-colors">
+            {{ inviting ? 'Inviting…' : `Invite ${invitees.filter(i => i.email.trim()).length} user${invitees.filter(i => i.email.trim()).length === 1 ? '' : 's'}` }}
+          </button>
+          <span v-if="inviteSuccess" class="text-sm text-green-600">Invitations sent!</span>
+          <span v-if="inviteError" class="text-sm text-red-600">{{ inviteError }}</span>
+        </div>
       </section>
     </template>
   </div>
