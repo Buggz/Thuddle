@@ -3,6 +3,14 @@ import { defineStore } from 'pinia'
 import { useApi } from '@/shared/composables/useApi'
 
 export const usePermissionsStore = defineStore('permissions', () => {
+    // Ensure user exists in DB on first login
+    async function ensureUserInitialized() {
+      try {
+        await authFetch('/api/profile/init', { method: 'POST' })
+      } catch (e) {
+        // Ignore errors (user may already exist or be unauthorized)
+      }
+    }
   const permissions = ref([])
   const loaded = ref(false)
   const profileComplete = ref(true)
@@ -13,6 +21,7 @@ export const usePermissionsStore = defineStore('permissions', () => {
 
   async function load() {
     try {
+      await ensureUserInitialized()
       const res = await authFetch('/api/profile')
       const data = await res.json()
       permissions.value = data.permissions || []
@@ -51,6 +60,7 @@ export const usePermissionsStore = defineStore('permissions', () => {
     load,
     hasPermission,
     markProfileComplete,
-    markProfilePictureUploaded
+    markProfilePictureUploaded,
+    ensureUserInitialized
   }
 })

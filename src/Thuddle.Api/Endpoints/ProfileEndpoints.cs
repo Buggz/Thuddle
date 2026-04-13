@@ -14,6 +14,56 @@ public static class ProfileEndpoints
         app.MapPut("/api/profile/displayname", UpdateDisplayName);
         app.MapPost("/api/profile/picture", UploadPicture).DisableAntiforgery();
         app.MapGet("/api/profile/picture/{keycloakId}", GetProfilePicture).AllowAnonymous();
+        app.MapPost("/api/profile/init", InitProfile);
+    }
+
+    // POST /api/profile/init - creates user if missing, idempotent
+    private static async Task<IResult> InitProfile(
+        ClaimsPrincipal user,
+        ThuddleDbContext db,
+        CancellationToken ct)
+    {
+        var keycloakId = GetKeycloakId(user);
+        if (keycloakId is null) return Results.Unauthorized();
+
+        var email = user.FindFirstValue("email") ?? "";
+        var givenName = user.FindFirstValue("given_name");
+        var familyName = user.FindFirstValue("family_name");
+        var fullName = (givenName, familyName) switch
+        {
+            (not null, not null) => $"{givenName} {familyName}",
+            (not null, null) => givenName,
+            (null, not null) => familyName,
+            _ => null
+        };
+
+        var dbUser = await db.Users.FirstOrDefaultAsync(u => u.KeycloakId == keycloakId, ct)
+            ?? await db.Users.FirstOrDefaultAsync(u => u.Email == email, ct);
+
+        if (dbUser is null)
+        {
+            dbUser = new User
+            {
+                Id = Guid.NewGuid(),
+                KeycloakId = keycloakId,
+                Email = email,
+                FullName = fullName,
+                DisplayName = fullName,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            };
+            db.Users.Add(dbUser);
+            await db.SaveChangesAsync(ct);
+        }
+        else if (dbUser.KeycloakId != keycloakId)
+        {
+            // Keycloak was recreated — update stale KeycloakId
+            dbUser.KeycloakId = keycloakId;
+            dbUser.UpdatedAt = DateTime.UtcNow;
+            await db.SaveChangesAsync(ct);
+        }
+
+        return Results.Ok(new { dbUser.Id });
     }
 
     private static string? GetKeycloakId(ClaimsPrincipal user)
@@ -42,55 +92,21 @@ public static class ProfileEndpoints
             _ => null
         };
 
-        var dbUser = await db.Users.FirstOrDefaultAsync(u => u.KeycloakId == keycloakId, ct);
 
-        if (dbUser is not null)
-        {
-            var changed = false;
-            if (fullName is not null && dbUser.FullName != fullName)
-            {
-                dbUser.FullName = fullName;
-                changed = true;
-            }
-            if (dbUser.DisplayName is null && fullName is not null)
-            {
-                dbUser.DisplayName = fullName;
-                changed = true;
-            }
-            if (changed)
-            {
-                dbUser.UpdatedAt = DateTime.UtcNow;
-                await db.SaveChangesAsync(ct);
-            }
-        }
-        else
-        {
-            // User may already exist with a different KeycloakId (e.g. fresh Keycloak instance)
-            dbUser = await db.Users.FirstOrDefaultAsync(u => u.Email == email, ct);
+        // Only read user, do not write on GET
+        var dbUser = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.KeycloakId == keycloakId, ct)
+            ?? await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Email == email, ct);
 
-            if (dbUser is not null)
+        // If user does not exist, return minimal info
+        if (dbUser is null)
+        {
+            return Results.Ok(new
             {
-                dbUser.KeycloakId = keycloakId;
-                dbUser.FullName = fullName ?? dbUser.FullName;
-                dbUser.DisplayName ??= fullName;
-                dbUser.UpdatedAt = DateTime.UtcNow;
-                await db.SaveChangesAsync(ct);
-            }
-            else
-            {
-                dbUser = new User
-                {
-                    Id = Guid.NewGuid(),
-                    KeycloakId = keycloakId,
-                    Email = email,
-                    FullName = fullName,
-                    DisplayName = fullName,
-                    CreatedAt = DateTime.UtcNow,
-                    UpdatedAt = DateTime.UtcNow
-                };
-                db.Users.Add(dbUser);
-                await db.SaveChangesAsync(ct);
-            }
+                DisplayName = fullName,
+                Email = email,
+                HasProfilePicture = false,
+                Permissions = new List<string>()
+            });
         }
 
         return Results.Ok(new
@@ -99,6 +115,7 @@ public static class ProfileEndpoints
             dbUser.Email,
             HasProfilePicture = dbUser.ScaledPicturePath is not null,
             Permissions = await db.UserPermissions
+                .AsNoTracking()
                 .Where(p => p.UserId == dbUser.Id)
                 .Select(p => p.Permission)
                 .ToListAsync(ct)
@@ -115,11 +132,37 @@ public static class ProfileEndpoints
         if (keycloakId is null) return Results.Unauthorized();
 
         var dbUser = await db.Users.FirstOrDefaultAsync(u => u.KeycloakId == keycloakId, ct);
-        if (dbUser is null) return Results.NotFound();
-
-        dbUser.DisplayName = request.DisplayName;
-        dbUser.UpdatedAt = DateTime.UtcNow;
-        db.Users.Update(dbUser);
+        if (dbUser is null)
+        {
+            // Create user if not found
+            var email = user.FindFirstValue("email") ?? "";
+            var givenName = user.FindFirstValue("given_name");
+            var familyName = user.FindFirstValue("family_name");
+            var fullName = (givenName, familyName) switch
+            {
+                (not null, not null) => $"{givenName} {familyName}",
+                (not null, null) => givenName,
+                (null, not null) => familyName,
+                _ => null
+            };
+            dbUser = new User
+            {
+                Id = Guid.NewGuid(),
+                KeycloakId = keycloakId,
+                Email = email,
+                FullName = fullName,
+                DisplayName = request.DisplayName,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            };
+            db.Users.Add(dbUser);
+        }
+        else
+        {
+            dbUser.DisplayName = request.DisplayName;
+            dbUser.UpdatedAt = DateTime.UtcNow;
+            db.Users.Update(dbUser);
+        }
         await db.SaveChangesAsync(ct);
 
         return Results.Ok(new { dbUser.DisplayName });
@@ -151,8 +194,34 @@ public static class ProfileEndpoints
 
         var scaledBytes = scaler.Scale(originalBytes);
 
+
         var dbUser = await db.Users.FirstOrDefaultAsync(u => u.KeycloakId == keycloakId, ct);
-        if (dbUser is null) return Results.NotFound();
+        if (dbUser is null)
+        {
+            // Create user if not found
+            var email = user.FindFirstValue("email") ?? "";
+            var givenName = user.FindFirstValue("given_name");
+            var familyName = user.FindFirstValue("family_name");
+            var fullName = (givenName, familyName) switch
+            {
+                (not null, not null) => $"{givenName} {familyName}",
+                (not null, null) => givenName,
+                (null, not null) => familyName,
+                _ => null
+            };
+            dbUser = new User
+            {
+                Id = Guid.NewGuid(),
+                KeycloakId = keycloakId,
+                Email = email,
+                FullName = fullName,
+                DisplayName = fullName,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            };
+            db.Users.Add(dbUser);
+            await db.SaveChangesAsync(ct);
+        }
 
         var (originalPath, scaledPath) = await storage.UploadAsync(
             dbUser.Id.ToString(), originalBytes, scaledBytes, ct);

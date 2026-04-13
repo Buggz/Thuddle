@@ -9,7 +9,7 @@ public sealed class PermissionRequirement(string permission) : IAuthorizationReq
     public string Permission { get; } = permission;
 }
 
-public sealed class PermissionHandler(IServiceScopeFactory scopeFactory) : AuthorizationHandler<PermissionRequirement>
+public sealed class PermissionHandler(IServiceScopeFactory scopeFactory, ILogger<PermissionHandler> logger) : AuthorizationHandler<PermissionRequirement>
 {
     protected override async Task HandleRequirementAsync(
         AuthorizationHandlerContext context,
@@ -19,6 +19,8 @@ public sealed class PermissionHandler(IServiceScopeFactory scopeFactory) : Autho
             ?? context.User.FindFirst("sid")?.Value
             ?? context.User.FindFirst("email")?.Value;
 
+        logger.LogWarning("PermissionHandler: keycloakId={KeycloakId}, requirement={Permission}", keycloakId, requirement.Permission);
+
         if (keycloakId is null) return;
 
         using var scope = scopeFactory.CreateScope();
@@ -26,6 +28,8 @@ public sealed class PermissionHandler(IServiceScopeFactory scopeFactory) : Autho
 
         var hasPermission = await db.UserPermissions
             .AnyAsync(p => p.User.KeycloakId == keycloakId && p.Permission == requirement.Permission);
+
+        logger.LogWarning("PermissionHandler: hasPermission={HasPermission}", hasPermission);
 
         if (hasPermission)
         {

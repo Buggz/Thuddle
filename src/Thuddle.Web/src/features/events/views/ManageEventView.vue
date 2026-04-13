@@ -1,8 +1,9 @@
 <script setup>
-import { shallowRef, ref, computed, onMounted } from 'vue'
+import { shallowRef, ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useApi } from '@/shared/composables/useApi'
 import RichTextEditor from '@/shared/components/RichTextEditor.vue'
+import Spinner from '@/shared/components/Spinner.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -26,8 +27,13 @@ const saving = shallowRef(false)
 const saveError = shallowRef(null)
 const saveSuccess = shallowRef(false)
 
+watch(() => form.value.visibility, (v) => {
+  if (v === 1) form.value.joinMode = 1
+})
+
 // Attendees
 const attendees = ref([])
+const pendingInvitations = ref([])
 const coAdmins = ref([])
 const loadingAttendees = shallowRef(true)
 const attendeesError = shallowRef(null)
@@ -43,6 +49,76 @@ const loading = shallowRef(true)
 const error = shallowRef(null)
 
 const hasCost = computed(() => eventData.value?.cost != null && eventData.value.cost > 0)
+
+// Invitation form state
+let nextInviteeId = 1
+const invitees = ref([
+  { id: nextInviteeId++, email: '', exists: null, loading: false, error: null }
+])
+const inviting = shallowRef(false)
+const inviteError = shallowRef(null)
+const inviteSuccess = shallowRef(false)
+
+function addInvitee() {
+  invitees.value.push({ id: nextInviteeId++, email: '', exists: null, loading: false, error: null })
+}
+function removeInvitee(invitee) {
+  if (inviteeTimers.has(invitee.id)) clearTimeout(inviteeTimers.get(invitee.id))
+  inviteeTimers.delete(invitee.id)
+  if (invitees.value.length > 1) invitees.value = invitees.value.filter(i => i.id !== invitee.id)
+}
+
+const inviteeTimers = new Map()
+function onInviteeInput(invitee) {
+  invitee.exists = null
+  invitee.error = null
+  if (inviteeTimers.has(invitee.id)) clearTimeout(inviteeTimers.get(invitee.id))
+  if (!invitee.email || !invitee.email.includes('@')) {
+    invitee.loading = false
+    return
+  }
+  invitee.loading = true
+  inviteeTimers.set(invitee.id, setTimeout(async () => {
+    try {
+      const res = await authFetch(`/api/users/exists?email=${encodeURIComponent(invitee.email)}`)
+      const data = await res.json()
+      invitee.exists = !!data.exists
+      invitee.error = null
+    } catch (err) {
+      invitee.error = 'Error checking user.'
+      invitee.exists = null
+    } finally {
+      invitee.loading = false
+    }
+  }, 500))
+}
+
+async function inviteUsers() {
+  inviting.value = true
+  inviteError.value = null
+  inviteSuccess.value = false
+  const emails = invitees.value.map(i => i.email.trim()).filter(e => e)
+  if (emails.length === 0) {
+    inviteError.value = 'Please enter at least one email.'
+    inviting.value = false
+    return
+  }
+  try {
+    await authFetch(`/api/events/${eventId}/invitations`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ emails })
+    })
+    inviteSuccess.value = true
+    setTimeout(() => { inviteSuccess.value = false }, 3000)
+    // Reset invitees
+    invitees.value = [{ id: nextInviteeId++, email: '', exists: null, loading: false, error: null }]
+  } catch (err) {
+    inviteError.value = err.message || 'Failed to send invitations.'
+  } finally {
+    inviting.value = false
+  }
+}
 
 function toLocalDatetime(iso) {
   if (!iso) return ''
@@ -113,6 +189,7 @@ async function loadAttendees() {
     const data = await res.json()
     attendees.value = data.attendees
     coAdmins.value = data.coAdmins
+    pendingInvitations.value = data.pendingInvitations || []
   } catch (err) {
     attendeesError.value = err.message || 'Failed to load attendees.'
   } finally {
@@ -242,7 +319,8 @@ onMounted(async () => {
             <div>
               <label class="block text-sm font-medium text-gray-700 mb-1">Join Mode</label>
               <select v-model.number="form.joinMode"
-                class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                :disabled="form.visibility === 1"
+                class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 disabled:bg-gray-100 disabled:text-gray-500">
                 <option :value="0">Open</option>
                 <option :value="1">Invite only</option>
               </select>
@@ -322,7 +400,7 @@ onMounted(async () => {
 
         <div v-if="loadingAttendees" class="text-sm text-gray-400">Loading attendees...</div>
         <div v-else-if="attendeesError" class="text-sm text-red-600">{{ attendeesError }}</div>
-        <div v-else-if="attendees.length === 0" class="text-sm text-gray-400">No attendees yet.</div>
+        <div v-else-if="attendees.length === 0 && pendingInvitations.length === 0" class="text-sm text-gray-400">No attendees yet.</div>
 
         <table v-else class="w-full text-sm">
           <thead>
@@ -357,8 +435,49 @@ onMounted(async () => {
                 </button>
               </td>
             </tr>
+            <tr v-for="inv in pendingInvitations" :key="'inv-' + inv.email" class="opacity-60">
+              <td class="py-2.5 font-medium text-gray-500 italic">—</td>
+              <td class="py-2.5 text-gray-400">—</td>
+              <td class="py-2.5 text-gray-500">{{ inv.email }}</td>
+              <td class="py-2.5">
+                <span class="inline-flex items-center gap-1 text-xs font-medium text-amber-600">
+                  <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" /></svg>
+                  Invited
+                </span>
+              </td>
+              <td v-if="hasCost" class="py-2.5 text-center text-gray-400">—</td>
+            </tr>
           </tbody>
         </table>
+      </section>
+
+      <!-- Invite Users -->
+      <section class="bg-white shadow rounded-xl p-6 mt-6">
+        <h2 class="text-lg font-semibold text-gray-900 mb-4">Invite by Email</h2>
+        <div v-for="invitee in invitees" :key="invitee.id" class="flex items-center gap-2 mb-2">
+          <input
+            v-model="invitee.email"
+            @input="onInviteeInput(invitee)"
+            type="email"
+            placeholder="Email address"
+            class="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+            autocomplete="off"
+          />
+          <span v-if="invitee.loading" class="ml-1"><Spinner /></span>
+          <span v-else-if="invitee.exists === true" class="ml-1 text-green-600 text-xs">User exists</span>
+          <span v-else-if="invitee.exists === false" class="ml-1 text-gray-400 text-xs">No user</span>
+          <span v-if="invitee.error" class="ml-1 text-red-600 text-xs">{{ invitee.error }}</span>
+          <button type="button" @click="removeInvitee(invitee)" class="text-xs text-gray-400 hover:text-red-500 px-2">✕</button>
+        </div>
+        <button type="button" @click="addInvitee" class="mt-1 mb-4 px-3 py-1 text-xs rounded bg-gray-100 hover:bg-gray-200 text-gray-700">+ Add another</button>
+        <div class="flex items-center gap-3 pt-2">
+          <button @click="inviteUsers" :disabled="inviting || invitees.every(i => !i.email.trim())"
+            class="px-5 py-2 text-sm font-semibold rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 transition-colors">
+            {{ inviting ? 'Inviting…' : `Invite ${invitees.filter(i => i.email.trim()).length} user${invitees.filter(i => i.email.trim()).length === 1 ? '' : 's'}` }}
+          </button>
+          <span v-if="inviteSuccess" class="text-sm text-green-600">Invitations sent!</span>
+          <span v-if="inviteError" class="text-sm text-red-600">{{ inviteError }}</span>
+        </div>
       </section>
     </template>
   </div>

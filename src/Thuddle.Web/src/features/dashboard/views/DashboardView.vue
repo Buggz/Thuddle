@@ -1,5 +1,5 @@
 <script setup>
-import { shallowRef, ref, onMounted, computed } from 'vue'
+import { shallowRef, ref, onMounted, computed, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useApi } from '@/shared/composables/useApi'
 import { useAuthStore } from '@/features/auth/stores/auth'
@@ -87,7 +87,18 @@ function formatDate(iso) {
   })
 }
 
-onMounted(loadEvents)
+onMounted(() => {
+  if (!auth.isAuthenticated || perms.loaded) {
+    loadEvents()
+  }
+})
+
+watch(() => perms.loaded, (loaded) => {
+  if (loaded) {
+    page.value = 1
+    loadEvents()
+  }
+})
 </script>
 
 <template>
@@ -130,8 +141,15 @@ onMounted(loadEvents)
           v-for="event in events"
           :key="event.id"
           :to="{ name: 'event', params: { id: event.id } }"
-          class="bg-white shadow rounded-lg p-5 flex flex-col hover:shadow-md transition-shadow"
+          class="bg-white shadow rounded-lg p-5 flex flex-col hover:shadow-md transition-shadow relative"
+          :class="{ 'ring-2 ring-amber-400': event.hasInvitation && !event.hasJoined }"
         >
+          <div v-if="event.hasInvitation && !event.hasJoined" class="flex items-center gap-1 text-amber-600 text-xs font-semibold mb-2">
+            <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+            </svg>
+            You're invited!
+          </div>
           <h3 class="text-lg font-semibold text-gray-900 mb-1">{{ event.title }}</h3>
           <p v-if="event.location" class="text-sm text-gray-500 mb-3 line-clamp-2">{{ event.location }}</p>
           <div class="mt-auto space-y-1 text-xs text-gray-400">
