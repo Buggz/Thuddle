@@ -1,5 +1,5 @@
 <script setup>
-import { shallowRef, ref, onMounted, computed } from 'vue'
+import { shallowRef, ref, onMounted, computed, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useApi } from '@/shared/composables/useApi'
 import { useAuthStore } from '@/features/auth/stores/auth'
@@ -87,7 +87,18 @@ function formatDate(iso) {
   })
 }
 
-onMounted(loadEvents)
+onMounted(() => {
+  if (!auth.isAuthenticated || perms.loaded) {
+    loadEvents()
+  }
+})
+
+watch(() => perms.loaded, (loaded) => {
+  if (loaded) {
+    page.value = 1
+    loadEvents()
+  }
+})
 </script>
 
 <template>
