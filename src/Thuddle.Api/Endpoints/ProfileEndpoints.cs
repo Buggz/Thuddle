@@ -185,8 +185,8 @@ public static class ProfileEndpoints
         if (file is null || file.Length == 0)
             return Results.BadRequest(new { error = "No picture uploaded." });
 
-        if (file.Length > 5 * 1024 * 1024)
-            return Results.BadRequest(new { error = "File too large. Maximum 5MB." });
+        if (file.Length > 10 * 1024 * 1024)
+            return Results.BadRequest(new { error = "File too large. Maximum 10MB." });
 
         using var ms = new MemoryStream();
         await file.CopyToAsync(ms, ct);

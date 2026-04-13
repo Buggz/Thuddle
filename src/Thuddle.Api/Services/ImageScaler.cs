@@ -20,7 +20,16 @@ public class ImageScaler
         using var original = SKBitmap.Decode(imageData)
             ?? throw new InvalidOperationException("Unable to decode image.");
 
-        using var scaled = original.Resize(new SKImageInfo(_targetSize, _targetSize), SKSamplingOptions.Default)
+        // Center-crop to square before scaling
+        var side = Math.Min(original.Width, original.Height);
+        var cropX = (original.Width - side) / 2;
+        var cropY = (original.Height - side) / 2;
+
+        using var cropped = new SKBitmap();
+        if (!original.ExtractSubset(cropped, new SKRectI(cropX, cropY, cropX + side, cropY + side)))
+            throw new InvalidOperationException("Unable to crop image.");
+
+        using var scaled = cropped.Resize(new SKImageInfo(_targetSize, _targetSize), SKSamplingOptions.Default)
             ?? throw new InvalidOperationException("Unable to resize image.");
 
         using var image = SKImage.FromBitmap(scaled);
