@@ -55,6 +55,13 @@ public static class ProfileEndpoints
             db.Users.Add(dbUser);
             await db.SaveChangesAsync(ct);
         }
+        else if (dbUser.KeycloakId != keycloakId)
+        {
+            // Keycloak was recreated — update stale KeycloakId
+            dbUser.KeycloakId = keycloakId;
+            dbUser.UpdatedAt = DateTime.UtcNow;
+            await db.SaveChangesAsync(ct);
+        }
 
         return Results.Ok(new { dbUser.Id });
     }

@@ -47,10 +47,15 @@ async function loadParticipants() {
   if (participantsLoaded.value) return
   participantsLoading.value = true
   try {
-    const res = await fetch(apiUrl(`/api/events/${route.params.id}/participants`))
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}))
-      throw new Error(data.error || `HTTP ${res.status}`)
+    let res
+    if (auth.isAuthenticated) {
+      res = await authFetch(`/api/events/${route.params.id}/participants`)
+    } else {
+      res = await fetch(apiUrl(`/api/events/${route.params.id}/participants`))
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data.error || `HTTP ${res.status}`)
+      }
     }
     participants.value = await res.json()
     participantsLoaded.value = true

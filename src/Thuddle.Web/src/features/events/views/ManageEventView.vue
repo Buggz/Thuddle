@@ -1,5 +1,5 @@
 <script setup>
-import { shallowRef, ref, computed, onMounted } from 'vue'
+import { shallowRef, ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useApi } from '@/shared/composables/useApi'
 import RichTextEditor from '@/shared/components/RichTextEditor.vue'
@@ -27,8 +27,13 @@ const saving = shallowRef(false)
 const saveError = shallowRef(null)
 const saveSuccess = shallowRef(false)
 
+watch(() => form.value.visibility, (v) => {
+  if (v === 1) form.value.joinMode = 1
+})
+
 // Attendees
 const attendees = ref([])
+const pendingInvitations = ref([])
 const coAdmins = ref([])
 const loadingAttendees = shallowRef(true)
 const attendeesError = shallowRef(null)
@@ -184,6 +189,7 @@ async function loadAttendees() {
     const data = await res.json()
     attendees.value = data.attendees
     coAdmins.value = data.coAdmins
+    pendingInvitations.value = data.pendingInvitations || []
   } catch (err) {
     attendeesError.value = err.message || 'Failed to load attendees.'
   } finally {
@@ -313,7 +319,8 @@ onMounted(async () => {
             <div>
               <label class="block text-sm font-medium text-gray-700 mb-1">Join Mode</label>
               <select v-model.number="form.joinMode"
-                class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                :disabled="form.visibility === 1"
+                class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 disabled:bg-gray-100 disabled:text-gray-500">
                 <option :value="0">Open</option>
                 <option :value="1">Invite only</option>
               </select>
@@ -393,7 +400,7 @@ onMounted(async () => {
 
         <div v-if="loadingAttendees" class="text-sm text-gray-400">Loading attendees...</div>
         <div v-else-if="attendeesError" class="text-sm text-red-600">{{ attendeesError }}</div>
-        <div v-else-if="attendees.length === 0" class="text-sm text-gray-400">No attendees yet.</div>
+        <div v-else-if="attendees.length === 0 && pendingInvitations.length === 0" class="text-sm text-gray-400">No attendees yet.</div>
 
         <table v-else class="w-full text-sm">
           <thead>
@@ -427,6 +434,18 @@ onMounted(async () => {
                   {{ a.hasPaid ? 'Paid' : 'Unpaid' }}
                 </button>
               </td>
+            </tr>
+            <tr v-for="inv in pendingInvitations" :key="'inv-' + inv.email" class="opacity-60">
+              <td class="py-2.5 font-medium text-gray-500 italic">—</td>
+              <td class="py-2.5 text-gray-400">—</td>
+              <td class="py-2.5 text-gray-500">{{ inv.email }}</td>
+              <td class="py-2.5">
+                <span class="inline-flex items-center gap-1 text-xs font-medium text-amber-600">
+                  <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" /></svg>
+                  Invited
+                </span>
+              </td>
+              <td v-if="hasCost" class="py-2.5 text-center text-gray-400">—</td>
             </tr>
           </tbody>
         </table>

@@ -1,5 +1,5 @@
 <script setup>
-import { reactive, shallowRef, computed } from 'vue'
+import { reactive, shallowRef, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useApi } from '@/shared/composables/useApi'
 
@@ -18,6 +18,10 @@ const form = reactive({
 
 const submitting = shallowRef(false)
 const error = shallowRef(null)
+
+watch(() => form.visibility, (v) => {
+  if (v === 'Unlisted') form.joinMode = 'InviteOnly'
+})
 
 const isValid = computed(() =>
   form.title.trim().length > 0 &&
@@ -124,7 +128,8 @@ async function submit() {
         <select
           id="joinMode"
           v-model="form.joinMode"
-          class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+          :disabled="form.visibility === 'Unlisted'"
+          class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 disabled:bg-gray-100 disabled:text-gray-500"
         >
           <option value="Open">Anyone</option>
           <option value="InviteOnly">Invite only</option>

@@ -72,6 +72,13 @@ public static class EventEndpoints
         var query = db.Events.AsNoTracking();
         if (isAnonymous)
             query = query.Where(e => e.Visibility == EventVisibility.Public);
+        else
+            query = query.Where(e =>
+                e.Visibility == EventVisibility.Public
+                || e.OwnerId == userId
+                || db.EventParticipants.Any(ep => ep.EventId == e.Id && ep.UserId == userId)
+                || db.EventCoAdmins.Any(ca => ca.EventId == e.Id && ca.UserId == userId)
+                || db.EventInvitations.Any(i => i.EventId == e.Id && i.Email == userEmail));
 
         var totalCount = await query.CountAsync(ct);
 
@@ -115,6 +122,7 @@ public static class EventEndpoints
             e.Cost,
             e.ParticipantCount,
             e.HasJoined,
+            e.HasInvitation,
             CanJoin = !e.HasJoined && !isAnonymous
                 && (e.JoinMode == JoinMode.Open || e.HasInvitation)
         });
@@ -163,6 +171,13 @@ public static class EventEndpoints
             : null;
 
         if (dbUser is null && evt.Visibility != EventVisibility.Public)
+            return Results.NotFound(new { error = "Event not found." });
+
+        if (dbUser is not null && evt.Visibility == EventVisibility.Unlisted
+            && evt.OwnerId != dbUser.Id
+            && !await db.EventParticipants.AnyAsync(p => p.EventId == eventId && p.UserId == dbUser.Id, ct)
+            && !await db.EventCoAdmins.AnyAsync(ca => ca.EventId == eventId && ca.UserId == dbUser.Id, ct)
+            && !await db.EventInvitations.AnyAsync(i => i.EventId == eventId && i.Email == dbUser.Email, ct))
             return Results.NotFound(new { error = "Event not found." });
 
         var hasJoined = dbUser is not null && await db.EventParticipants
@@ -222,6 +237,11 @@ public static class EventEndpoints
         if (request.Capacity is < 1)
             return Results.BadRequest(new { error = "Capacity must be at least 1." });
 
+        // Unlisted events must be invite-only
+        var joinMode = request.Visibility == EventVisibility.Unlisted
+            ? JoinMode.InviteOnly
+            : request.JoinMode;
+
         var evt = new Event
         {
             Id = Guid.NewGuid(),
@@ -232,7 +252,7 @@ public static class EventEndpoints
             Start = request.Start,
             End = request.End,
             Visibility = request.Visibility,
-            JoinMode = request.JoinMode,
+            JoinMode = joinMode,
             Capacity = request.Capacity,
             Cost = request.Cost,
             CreatedAt = DateTime.UtcNow,
@@ -413,13 +433,18 @@ public static class EventEndpoints
         if (request.Capacity is < 1)
             return Results.BadRequest(new { error = "Capacity must be at least 1." });
 
+        // Unlisted events must be invite-only
+        var joinMode = request.Visibility == EventVisibility.Unlisted
+            ? JoinMode.InviteOnly
+            : request.JoinMode;
+
         evt.Title = request.Title.Trim();
         evt.Location = request.Location?.Trim() ?? "";
         evt.Description = request.Description;
         evt.Start = request.Start;
         evt.End = request.End;
         evt.Visibility = request.Visibility;
-        evt.JoinMode = request.JoinMode;
+        evt.JoinMode = joinMode;
         evt.Capacity = request.Capacity;
         evt.Cost = request.Cost;
         evt.UpdatedAt = DateTime.UtcNow;
@@ -552,18 +577,44 @@ public static class EventEndpoints
             })
             .ToListAsync(ct);
 
-        return Results.Ok(new { attendees, coAdmins });
+        var joinedEmails = attendees.Select(a => a.Email).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var pendingInvitations = await db.EventInvitations
+            .Where(i => i.EventId == eventId && !joinedEmails.Contains(i.Email))
+            .Select(i => new
+            {
+                i.Email,
+                InvitedAt = i.CreatedAt
+            })
+            .OrderBy(i => i.InvitedAt)
+            .ToListAsync(ct);
+
+        return Results.Ok(new { attendees, coAdmins, pendingInvitations });
     }
 
     private static async Task<IResult> GetParticipants(
         Guid eventId,
+        ClaimsPrincipal user,
         ThuddleDbContext db,
         CancellationToken ct)
     {
         var evt = await db.Events.AsNoTracking().FirstOrDefaultAsync(e => e.Id == eventId, ct);
         if (evt is null) return Results.NotFound(new { error = "Event not found." });
+
         if (evt.Visibility != EventVisibility.Public)
-            return Results.NotFound(new { error = "Event not found." });
+        {
+            var keycloakId = GetKeycloakId(user);
+            var dbUser = keycloakId is not null
+                ? await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.KeycloakId == keycloakId, ct)
+                : null;
+
+            if (dbUser is null
+                || (evt.OwnerId != dbUser.Id
+                    && !await db.EventParticipants.AnyAsync(p => p.EventId == eventId && p.UserId == dbUser.Id, ct)
+                    && !await db.EventCoAdmins.AnyAsync(ca => ca.EventId == eventId && ca.UserId == dbUser.Id, ct)
+                    && !await db.EventInvitations.AnyAsync(i => i.EventId == eventId && i.Email == dbUser.Email, ct)))
+                return Results.NotFound(new { error = "Event not found." });
+        }
 
         var participantsRaw = await db.EventParticipants
             .Where(p => p.EventId == eventId)
