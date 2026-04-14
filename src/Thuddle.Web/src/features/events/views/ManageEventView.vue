@@ -525,7 +525,10 @@ onMounted(async () => {
                 type="email"
                 placeholder="Email address"
                 class="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                autocomplete="off"
+                autocomplete="new-password"
+                data-1p-ignore
+                data-lpignore="true"
+                data-form-type="other"
               />
               <span v-if="invitee.loading" class="ml-1"><Spinner /></span>
               <span v-else-if="invitee.exists === true" class="ml-1 text-green-600 text-xs">User exists</span>

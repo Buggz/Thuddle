@@ -163,8 +163,20 @@ public class MigrationWorker(
             u => u.Email.ToLower() == adminEmail.ToLower(), ct);
         if (user is null)
         {
-            logger.LogInformation("Admin user {Email} not found in database yet — permission will be granted on first login.", adminEmail);
-            return;
+            // Create the user so the permission can be granted immediately.
+            // On first login, /api/profile/init will match by email and update the KeycloakId.
+            user = new User
+            {
+                Id = Guid.NewGuid(),
+                KeycloakId = "",
+                Email = adminEmail,
+                DisplayName = "Test User",
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            };
+            dbContext.Users.Add(user);
+            await dbContext.SaveChangesAsync(ct);
+            logger.LogInformation("Created seed user {Email}.", adminEmail);
         }
 
         var hasPermission = await dbContext.UserPermissions
