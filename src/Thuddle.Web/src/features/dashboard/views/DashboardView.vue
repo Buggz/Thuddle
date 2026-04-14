@@ -127,14 +127,29 @@ function nextPage() {
   }
 }
 
-function formatDate(iso) {
-  return new Date(iso).toLocaleDateString(undefined, {
-    weekday: 'short',
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit'
-  })
+function formatDateShort(iso) {
+  const d = new Date(iso)
+  return d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })
+}
+
+function isSameDay(a, b) {
+  const da = new Date(a)
+  const db = new Date(b)
+  return da.getFullYear() === db.getFullYear()
+    && da.getMonth() === db.getMonth()
+    && da.getDate() === db.getDate()
+}
+
+function eventImageGradient(index) {
+  const gradients = [
+    'from-indigo-400 to-purple-500',
+    'from-emerald-400 to-teal-500',
+    'from-orange-400 to-rose-500',
+    'from-sky-400 to-blue-500',
+    'from-fuchsia-400 to-pink-500',
+    'from-amber-400 to-orange-500',
+  ]
+  return gradients[index % gradients.length]
 }
 
 onMounted(() => {
@@ -170,65 +185,138 @@ watch(() => perms.loaded, (loaded) => {
       </button>
     </div>
 
-    <div class="flex items-center justify-between mb-6">
-      <h2 class="text-2xl font-bold text-gray-900">Events</h2>
+    <div class="flex items-center justify-between mb-8">
+      <h2 class="text-3xl font-extrabold text-gray-900 tracking-tight">Events</h2>
     </div>
 
     <div v-if="loading" class="text-center py-12 text-gray-400 text-lg">{{ loadingMessage }}</div>
 
-      <div v-else-if="error" class="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
-        {{ error }}
-      </div>
+    <div v-else-if="error" class="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+      {{ error }}
+    </div>
 
-      <div v-else-if="events.length === 0" class="text-center py-12">
-        <p class="text-gray-500 text-lg">No events yet.</p>
-        <p class="text-gray-400 text-sm mt-1">Create one to get started!</p>
-      </div>
+    <div v-else-if="events.length === 0" class="text-center py-12">
+      <p class="text-gray-500 text-lg">No events yet.</p>
+      <p class="text-gray-400 text-sm mt-1">Create one to get started!</p>
+    </div>
 
-      <template v-else>
-      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+    <template v-else>
+      <div class="flex flex-col gap-4">
         <RouterLink
-          v-for="event in events"
+          v-for="(event, idx) in events"
           :key="event.id"
           :to="{ name: 'event', params: { id: event.id } }"
-          class="bg-white shadow rounded-lg p-5 flex flex-col hover:shadow-md transition-shadow relative"
-          :class="{ 'ring-2 ring-amber-400': event.hasInvitation && !event.hasJoined }"
+          class="group relative flex overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-gray-200/60 hover:shadow-lg hover:ring-gray-300 transition-all duration-200"
+          :class="{
+            'ring-2 ring-amber-400 shadow-amber-100': event.hasInvitation && !event.hasJoined,
+          }"
         >
-          <div v-if="event.hasInvitation && !event.hasJoined" class="flex items-center gap-1 text-amber-600 text-xs font-semibold mb-2">
-            <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-              <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
-            </svg>
-            You're invited!
-          </div>
-          <h3 class="text-lg font-semibold text-gray-900 mb-1">{{ event.title }}</h3>
-          <p v-if="event.location" class="text-sm text-gray-500 mb-3 line-clamp-2">{{ event.location }}</p>
-          <div class="mt-auto space-y-1 text-xs text-gray-400">
-            <div class="flex items-center gap-1.5">
-              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" />
-              </svg>
-              <span>{{ formatDate(event.start) }} – {{ formatDate(event.end) }}</span>
+          <!-- Event Image / Gradient placeholder -->
+          <div class="relative w-44 shrink-0 hidden sm:block">
+            <img
+              v-if="event.picturePath"
+              :src="event.picturePath"
+              :alt="event.title"
+              class="absolute inset-0 w-full h-full object-cover"
+            />
+            <div
+              v-else
+              class="absolute inset-0 bg-linear-to-br opacity-90"
+              :class="eventImageGradient(idx)"
+            >
+              <div class="absolute inset-0 flex items-center justify-center">
+                <svg class="w-10 h-10 text-white/40" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" />
+                </svg>
+              </div>
             </div>
-            <div class="flex items-center gap-2">
-              <span
-                class="inline-block rounded-full px-2 py-0.5 text-xs font-medium"
-                :class="event.visibility === 0 ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'"
+            <!-- Invitation ribbon -->
+            <div
+              v-if="event.hasInvitation && !event.hasJoined"
+              class="absolute top-2.5 left-2.5 flex items-center gap-1 rounded-full bg-amber-500 px-2.5 py-1 text-[11px] font-bold text-white shadow-md uppercase tracking-wide"
+            >
+              <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+              </svg>
+              Invited
+            </div>
+          </div>
+
+          <!-- Card content -->
+          <div class="flex flex-1 items-center gap-6 px-5 py-4 min-w-0">
+            <!-- Dates -->
+            <div class="hidden md:flex flex-col items-start shrink-0 min-w-40">
+              <template v-if="isSameDay(event.start, event.end)">
+                <span class="text-base font-bold text-gray-900 leading-snug">{{ formatDateShort(event.start) }}</span>
+              </template>
+              <template v-else>
+                <span class="text-base font-bold text-gray-900 leading-snug">{{ formatDateShort(event.start) }}</span>
+                <span class="text-xs text-gray-400 font-medium my-0.5">to</span>
+                <span class="text-base font-bold text-gray-900 leading-snug">{{ formatDateShort(event.end) }}</span>
+              </template>
+            </div>
+
+            <!-- Title + Location -->
+            <div class="flex-1 min-w-0">
+              <!-- Mobile-only invitation badge -->
+              <div v-if="event.hasInvitation && !event.hasJoined" class="sm:hidden flex items-center gap-1 text-amber-600 text-xs font-bold mb-1.5 uppercase tracking-wide">
+                <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+                </svg>
+                You're invited!
+              </div>
+              <h3 class="text-lg font-bold text-gray-900 truncate group-hover:text-indigo-600 transition-colors">
+                {{ event.title }}
+              </h3>
+              <p v-if="event.location" class="text-sm text-gray-500 truncate mt-0.5">
+                {{ event.location }}
+              </p>
+            </div>
+
+            <!-- Badges + Attendees -->
+            <div class="hidden lg:flex flex-col items-end gap-2 shrink-0 min-w-32">
+              <div class="flex items-center gap-1.5">
+                <span
+                  class="rounded-full px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide"
+                  :class="event.joinMode === 0
+                    ? 'bg-sky-50 text-sky-700 ring-1 ring-sky-200'
+                    : 'bg-gray-50 text-gray-600 ring-1 ring-gray-200'"
+                >
+                  {{ event.joinMode === 0 ? 'Anyone can join' : 'Invite only' }}
+                </span>
+              </div>
+              <div class="flex items-center gap-1.5 text-sm text-gray-500">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 0 0 2.625.372 9.337 9.337 0 0 0 4.121-.952 4.125 4.125 0 0 0-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 0 1 8.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0 1 11.964-3.07M12 6.375a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0Zm8.25 2.25a2.625 2.625 0 1 1-5.25 0 2.625 2.625 0 0 1 5.25 0Z" />
+                </svg>
+                <span class="font-medium">
+                  <template v-if="event.capacity">{{ event.participantCount }}/{{ event.capacity }}</template>
+                  <template v-else>{{ event.participantCount }}</template>
+                </span>
+              </div>
+            </div>
+
+            <!-- Attending status -->
+            <!-- Attending status (fixed width to keep alignment) -->
+            <div class="shrink-0 pl-2 hidden sm:block w-36">
+              <div
+                v-if="event.hasJoined"
+                class="flex items-center gap-2 rounded-xl bg-emerald-50 px-4 py-2.5 ring-1 ring-emerald-200"
               >
-                {{ event.visibility === 0 ? 'Public' : 'Unlisted' }}
-              </span>
-              <span
-                class="inline-block rounded-full px-2 py-0.5 text-xs font-medium"
-                :class="event.joinMode === 0 ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'"
+                <svg class="w-5 h-5 text-emerald-500" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                </svg>
+                <span class="text-sm font-bold text-emerald-700">Attending</span>
+              </div>
+              <div
+                v-else-if="event.hasInvitation"
+                class="flex items-center gap-2 rounded-xl bg-amber-50 px-4 py-2.5 ring-1 ring-amber-200"
               >
-                {{ event.joinMode === 0 ? 'Open' : 'Invite only' }}
-              </span>
-              <span class="text-gray-400">
-                <template v-if="event.capacity">{{ event.participantCount }}/{{ event.capacity }}</template>
-                <template v-else>{{ event.participantCount }} attending</template>
-              </span>
-              <span class="font-medium" :class="event.cost ? 'text-gray-700' : 'text-green-600'">
-                {{ event.cost ? event.cost.toFixed(2) : 'Free' }}
-              </span>
+                <svg class="w-5 h-5 text-amber-500" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+                </svg>
+                <span class="text-sm font-bold text-amber-700">Invited</span>
+              </div>
             </div>
           </div>
         </RouterLink>
