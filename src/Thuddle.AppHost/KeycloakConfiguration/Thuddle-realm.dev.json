@@ -77,22 +77,6 @@
       ]
     },
     {
-      "id": "00000000-0000-0000-0000-000000000002",
-      "username": "admin",
-      "email": "admin@thuddle.dev",
-      "emailVerified": true,
-      "enabled": true,
-      "firstName": "Admin",
-      "lastName": "User",
-      "credentials": [
-        {
-          "type": "password",
-          "value": "adminpassword",
-          "temporary": false
-        }
-      ]
-    },
-    {
       "id": "00000000-0000-0000-0000-000000000003",
       "username": "alice",
       "email": "alice@thuddle.dev",

@@ -42,13 +42,14 @@ For deployment instructions, see [DEPLOY.md](DEPLOY.md).
 
 The dev realm (`KeycloakConfiguration/Thuddle-realm.dev.json`) seeds these users with stable IDs:
 
-| Username   | Email                | Password       | Notes                |
-|------------|----------------------|----------------|----------------------|
-| `testuser` | testuser@thuddle.dev | `testpassword` | General test account |
-| `admin`    | admin@thuddle.dev    | `adminpassword`| General test account |
-| `alice`    | alice@thuddle.dev    | `testpassword` |                      |
-| `bob`      | bob@thuddle.dev      | `testpassword` |                      |
-| `charlie`  | charlie@thuddle.dev  | `testpassword` |                      |
+| Username   | Email                | Password       | Notes                          |
+|------------|----------------------|----------------|--------------------------------|
+| `testuser` | testuser@thuddle.dev | `testpassword` | Seeded with `events:write`     |
+| `alice`    | alice@thuddle.dev    | `testpassword` |                                |
+| `bob`      | bob@thuddle.dev      | `testpassword` |                                |
+| `charlie`  | charlie@thuddle.dev  | `testpassword` |                                |
+
+`testuser` is automatically granted the `events:write` permission by the migration service, allowing it to create events. Other users can be granted permissions through the app.
 
 User IDs are pinned in the realm file so they remain consistent across container recreations. Permissions and other database references will match after a volume reset.
 
