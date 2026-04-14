@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
 using Thuddle.Api.Data;
 using Thuddle.Api.Services;
@@ -107,7 +108,7 @@ public static class DiscussionEndpoints
         CreatePostRequest request,
         ClaimsPrincipal user,
         ThuddleDbContext db,
-        SmtpEmailSender emailSender,
+        IServiceProvider serviceProvider,
         CancellationToken ct)
     {
         var keycloakId = GetKeycloakId(user);
@@ -160,7 +161,14 @@ public static class DiscussionEndpoints
         // Send email if requested and user is admin
         if (request.SendEmail && isAdmin)
         {
-            _ = Task.Run(async () => await SendPostEmailAsync(evt, post, dbUser, db, emailSender), CancellationToken.None);
+            _ = Task.Run(async () =>
+            {
+                using var scope = serviceProvider.CreateScope();
+                var scopedDb = scope.ServiceProvider.GetRequiredService<ThuddleDbContext>();
+                var scopedEmailSender = scope.ServiceProvider.GetRequiredService<SmtpEmailSender>();
+                var scopedConfig = scope.ServiceProvider.GetRequiredService<IConfiguration>();
+                await SendPostEmailAsync(evt, post, dbUser, scopedDb, scopedEmailSender, scopedConfig);
+            }, CancellationToken.None);
         }
 
         return Results.Created($"/api/events/{eventId}/discussion/{post.Id}", new
@@ -179,7 +187,7 @@ public static class DiscussionEndpoints
 
     private static async Task SendPostEmailAsync(
         Event evt, DiscussionPost post, User author,
-        ThuddleDbContext db, SmtpEmailSender emailSender)
+        ThuddleDbContext db, SmtpEmailSender emailSender, IConfiguration config)
     {
         try
         {
@@ -204,16 +212,52 @@ public static class DiscussionEndpoints
             emails = emails.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
             emails.Remove(author.Email);
 
+            var baseUrl = config["App:BaseUrl"] ?? "https://thuddle.app";
+            var eventUrl = $"{baseUrl}/events/{evt.Id}";
             var authorName = author.DisplayName ?? author.Email;
             var subject = $"[{evt.Title}] New update from {authorName}";
+
+            var emailContent = post.Content;
+            var hasImages = Regex.IsMatch(emailContent, @"<img\b", RegexOptions.IgnoreCase);
+            if (hasImages)
+                emailContent = Regex.Replace(emailContent, @"<img\b[^>]*>", "<p style=\"color:#6b7280; font-style:italic;\">[image]</p>", RegexOptions.IgnoreCase);
+
+            var imageHint = hasImages
+                ? $"""<p style="margin-top:12px;"><a href="{eventUrl}" style="color:#4f46e5; text-decoration:underline;">View the full post with images</a></p>"""
+                : "";
+
             var htmlBody = $"""
-                <div style="font-family: sans-serif; max-width: 600px;">
-                    <h2 style="color: #4f46e5;">New update in {System.Net.WebUtility.HtmlEncode(evt.Title)}</h2>
-                    <p style="color: #6b7280;">Posted by {System.Net.WebUtility.HtmlEncode(authorName)}</p>
-                    <div style="padding: 16px; background: #f9fafb; border-radius: 8px; margin: 16px 0;">
-                        {post.Content}
-                    </div>
-                </div>
+                <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f4f7; padding:40px 0; font-family: sans-serif;">
+                    <tr>
+                        <td align="center">
+                            <table width="560" cellpadding="0" cellspacing="0" style="background-color:#ffffff; border-radius:12px; overflow:hidden; box-shadow:0 1px 3px rgba(0,0,0,0.08);">
+                                <tr>
+                                    <td style="background-color:#4f46e5; padding:28px 40px; text-align:center;">
+                                        <a href="{baseUrl}" style="text-decoration:none;"><h1 style="margin:0; font-size:26px; font-weight:700; color:#ffffff; letter-spacing:-0.5px;">Thuddle</h1></a>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td style="padding:36px 40px 40px;">
+                                        <h2 style="margin-top:0; color: #4f46e5;"><a href="{eventUrl}" style="color:#4f46e5; text-decoration:none;">New update in {System.Net.WebUtility.HtmlEncode(evt.Title)}</a></h2>
+                                        <p style="color: #6b7280;">Posted by {System.Net.WebUtility.HtmlEncode(authorName)}</p>
+                                        <div style="padding: 16px; background: #f9fafb; border-radius: 8px; margin: 16px 0;">
+                                            {emailContent}
+                                        </div>
+                                        {imageHint}
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td style="padding:20px 40px 28px; border-top:1px solid #e5e7eb; text-align:center;">
+                                        <p style="margin:0; font-size:13px; color:#9ca3af; line-height:1.5;">
+                                            This email was sent by <a href="{baseUrl}" style="color:#4f46e5; text-decoration:none;">Thuddle</a>.<br>
+                                            If you didn't request this, you can safely ignore it.
+                                        </p>
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+                </table>
                 """;
 
             foreach (var email in emails)
