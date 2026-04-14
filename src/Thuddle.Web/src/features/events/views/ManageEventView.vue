@@ -239,9 +239,9 @@ async function removeCoAdmin(admin) {
   }
 }
 
-async function uploadDescriptionImage(file) {
+async function uploadDescriptionImage(blob) {
   const formData = new FormData()
-  formData.append('file', file)
+  formData.append('file', blob, 'image.jpg')
   const res = await authFetch(`/api/events/${eventId}/images`, {
     method: 'POST',
     body: formData

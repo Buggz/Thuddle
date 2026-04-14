@@ -4,7 +4,8 @@ import StarterKit from '@tiptap/starter-kit'
 import Image from '@tiptap/extension-image'
 import Underline from '@tiptap/extension-underline'
 import { TextStyle } from '@tiptap/extension-text-style'
-import { shallowRef, watch, onBeforeUnmount } from 'vue'
+import { shallowRef, ref, watch, onBeforeUnmount } from 'vue'
+import ImageEditor from '@/shared/components/ImageEditor.vue'
 
 const props = defineProps({
   modelValue: { type: String, default: '' },
@@ -13,6 +14,7 @@ const props = defineProps({
 
 const emit = defineEmits(['update:modelValue'])
 const uploading = shallowRef(false)
+const pendingImageFile = ref(null)
 
 const editor = useEditor({
   content: props.modelValue,
@@ -74,21 +76,28 @@ async function insertImage() {
   const input = document.createElement('input')
   input.type = 'file'
   input.accept = 'image/jpeg,image/png,image/gif,image/webp'
-  input.onchange = async () => {
+  input.onchange = () => {
     const file = input.files?.[0]
-    if (!file) return
-
-    uploading.value = true
-    try {
-      const url = await props.uploadImage(file)
-      if (url) {
-        editor.value?.chain().focus().setImage({ src: url }).run()
-      }
-    } finally {
-      uploading.value = false
-    }
+    if (file) pendingImageFile.value = file
   }
   input.click()
+}
+
+async function onImageEdited(blob) {
+  pendingImageFile.value = null
+  uploading.value = true
+  try {
+    const url = await props.uploadImage(blob)
+    if (url) {
+      editor.value?.chain().focus().setImage({ src: url }).run()
+    }
+  } finally {
+    uploading.value = false
+  }
+}
+
+function onImageEditCancelled() {
+  pendingImageFile.value = null
 }
 
 function isActive(name, attrs) {
@@ -145,5 +154,12 @@ function isActive(name, attrs) {
 
     <!-- Editor area -->
     <EditorContent :editor="editor" />
+
+    <ImageEditor
+      v-if="pendingImageFile"
+      :image-file="pendingImageFile"
+      @done="onImageEdited"
+      @cancel="onImageEditCancelled"
+    />
   </div>
 </template>
