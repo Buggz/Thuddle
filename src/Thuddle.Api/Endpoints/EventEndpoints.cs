@@ -21,6 +21,7 @@ public static class EventEndpoints
         app.MapGet("/api/events/{eventId:guid}/participants", GetParticipants).AllowAnonymous();
         app.MapPut("/api/events/{eventId:guid}/attendees/{userId:guid}/payment", UpdatePayment).RequireAuthorization();
         app.MapPost("/api/events/{eventId:guid}/images", UploadEventImage).RequireAuthorization().DisableAntiforgery();
+        app.MapPost("/api/events/{eventId:guid}/picture", UploadEventPicture).RequireAuthorization().DisableAntiforgery();
 
         app.MapGet("/api/users/exists", UserExistsByEmail).RequireAuthorization();
     }
@@ -682,6 +683,55 @@ public static class EventEndpoints
         await db.SaveChangesAsync(ct);
 
         return Results.Ok(new { userId, hasPaid = request.HasPaid });
+    }
+
+    private static async Task<IResult> UploadEventPicture(
+        Guid eventId,
+        HttpRequest request,
+        ClaimsPrincipal user,
+        ThuddleDbContext db,
+        EventImageStorage imageStorage,
+        CancellationToken ct)
+    {
+        var keycloakId = GetKeycloakId(user);
+        if (keycloakId is null) return Results.Unauthorized();
+
+        var dbUser = await db.Users.FirstOrDefaultAsync(u => u.KeycloakId == keycloakId, ct);
+        if (dbUser is null) return Results.Unauthorized();
+
+        if (!await IsEventAdmin(db, eventId, dbUser.Id, ct))
+            return Results.Forbid();
+
+        var form = await request.ReadFormAsync(ct);
+        var file = form.Files.GetFile("picture");
+        if (file is null || file.Length == 0)
+            return Results.BadRequest(new { error = "No picture uploaded." });
+
+        if (file.Length > 10 * 1024 * 1024)
+            return Results.BadRequest(new { error = "File too large. Maximum 10MB." });
+
+        using var ms = new MemoryStream();
+        await file.CopyToAsync(ms, ct);
+        var imageData = ms.ToArray();
+
+        try
+        {
+            var url = await imageStorage.UploadEventPictureAsync(eventId, imageData, ct);
+
+            var evt = await db.Events.FirstOrDefaultAsync(e => e.Id == eventId, ct);
+            if (evt is not null)
+            {
+                evt.PicturePath = url;
+                evt.UpdatedAt = DateTime.UtcNow;
+                await db.SaveChangesAsync(ct);
+            }
+
+            return Results.Ok(new { url });
+        }
+        catch (ArgumentException ex)
+        {
+            return Results.BadRequest(new { error = ex.Message });
+        }
     }
 
     private static async Task<IResult> UploadEventImage(

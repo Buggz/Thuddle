@@ -3,6 +3,7 @@ import { shallowRef, ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useApi } from '@/shared/composables/useApi'
 import RichTextEditor from '@/shared/components/RichTextEditor.vue'
+import ImageCropper from '@/features/profile/components/ImageCropper.vue'
 import Spinner from '@/shared/components/Spinner.vue'
 
 const route = useRoute()
@@ -27,6 +28,11 @@ const form = ref({
 const saving = shallowRef(false)
 const saveError = shallowRef(null)
 const saveSuccess = shallowRef(false)
+
+// Event image
+const selectedImageFile = ref(null)
+const uploadingImage = shallowRef(false)
+const imageError = shallowRef(null)
 
 watch(() => form.value.visibility, (v) => {
   if (v === 1) form.value.joinMode = 1
@@ -130,6 +136,36 @@ async function inviteUsers() {
   } finally {
     inviting.value = false
   }
+}
+
+function onImageFileChange(event) {
+  const file = event.target.files?.[0]
+  if (file) selectedImageFile.value = file
+  event.target.value = ''
+}
+
+async function onImageCrop(blob) {
+  selectedImageFile.value = null
+  uploadingImage.value = true
+  imageError.value = null
+  try {
+    const formData = new FormData()
+    formData.append('picture', blob, 'event.jpg')
+    const res = await authFetch(`/api/events/${eventId}/picture`, {
+      method: 'POST',
+      body: formData
+    })
+    const data = await res.json()
+    if (eventData.value) eventData.value.picturePath = data.url
+  } catch (err) {
+    imageError.value = err.message || 'Failed to upload image.'
+  } finally {
+    uploadingImage.value = false
+  }
+}
+
+function onImageCropCancel() {
+  selectedImageFile.value = null
 }
 
 function toLocalDatetime(iso) {
@@ -344,6 +380,39 @@ onMounted(async () => {
 
         <!-- Tab: About this event -->
         <div v-if="activeTab === 'about'" class="p-6">
+          <!-- Event Image -->
+          <div class="mb-6">
+            <label class="block text-sm font-medium text-gray-700 mb-2">Event image</label>
+            <div v-if="eventData?.picturePath" class="mb-3">
+              <img :src="eventData.picturePath" alt="Event image" class="rounded-lg max-h-48 object-cover" />
+              <div class="flex gap-2 mt-2">
+                <label class="inline-flex items-center px-3 py-1.5 text-xs font-medium text-gray-700 bg-gray-100 rounded-lg cursor-pointer hover:bg-gray-200 transition"
+                  :class="{ 'opacity-50 pointer-events-none': uploadingImage }">
+                  {{ uploadingImage ? 'Uploading...' : 'Change' }}
+                  <input type="file" accept="image/*" class="hidden" @change="onImageFileChange" :disabled="uploadingImage" />
+                </label>
+              </div>
+            </div>
+            <div v-else>
+              <label class="inline-flex items-center px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg cursor-pointer hover:bg-gray-50 transition"
+                :class="{ 'opacity-50 pointer-events-none': uploadingImage }">
+                {{ uploadingImage ? 'Uploading...' : 'Upload image' }}
+                <input type="file" accept="image/*" class="hidden" @change="onImageFileChange" :disabled="uploadingImage" />
+              </label>
+              <p class="mt-1.5 text-xs text-gray-400">PNG, JPG up to 10MB. Will be shown on the event card.</p>
+            </div>
+            <div v-if="imageError" class="mt-2 text-sm text-red-600">{{ imageError }}</div>
+            <ImageCropper
+              v-if="selectedImageFile"
+              :image-file="selectedImageFile"
+              shape="rectangle"
+              :aspect-ratio="16/9"
+              title="Crop Event Image"
+              @crop="onImageCrop"
+              @cancel="onImageCropCancel"
+            />
+          </div>
+
           <form @submit.prevent="saveEvent" class="space-y-4">
             <div>
               <label class="block text-sm font-medium text-gray-700 mb-1">Title</label>

@@ -49,6 +49,26 @@ public sealed class EventImageStorage
         return blob.Uri.ToString();
     }
 
+    public async Task<string> UploadEventPictureAsync(Guid eventId, byte[] imageData, CancellationToken ct = default)
+    {
+        await _container.CreateIfNotExistsAsync(PublicAccessType.Blob, cancellationToken: ct);
+
+        var outputData = ScaleAndEncode(imageData);
+        var blobName = $"{eventId}/picture.jpg";
+        var blob = _container.GetBlobClient(blobName);
+
+        await blob.UploadAsync(
+            new BinaryData(outputData),
+            overwrite: true,
+            cancellationToken: ct);
+
+        await blob.SetHttpHeadersAsync(
+            new BlobHttpHeaders { ContentType = "image/jpeg" },
+            cancellationToken: ct);
+
+        return blob.Uri.ToString();
+    }
+
     private static byte[] ScaleAndEncode(byte[] imageData)
     {
         using var original = SKBitmap.Decode(imageData)

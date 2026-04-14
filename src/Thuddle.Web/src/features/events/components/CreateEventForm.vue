@@ -1,7 +1,8 @@
 <script setup>
-import { reactive, shallowRef, computed, watch } from 'vue'
+import { reactive, shallowRef, ref, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useApi } from '@/shared/composables/useApi'
+import ImageCropper from '@/features/profile/components/ImageCropper.vue'
 
 const router = useRouter()
 const { authFetch } = useApi()
@@ -19,6 +20,11 @@ const form = reactive({
 const submitting = shallowRef(false)
 const error = shallowRef(null)
 
+// Event image
+const selectedFile = ref(null)
+const croppedBlob = ref(null)
+const previewUrl = ref(null)
+
 watch(() => form.visibility, (v) => {
   if (v === 'Unlisted') form.joinMode = 'InviteOnly'
 })
@@ -30,6 +36,29 @@ const isValid = computed(() =>
   new Date(form.end) > new Date(form.start) &&
   (form.capacity === '' || (Number.isInteger(Number(form.capacity)) && Number(form.capacity) >= 1))
 )
+
+function onFileChange(event) {
+  const file = event.target.files?.[0]
+  if (file) selectedFile.value = file
+  event.target.value = ''
+}
+
+function onCrop(blob) {
+  selectedFile.value = null
+  croppedBlob.value = blob
+  if (previewUrl.value) URL.revokeObjectURL(previewUrl.value)
+  previewUrl.value = URL.createObjectURL(blob)
+}
+
+function onCancelCrop() {
+  selectedFile.value = null
+}
+
+function removeImage() {
+  croppedBlob.value = null
+  if (previewUrl.value) URL.revokeObjectURL(previewUrl.value)
+  previewUrl.value = null
+}
 
 async function submit() {
   if (!isValid.value) return
@@ -48,11 +77,21 @@ async function submit() {
       capacity: form.capacity ? Number(form.capacity) : null
     }
 
-    await authFetch('/api/events', {
+    const res = await authFetch('/api/events', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body)
     })
+    const data = await res.json()
+
+    if (croppedBlob.value && data.id) {
+      const formData = new FormData()
+      formData.append('picture', croppedBlob.value, 'event.jpg')
+      await authFetch(`/api/events/${data.id}/picture`, {
+        method: 'POST',
+        body: formData
+      })
+    }
 
     router.push({ name: 'home' })
   } catch (err) {
@@ -148,6 +187,40 @@ async function submit() {
         min="1"
         class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 sm:max-w-[12rem]"
         placeholder="No limit"
+      />
+    </div>
+
+    <div>
+      <label class="block text-sm font-medium text-gray-700 mb-1">
+        Event image <span class="text-gray-400 font-normal">(optional)</span>
+      </label>
+      <div v-if="previewUrl" class="mb-3">
+        <img :src="previewUrl" alt="Event image preview" class="rounded-lg max-h-48 object-cover" />
+        <div class="flex gap-2 mt-2">
+          <label class="inline-flex items-center px-3 py-1.5 text-xs font-medium text-gray-700 bg-gray-100 rounded-lg cursor-pointer hover:bg-gray-200 transition">
+            Change
+            <input type="file" accept="image/*" class="hidden" @change="onFileChange" />
+          </label>
+          <button type="button" @click="removeImage" class="px-3 py-1.5 text-xs font-medium text-red-600 bg-red-50 rounded-lg hover:bg-red-100 transition">
+            Remove
+          </button>
+        </div>
+      </div>
+      <div v-else>
+        <label class="inline-flex items-center px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg cursor-pointer hover:bg-gray-50 transition">
+          Choose image
+          <input type="file" accept="image/*" class="hidden" @change="onFileChange" />
+        </label>
+        <p class="mt-1.5 text-xs text-gray-400">PNG, JPG up to 10MB. Will be shown on the event card.</p>
+      </div>
+      <ImageCropper
+        v-if="selectedFile"
+        :image-file="selectedFile"
+        shape="rectangle"
+        :aspect-ratio="16/9"
+        title="Crop Event Image"
+        @crop="onCrop"
+        @cancel="onCancelCrop"
       />
     </div>
 
