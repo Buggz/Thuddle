@@ -10,6 +10,7 @@ const router = useRouter()
 const { authFetch } = useApi()
 
 const eventId = route.params.id
+const activeTab = shallowRef('about')
 
 // Event details (editable)
 const form = ref({
@@ -317,256 +318,273 @@ onMounted(async () => {
     <template v-else>
       <h1 class="text-2xl font-bold text-gray-900 mb-6">Manage Event</h1>
 
-      <!-- Edit Event Details -->
-      <section class="bg-white shadow rounded-xl p-6 mb-6">
-        <h2 class="text-lg font-semibold text-gray-900 mb-4">Event Details</h2>
-        <form @submit.prevent="saveEvent" class="space-y-4">
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Title</label>
-            <input v-model="form.title" type="text" required
-              class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
-          </div>
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Location</label>
-            <textarea v-model="form.location" rows="3"
-              class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
-          </div>
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Description</label>
-            <RichTextEditor v-model="form.description" :upload-image="uploadDescriptionImage" />
-          </div>
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">Start</label>
-              <input v-model="form.start" type="datetime-local" required
-                class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
-            </div>
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">End</label>
-              <input v-model="form.end" type="datetime-local" required
-                class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
-            </div>
-          </div>
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">Visibility</label>
-              <select v-model.number="form.visibility"
-                class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
-                <option :value="0">Public</option>
-                <option :value="1">Unlisted</option>
-              </select>
-            </div>
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">Join Mode</label>
-              <select v-model.number="form.joinMode"
-                :disabled="form.visibility === 1"
-                class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 disabled:bg-gray-100 disabled:text-gray-500">
-                <option :value="0">Open</option>
-                <option :value="1">Invite only</option>
-              </select>
-            </div>
-          </div>
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">Capacity</label>
-              <input v-model.number="form.capacity" type="number" min="1" placeholder="Unlimited"
-                class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
-            </div>
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">Cost</label>
-              <input v-model.number="form.cost" type="number" min="0" step="0.01" placeholder="Free"
-                class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
-            </div>
-          </div>
-
-          <div class="flex items-center gap-3 pt-2">
-            <button type="submit" :disabled="saving"
-              class="px-5 py-2 text-sm font-semibold rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 transition-colors">
-              {{ saving ? 'Saving…' : 'Save Changes' }}
-            </button>
-            <span v-if="saveSuccess" class="text-sm text-green-600">Saved!</span>
-            <span v-if="saveError" class="text-sm text-red-600">{{ saveError }}</span>
-          </div>
-        </form>
-      </section>
-
-      <!-- Co-Admins -->
-      <section class="bg-white shadow rounded-xl p-6 mb-6">
-        <h2 class="text-lg font-semibold text-gray-900 mb-4">Co-Admins</h2>
-        <div class="flex gap-2 mb-4">
-          <input
-            v-model="newCoAdminEmail"
-            type="email"
-            placeholder="Email address"
-            class="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-            @keyup.enter="addCoAdmin"
-          />
-          <button
-            :disabled="addingCoAdmin || !newCoAdminEmail.trim()"
-            @click="addCoAdmin"
-            class="px-4 py-2 text-sm font-medium rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 transition-colors"
-          >
-            {{ addingCoAdmin ? 'Adding…' : 'Add' }}
-          </button>
-        </div>
-        <div v-if="coAdminError" class="text-sm text-red-600 mb-3">{{ coAdminError }}</div>
-        <div v-if="coAdmins.length === 0" class="text-sm text-gray-400">No co-admins yet.</div>
-        <ul v-else class="divide-y divide-gray-100">
-          <li v-for="admin in coAdmins" :key="admin.userId" class="flex items-center justify-between py-2.5">
-            <div>
-              <p class="text-sm font-medium text-gray-900">{{ admin.displayName }}</p>
-              <p class="text-xs text-gray-500">
-                <span v-if="admin.fullName">{{ admin.fullName }}</span>
-                <span v-else class="text-gray-400 italic cursor-default select-none" title="Will be updated next time the user logs in">(Not available)</span>
-                · {{ admin.email }}
-              </p>
-            </div>
+      <!-- Tabs -->
+      <div class="bg-white shadow rounded-xl overflow-hidden">
+        <div class="border-b border-gray-100">
+          <nav class="flex px-6" aria-label="Tabs">
             <button
-              @click="removeCoAdmin(admin)"
-              class="text-xs text-red-600 hover:text-red-800 font-medium"
+              v-for="tab in [
+                { key: 'about', label: 'About this event' },
+                { key: 'discussion', label: 'Discussion' },
+                { key: 'attendees', label: 'Attendees' },
+                { key: 'coadmins', label: 'Co-Admins' }
+              ]"
+              :key="tab.key"
+              @click="activeTab = tab.key"
+              class="px-4 py-3 text-sm font-medium border-b-2 transition-colors"
+              :class="activeTab === tab.key
+                ? 'border-indigo-600 text-indigo-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
             >
-              Remove
+              {{ tab.label }}
+              <span v-if="tab.key === 'attendees'" class="ml-1 inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600">{{ attendees.length }}</span>
             </button>
-          </li>
-        </ul>
-      </section>
+          </nav>
+        </div>
 
-      <!-- Attendees -->
-      <section class="bg-white shadow rounded-xl p-6">
-        <h2 class="text-lg font-semibold text-gray-900 mb-4">
-          Attendees
-          <span class="text-sm font-normal text-gray-400 ml-1">({{ attendees.length }})</span>
-        </h2>
-
-        <div v-if="loadingAttendees" class="text-sm text-gray-400">Loading attendees...</div>
-        <div v-else-if="attendeesError" class="text-sm text-red-600">{{ attendeesError }}</div>
-        <div v-else-if="attendees.length === 0 && pendingInvitations.length === 0" class="text-sm text-gray-400">No attendees yet.</div>
-
-        <table v-else class="w-full text-sm">
-          <thead>
-            <tr class="text-left text-xs text-gray-500 uppercase tracking-wide border-b border-gray-200">
-              <th class="pb-2 font-medium">Display Name</th>
-              <th class="pb-2 font-medium">Full Name</th>
-              <th class="pb-2 font-medium">Email</th>
-              <th class="pb-2 font-medium">Joined</th>
-              <th v-if="hasCost" class="pb-2 font-medium text-center">Paid</th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-gray-100">
-            <tr v-for="a in attendees" :key="a.userId">
-              <td class="py-2.5 font-medium text-gray-900">{{ a.displayName }}</td>
-              <td class="py-2.5">
-                <span v-if="a.fullName" class="text-gray-700">{{ a.fullName }}</span>
-                <span v-else class="text-gray-400 italic cursor-default select-none" title="Will be updated next time the user logs in">(Not available)</span>
-              </td>
-              <td class="py-2.5 text-gray-500">{{ a.email }}</td>
-              <td class="py-2.5 text-gray-500">
-                {{ new Date(a.joinedAt).toLocaleDateString() }}
-              </td>
-              <td v-if="hasCost" class="py-2.5 text-center">
-                <button
-                  @click="togglePaid(a)"
-                  class="inline-flex items-center gap-1 text-xs font-medium rounded-full px-2.5 py-1 transition-colors"
-                  :class="a.hasPaid
-                    ? 'bg-green-100 text-green-700 hover:bg-green-200'
-                    : 'bg-red-100 text-red-700 hover:bg-red-200'"
-                >
-                  {{ a.hasPaid ? 'Paid' : 'Unpaid' }}
-                </button>
-              </td>
-            </tr>
-            <tr v-for="inv in pendingInvitations" :key="'inv-' + inv.email" class="opacity-60">
-              <td class="py-2.5 font-medium text-gray-500 italic">—</td>
-              <td class="py-2.5 text-gray-400">—</td>
-              <td class="py-2.5 text-gray-500">{{ inv.email }}</td>
-              <td class="py-2.5">
-                <span class="inline-flex items-center gap-1 text-xs font-medium text-amber-600">
-                  <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" /></svg>
-                  Invited
-                </span>
-              </td>
-              <td v-if="hasCost" class="py-2.5 text-center text-gray-400">—</td>
-            </tr>
-          </tbody>
-        </table>
-      </section>
-
-      <!-- Discussion Settings -->
-      <section class="bg-white shadow rounded-xl p-6 mt-6">
-        <h2 class="text-lg font-semibold text-gray-900 mb-4">Discussion Settings</h2>
-        <div class="space-y-4">
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <!-- Tab: About this event -->
+        <div v-if="activeTab === 'about'" class="p-6">
+          <form @submit.prevent="saveEvent" class="space-y-4">
             <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">Member posts</label>
-              <select v-model.number="discussionSettings.memberPostPolicy"
-                class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
-                <option :value="1">Post freely</option>
-                <option :value="0">Require approval</option>
-              </select>
-              <p class="mt-1 text-xs text-gray-400">Attendees who have joined the event</p>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Title</label>
+              <input v-model="form.title" type="text" required
+                class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
             </div>
             <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">Non-member posts</label>
-              <select v-model.number="discussionSettings.nonMemberPostPolicy"
-                :disabled="!discussionSettings.allowNonMemberPosts"
-                class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 disabled:bg-gray-100 disabled:text-gray-500">
-                <option :value="1">Post freely</option>
-                <option :value="0">Require approval</option>
-              </select>
-              <p class="mt-1 text-xs text-gray-400">Users who haven't joined the event</p>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Location</label>
+              <textarea v-model="form.location" rows="3"
+                class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Description</label>
+              <RichTextEditor v-model="form.description" :upload-image="uploadDescriptionImage" />
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Start</label>
+                <input v-model="form.start" type="datetime-local" required
+                  class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">End</label>
+                <input v-model="form.end" type="datetime-local" required
+                  class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
+              </div>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Visibility</label>
+                <select v-model.number="form.visibility"
+                  class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                  <option :value="0">Public</option>
+                  <option :value="1">Unlisted</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Join Mode</label>
+                <select v-model.number="form.joinMode"
+                  :disabled="form.visibility === 1"
+                  class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 disabled:bg-gray-100 disabled:text-gray-500">
+                  <option :value="0">Open</option>
+                  <option :value="1">Invite only</option>
+                </select>
+              </div>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Capacity</label>
+                <input v-model.number="form.capacity" type="number" min="1" placeholder="Unlimited"
+                  class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Cost</label>
+                <input v-model.number="form.cost" type="number" min="0" step="0.01" placeholder="Free"
+                  class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
+              </div>
+            </div>
+
+            <div class="flex items-center gap-3 pt-2">
+              <button type="submit" :disabled="saving"
+                class="px-5 py-2 text-sm font-semibold rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 transition-colors">
+                {{ saving ? 'Saving…' : 'Save Changes' }}
+              </button>
+              <span v-if="saveSuccess" class="text-sm text-green-600">Saved!</span>
+              <span v-if="saveError" class="text-sm text-red-600">{{ saveError }}</span>
+            </div>
+          </form>
+        </div>
+
+        <!-- Tab: Discussion Settings -->
+        <div v-if="activeTab === 'discussion'" class="p-6">
+          <div class="space-y-4">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Member posts</label>
+                <select v-model.number="discussionSettings.memberPostPolicy"
+                  class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                  <option :value="1">Post freely</option>
+                  <option :value="0">Require approval</option>
+                </select>
+                <p class="mt-1 text-xs text-gray-400">Attendees who have joined the event</p>
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Non-member posts</label>
+                <select v-model.number="discussionSettings.nonMemberPostPolicy"
+                  :disabled="!discussionSettings.allowNonMemberPosts"
+                  class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 disabled:bg-gray-100 disabled:text-gray-500">
+                  <option :value="1">Post freely</option>
+                  <option :value="0">Require approval</option>
+                </select>
+                <p class="mt-1 text-xs text-gray-400">Users who haven't joined the event</p>
+              </div>
+            </div>
+            <div class="flex flex-col gap-3">
+              <label class="flex items-center gap-2 text-sm text-gray-700">
+                <input type="checkbox" v-model="discussionSettings.allowNonMemberPosts"
+                  class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
+                Allow non-members to create posts
+              </label>
+              <label class="flex items-center gap-2 text-sm text-gray-700">
+                <input type="checkbox" v-model="discussionSettings.allowNonMemberComments"
+                  class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
+                Allow non-members to comment
+              </label>
+            </div>
+            <div class="flex items-center gap-3 pt-2">
+              <button @click="saveDiscussionSettings" :disabled="savingDiscussion"
+                class="px-5 py-2 text-sm font-semibold rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 transition-colors">
+                {{ savingDiscussion ? 'Saving…' : 'Save Settings' }}
+              </button>
+              <span v-if="discussionSaveSuccess" class="text-sm text-green-600">Saved!</span>
+              <span v-if="discussionSaveError" class="text-sm text-red-600">{{ discussionSaveError }}</span>
             </div>
           </div>
-          <div class="flex flex-col gap-3">
-            <label class="flex items-center gap-2 text-sm text-gray-700">
-              <input type="checkbox" v-model="discussionSettings.allowNonMemberPosts"
-                class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
-              Allow non-members to create posts
-            </label>
-            <label class="flex items-center gap-2 text-sm text-gray-700">
-              <input type="checkbox" v-model="discussionSettings.allowNonMemberComments"
-                class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
-              Allow non-members to comment
-            </label>
-          </div>
-          <div class="flex items-center gap-3 pt-2">
-            <button @click="saveDiscussionSettings" :disabled="savingDiscussion"
-              class="px-5 py-2 text-sm font-semibold rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 transition-colors">
-              {{ savingDiscussion ? 'Saving…' : 'Save Discussion Settings' }}
-            </button>
-            <span v-if="discussionSaveSuccess" class="text-sm text-green-600">Saved!</span>
-            <span v-if="discussionSaveError" class="text-sm text-red-600">{{ discussionSaveError }}</span>
-          </div>
         </div>
-      </section>
 
-      <!-- Invite Users -->
-      <section class="bg-white shadow rounded-xl p-6 mt-6">
-        <h2 class="text-lg font-semibold text-gray-900 mb-4">Invite by Email</h2>
-        <div v-for="invitee in invitees" :key="invitee.id" class="flex items-center gap-2 mb-2">
-          <input
-            v-model="invitee.email"
-            @input="onInviteeInput(invitee)"
-            type="email"
-            placeholder="Email address"
-            class="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-            autocomplete="off"
-          />
-          <span v-if="invitee.loading" class="ml-1"><Spinner /></span>
-          <span v-else-if="invitee.exists === true" class="ml-1 text-green-600 text-xs">User exists</span>
-          <span v-else-if="invitee.exists === false" class="ml-1 text-gray-400 text-xs">No user</span>
-          <span v-if="invitee.error" class="ml-1 text-red-600 text-xs">{{ invitee.error }}</span>
-          <button type="button" @click="removeInvitee(invitee)" class="text-xs text-gray-400 hover:text-red-500 px-2">✕</button>
+        <!-- Tab: Attendees -->
+        <div v-if="activeTab === 'attendees'" class="p-6">
+          <div v-if="loadingAttendees" class="text-sm text-gray-400">Loading attendees...</div>
+          <div v-else-if="attendeesError" class="text-sm text-red-600">{{ attendeesError }}</div>
+          <div v-else-if="attendees.length === 0 && pendingInvitations.length === 0" class="text-sm text-gray-400">No attendees yet.</div>
+
+          <table v-else class="w-full text-sm">
+            <thead>
+              <tr class="text-left text-xs text-gray-500 uppercase tracking-wide border-b border-gray-200">
+                <th class="pb-2 font-medium">Display Name</th>
+                <th class="pb-2 font-medium">Full Name</th>
+                <th class="pb-2 font-medium">Email</th>
+                <th class="pb-2 font-medium">Joined</th>
+                <th v-if="hasCost" class="pb-2 font-medium text-center">Paid</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100">
+              <tr v-for="a in attendees" :key="a.userId">
+                <td class="py-2.5 font-medium text-gray-900">{{ a.displayName }}</td>
+                <td class="py-2.5">
+                  <span v-if="a.fullName" class="text-gray-700">{{ a.fullName }}</span>
+                  <span v-else class="text-gray-400 italic cursor-default select-none" title="Will be updated next time the user logs in">(Not available)</span>
+                </td>
+                <td class="py-2.5 text-gray-500">{{ a.email }}</td>
+                <td class="py-2.5 text-gray-500">
+                  {{ new Date(a.joinedAt).toLocaleDateString() }}
+                </td>
+                <td v-if="hasCost" class="py-2.5 text-center">
+                  <button
+                    @click="togglePaid(a)"
+                    class="inline-flex items-center gap-1 text-xs font-medium rounded-full px-2.5 py-1 transition-colors"
+                    :class="a.hasPaid
+                      ? 'bg-green-100 text-green-700 hover:bg-green-200'
+                      : 'bg-red-100 text-red-700 hover:bg-red-200'"
+                  >
+                    {{ a.hasPaid ? 'Paid' : 'Unpaid' }}
+                  </button>
+                </td>
+              </tr>
+              <tr v-for="inv in pendingInvitations" :key="'inv-' + inv.email" class="opacity-60">
+                <td class="py-2.5 font-medium text-gray-500 italic">—</td>
+                <td class="py-2.5 text-gray-400">—</td>
+                <td class="py-2.5 text-gray-500">{{ inv.email }}</td>
+                <td class="py-2.5">
+                  <span class="inline-flex items-center gap-1 text-xs font-medium text-amber-600">
+                    <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" /></svg>
+                    Invited
+                  </span>
+                </td>
+                <td v-if="hasCost" class="py-2.5 text-center text-gray-400">—</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <!-- Invite Users -->
+          <div class="border-t border-gray-100 mt-6 pt-6">
+            <h3 class="text-base font-semibold text-gray-900 mb-4">Invite by Email</h3>
+            <div v-for="invitee in invitees" :key="invitee.id" class="flex items-center gap-2 mb-2">
+              <input
+                v-model="invitee.email"
+                @input="onInviteeInput(invitee)"
+                type="email"
+                placeholder="Email address"
+                class="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                autocomplete="off"
+              />
+              <span v-if="invitee.loading" class="ml-1"><Spinner /></span>
+              <span v-else-if="invitee.exists === true" class="ml-1 text-green-600 text-xs">User exists</span>
+              <span v-else-if="invitee.exists === false" class="ml-1 text-gray-400 text-xs">No user</span>
+              <span v-if="invitee.error" class="ml-1 text-red-600 text-xs">{{ invitee.error }}</span>
+              <button type="button" @click="removeInvitee(invitee)" class="text-xs text-gray-400 hover:text-red-500 px-2">✕</button>
+            </div>
+            <button type="button" @click="addInvitee" class="mt-1 mb-4 px-3 py-1 text-xs rounded bg-gray-100 hover:bg-gray-200 text-gray-700">+ Add another</button>
+            <div class="flex items-center gap-3 pt-2">
+              <button @click="inviteUsers" :disabled="inviting || invitees.every(i => !i.email.trim())"
+                class="px-5 py-2 text-sm font-semibold rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 transition-colors">
+                {{ inviting ? 'Inviting…' : `Invite ${invitees.filter(i => i.email.trim()).length} user${invitees.filter(i => i.email.trim()).length === 1 ? '' : 's'}` }}
+              </button>
+              <span v-if="inviteSuccess" class="text-sm text-green-600">Invitations sent!</span>
+              <span v-if="inviteError" class="text-sm text-red-600">{{ inviteError }}</span>
+            </div>
+          </div>
         </div>
-        <button type="button" @click="addInvitee" class="mt-1 mb-4 px-3 py-1 text-xs rounded bg-gray-100 hover:bg-gray-200 text-gray-700">+ Add another</button>
-        <div class="flex items-center gap-3 pt-2">
-          <button @click="inviteUsers" :disabled="inviting || invitees.every(i => !i.email.trim())"
-            class="px-5 py-2 text-sm font-semibold rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 transition-colors">
-            {{ inviting ? 'Inviting…' : `Invite ${invitees.filter(i => i.email.trim()).length} user${invitees.filter(i => i.email.trim()).length === 1 ? '' : 's'}` }}
-          </button>
-          <span v-if="inviteSuccess" class="text-sm text-green-600">Invitations sent!</span>
-          <span v-if="inviteError" class="text-sm text-red-600">{{ inviteError }}</span>
+
+        <!-- Tab: Co-Admins -->
+        <div v-if="activeTab === 'coadmins'" class="p-6">
+          <div class="flex gap-2 mb-4">
+            <input
+              v-model="newCoAdminEmail"
+              type="email"
+              placeholder="Email address"
+              class="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+              @keyup.enter="addCoAdmin"
+            />
+            <button
+              :disabled="addingCoAdmin || !newCoAdminEmail.trim()"
+              @click="addCoAdmin"
+              class="px-4 py-2 text-sm font-medium rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+            >
+              {{ addingCoAdmin ? 'Adding…' : 'Add' }}
+            </button>
+          </div>
+          <div v-if="coAdminError" class="text-sm text-red-600 mb-3">{{ coAdminError }}</div>
+          <div v-if="coAdmins.length === 0" class="text-sm text-gray-400">No co-admins yet.</div>
+          <ul v-else class="divide-y divide-gray-100">
+            <li v-for="admin in coAdmins" :key="admin.userId" class="flex items-center justify-between py-2.5">
+              <div>
+                <p class="text-sm font-medium text-gray-900">{{ admin.displayName }}</p>
+                <p class="text-xs text-gray-500">
+                  <span v-if="admin.fullName">{{ admin.fullName }}</span>
+                  <span v-else class="text-gray-400 italic cursor-default select-none" title="Will be updated next time the user logs in">(Not available)</span>
+                  · {{ admin.email }}
+                </p>
+              </div>
+              <button
+                @click="removeCoAdmin(admin)"
+                class="text-xs text-red-600 hover:text-red-800 font-medium"
+              >
+                Remove
+              </button>
+            </li>
+          </ul>
         </div>
-      </section>
+      </div>
     </template>
   </div>
 </template>
