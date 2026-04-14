@@ -103,31 +103,51 @@ public static class EventEndpoints
                 e.Cost,
                 ParticipantCount = db.EventParticipants.Count(ep => ep.EventId == e.Id),
                 PostCount = db.DiscussionPosts.Count(dp => dp.EventId == e.Id && dp.IsApproved),
+                LatestPostAt = db.DiscussionPosts
+                    .Where(dp => dp.EventId == e.Id && dp.IsApproved)
+                    .Max(dp => (DateTime?)dp.CreatedAt),
+                LatestCommentAt = db.DiscussionComments
+                    .Where(dc => dc.Post.EventId == e.Id && dc.Post.IsApproved)
+                    .Max(dc => (DateTime?)dc.CreatedAt),
+                LastReadAt = !isAnonymous
+                    ? db.DiscussionReadReceipts
+                        .Where(r => r.UserId == userId && r.EventId == e.Id)
+                        .Select(r => (DateTime?)r.LastReadAt)
+                        .FirstOrDefault()
+                    : null,
                 HasJoined = !isAnonymous && db.EventParticipants.Any(ep => ep.EventId == e.Id && ep.UserId == userId),
                 HasInvitation = !isAnonymous && db.EventInvitations.Any(i => i.EventId == e.Id && i.Email.ToLower() == userEmail)
             })
             .ToListAsync(ct);
 
-        var result = events.Select(e => new
+        var result = events.Select(e =>
         {
-            e.Id,
-            e.Title,
-            e.Location,
-            e.Description,
-            e.PicturePath,
-            e.Start,
-            e.End,
-            e.OwnerId,
-            e.Visibility,
-            e.JoinMode,
-            e.Capacity,
-            e.Cost,
-            e.ParticipantCount,
-            e.PostCount,
-            e.HasJoined,
-            e.HasInvitation,
-            CanJoin = !e.HasJoined && !isAnonymous
-                && (e.JoinMode == JoinMode.Open || e.HasInvitation)
+            var latestActivity = new[] { e.LatestPostAt, e.LatestCommentAt }
+                .Where(d => d.HasValue).Max();
+
+            return new
+            {
+                e.Id,
+                e.Title,
+                e.Location,
+                e.Description,
+                e.PicturePath,
+                e.Start,
+                e.End,
+                e.OwnerId,
+                e.Visibility,
+                e.JoinMode,
+                e.Capacity,
+                e.Cost,
+                e.ParticipantCount,
+                e.PostCount,
+                HasUnreadDiscussion = !isAnonymous && e.PostCount > 0
+                    && (e.LastReadAt is null || latestActivity > e.LastReadAt),
+                e.HasJoined,
+                e.HasInvitation,
+                CanJoin = !e.HasJoined && !isAnonymous
+                    && (e.JoinMode == JoinMode.Open || e.HasInvitation)
+            };
         });
 
         return Results.Ok(new
@@ -195,6 +215,25 @@ public static class EventEndpoints
         var participantCount = await db.EventParticipants.CountAsync(p => p.EventId == eventId, ct);
         var postCount = await db.DiscussionPosts.CountAsync(p => p.EventId == eventId && p.IsApproved, ct);
 
+        var hasUnreadDiscussion = false;
+        if (dbUser is not null && postCount > 0)
+        {
+            var lastRead = await db.DiscussionReadReceipts
+                .Where(r => r.UserId == dbUser.Id && r.EventId == eventId)
+                .Select(r => (DateTime?)r.LastReadAt)
+                .FirstOrDefaultAsync(ct);
+
+            var latestPost = await db.DiscussionPosts
+                .Where(p => p.EventId == eventId && p.IsApproved)
+                .MaxAsync(p => (DateTime?)p.CreatedAt, ct);
+            var latestComment = await db.DiscussionComments
+                .Where(c => c.Post.EventId == eventId && c.Post.IsApproved)
+                .MaxAsync(c => (DateTime?)c.CreatedAt, ct);
+
+            var latestActivity = new[] { latestPost, latestComment }.Where(d => d.HasValue).Max();
+            hasUnreadDiscussion = lastRead is null || latestActivity > lastRead;
+        }
+
         var isAdmin = dbUser is not null
             && await IsEventAdmin(db, eventId, dbUser.Id, ct);
 
@@ -220,6 +259,7 @@ public static class EventEndpoints
             ParticipantCount = participantCount,
             PostCount = postCount,
             PendingPostCount = pendingPostCount,
+            HasUnreadDiscussion = hasUnreadDiscussion,
             HasJoined = hasJoined,
             CanJoin = canJoin,
             IsAdmin = isAdmin

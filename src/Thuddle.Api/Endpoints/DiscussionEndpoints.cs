@@ -59,6 +59,34 @@ public static class DiscussionEndpoints
 
         var isAdmin = dbUser is not null && await IsEventAdmin(db, eventId, dbUser.Id, ct);
 
+        // Get the user's last read timestamp before updating it
+        DateTime? lastReadAt = null;
+        if (dbUser is not null)
+        {
+            var receipt = await db.DiscussionReadReceipts
+                .FirstOrDefaultAsync(r => r.UserId == dbUser.Id && r.EventId == eventId, ct);
+
+            lastReadAt = receipt?.LastReadAt;
+
+            // Upsert the read receipt
+            if (receipt is not null)
+            {
+                receipt.LastReadAt = DateTime.UtcNow;
+                db.DiscussionReadReceipts.Update(receipt);
+            }
+            else
+            {
+                db.DiscussionReadReceipts.Add(new DiscussionReadReceipt
+                {
+                    Id = Guid.NewGuid(),
+                    UserId = dbUser.Id,
+                    EventId = eventId,
+                    LastReadAt = DateTime.UtcNow
+                });
+            }
+            await db.SaveChangesAsync(ct);
+        }
+
         var query = db.DiscussionPosts
             .AsNoTracking()
             .Where(p => p.EventId == eventId);
@@ -84,6 +112,9 @@ public static class DiscussionEndpoints
                 AuthorKeycloakId = p.Author.KeycloakId,
                 HasProfilePicture = p.Author.ScaledPicturePath != null,
                 CommentCount = db.DiscussionComments.Count(c => c.PostId == p.Id),
+                LatestCommentAt = db.DiscussionComments
+                    .Where(c => c.PostId == p.Id)
+                    .Max(c => (DateTime?)c.CreatedAt),
                 IsOwnPost = dbUser != null && p.AuthorId == dbUser.Id
             })
             .ToListAsync(ct);
@@ -91,6 +122,7 @@ public static class DiscussionEndpoints
         return Results.Ok(new
         {
             posts,
+            lastReadAt,
             isAdmin,
             settings = new
             {
