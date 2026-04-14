@@ -1,9 +1,10 @@
 <script setup>
-import { shallowRef, ref, onMounted } from 'vue'
+import { shallowRef, ref, onMounted, watch } from 'vue'
 import { useRoute, useRouter, RouterLink } from 'vue-router'
 import { useApi } from '@/shared/composables/useApi'
 import { useAuthStore } from '@/features/auth/stores/auth'
 import { apiUrl } from '@/api'
+import DiscussionTab from '@/features/events/components/DiscussionTab.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -107,6 +108,14 @@ function formatDate(iso) {
 }
 
 onMounted(loadEvent)
+
+// Re-fetch event data when auth state changes so admin/join status updates
+watch(() => auth.isAuthenticated, (authenticated, wasAuthenticated) => {
+  if (authenticated !== wasAuthenticated) {
+    participantsLoaded.value = false
+    loadEvent()
+  }
+})
 </script>
 
 <template>
@@ -263,6 +272,15 @@ onMounted(loadEvent)
               About this event
             </button>
             <button
+              @click="selectTab('discussion')"
+              class="px-4 py-3 text-sm font-medium border-b-2 transition-colors"
+              :class="activeTab === 'discussion'
+                ? 'border-indigo-600 text-indigo-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
+            >
+              Discussion
+            </button>
+            <button
               @click="selectTab('attendees')"
               class="px-4 py-3 text-sm font-medium border-b-2 transition-colors"
               :class="activeTab === 'attendees'
@@ -281,6 +299,11 @@ onMounted(loadEvent)
         <div v-if="activeTab === 'about'" class="px-6 py-5">
           <div v-if="event.description" class="prose prose-sm max-w-none text-gray-700" v-html="event.description" />
           <p v-else class="text-sm text-gray-400">No description provided.</p>
+        </div>
+
+        <!-- Tab: Discussion -->
+        <div v-if="activeTab === 'discussion'" class="px-6 py-5">
+          <DiscussionTab :event-id="event.id" :is-admin="event.isAdmin" />
         </div>
 
         <!-- Tab: Attendees -->

@@ -43,6 +43,17 @@ const newCoAdminEmail = ref('')
 const addingCoAdmin = shallowRef(false)
 const coAdminError = shallowRef(null)
 
+// Discussion settings
+const discussionSettings = ref({
+  memberPostPolicy: 1,      // 0 = RequireApproval, 1 = AutoApprove
+  nonMemberPostPolicy: 0,
+  allowNonMemberPosts: false,
+  allowNonMemberComments: false
+})
+const savingDiscussion = shallowRef(false)
+const discussionSaveSuccess = shallowRef(false)
+const discussionSaveError = shallowRef(null)
+
 // Event metadata
 const eventData = ref(null)
 const loading = shallowRef(true)
@@ -250,9 +261,38 @@ async function uploadDescriptionImage(blob) {
   return data.url
 }
 
+async function loadDiscussionSettings() {
+  try {
+    const res = await authFetch(`/api/events/${eventId}/discussion-settings`)
+    const data = await res.json()
+    discussionSettings.value = data
+  } catch { /* ignore - uses defaults */ }
+}
+
+async function saveDiscussionSettings() {
+  savingDiscussion.value = true
+  discussionSaveError.value = null
+  discussionSaveSuccess.value = false
+  try {
+    await authFetch(`/api/events/${eventId}/discussion-settings`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(discussionSettings.value)
+    })
+    discussionSaveSuccess.value = true
+    setTimeout(() => { discussionSaveSuccess.value = false }, 3000)
+  } catch (err) {
+    discussionSaveError.value = err.message || 'Failed to save discussion settings.'
+  } finally {
+    savingDiscussion.value = false
+  }
+}
+
 onMounted(async () => {
   await loadEvent()
-  if (!error.value) await loadAttendees()
+  if (!error.value) {
+    await Promise.all([loadAttendees(), loadDiscussionSettings()])
+  }
 })
 </script>
 
@@ -449,6 +489,54 @@ onMounted(async () => {
             </tr>
           </tbody>
         </table>
+      </section>
+
+      <!-- Discussion Settings -->
+      <section class="bg-white shadow rounded-xl p-6 mt-6">
+        <h2 class="text-lg font-semibold text-gray-900 mb-4">Discussion Settings</h2>
+        <div class="space-y-4">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Member posts</label>
+              <select v-model.number="discussionSettings.memberPostPolicy"
+                class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                <option :value="1">Post freely</option>
+                <option :value="0">Require approval</option>
+              </select>
+              <p class="mt-1 text-xs text-gray-400">Attendees who have joined the event</p>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Non-member posts</label>
+              <select v-model.number="discussionSettings.nonMemberPostPolicy"
+                :disabled="!discussionSettings.allowNonMemberPosts"
+                class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 disabled:bg-gray-100 disabled:text-gray-500">
+                <option :value="1">Post freely</option>
+                <option :value="0">Require approval</option>
+              </select>
+              <p class="mt-1 text-xs text-gray-400">Users who haven't joined the event</p>
+            </div>
+          </div>
+          <div class="flex flex-col gap-3">
+            <label class="flex items-center gap-2 text-sm text-gray-700">
+              <input type="checkbox" v-model="discussionSettings.allowNonMemberPosts"
+                class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
+              Allow non-members to create posts
+            </label>
+            <label class="flex items-center gap-2 text-sm text-gray-700">
+              <input type="checkbox" v-model="discussionSettings.allowNonMemberComments"
+                class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
+              Allow non-members to comment
+            </label>
+          </div>
+          <div class="flex items-center gap-3 pt-2">
+            <button @click="saveDiscussionSettings" :disabled="savingDiscussion"
+              class="px-5 py-2 text-sm font-semibold rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 transition-colors">
+              {{ savingDiscussion ? 'Saving…' : 'Save Discussion Settings' }}
+            </button>
+            <span v-if="discussionSaveSuccess" class="text-sm text-green-600">Saved!</span>
+            <span v-if="discussionSaveError" class="text-sm text-red-600">{{ discussionSaveError }}</span>
+          </div>
+        </div>
       </section>
 
       <!-- Invite Users -->

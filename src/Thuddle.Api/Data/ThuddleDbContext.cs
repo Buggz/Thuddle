@@ -10,6 +10,8 @@ public class ThuddleDbContext(DbContextOptions<ThuddleDbContext> options) : DbCo
     public DbSet<EventInvitation> EventInvitations => Set<EventInvitation>();
     public DbSet<EventParticipant> EventParticipants => Set<EventParticipant>();
     public DbSet<EventCoAdmin> EventCoAdmins => Set<EventCoAdmin>();
+    public DbSet<DiscussionPost> DiscussionPosts => Set<DiscussionPost>();
+    public DbSet<DiscussionComment> DiscussionComments => Set<DiscussionComment>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -70,6 +72,32 @@ public class ThuddleDbContext(DbContextOptions<ThuddleDbContext> options) : DbCo
             entity.HasOne(c => c.User)
                 .WithMany()
                 .HasForeignKey(c => c.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<DiscussionPost>(entity =>
+        {
+            entity.HasIndex(p => new { p.EventId, p.CreatedAt });
+            entity.HasOne(p => p.Event)
+                .WithMany()
+                .HasForeignKey(p => p.EventId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(p => p.Author)
+                .WithMany()
+                .HasForeignKey(p => p.AuthorId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<DiscussionComment>(entity =>
+        {
+            entity.HasIndex(c => new { c.PostId, c.CreatedAt });
+            entity.HasOne(c => c.Post)
+                .WithMany()
+                .HasForeignKey(c => c.PostId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(c => c.Author)
+                .WithMany()
+                .HasForeignKey(c => c.AuthorId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
     }
