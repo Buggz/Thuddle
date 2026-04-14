@@ -217,7 +217,7 @@ function rotate(dir) {
   offscreen.toBlob(blob => {
     imageUrl.value = URL.createObjectURL(blob)
     // onImageLoad will fire and reset display dims + circle
-  }, 'image/png')
+  }, 'image/jpeg', 0.85)
 }
 
 function doCrop() {
@@ -234,7 +234,7 @@ function doCrop() {
   const ctx = canvas.getContext('2d')
 
   ctx.drawImage(img, cropX, cropY, cropSize, cropSize, 0, 0, cropSize, cropSize)
-  canvas.toBlob(blob => emit('crop', blob), 'image/png')
+  canvas.toBlob(blob => emit('crop', blob), 'image/jpeg', 0.85)
 }
 </script>
 
