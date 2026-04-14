@@ -31,7 +31,7 @@ public static class EventEndpoints
         if (string.IsNullOrWhiteSpace(email))
             return Results.BadRequest(new { error = "Email is required." });
 
-        var exists = await db.Users.AsNoTracking().AnyAsync(u => u.Email == email, ct);
+        var exists = await db.Users.AsNoTracking().AnyAsync(u => u.Email.ToLower() == email.ToLower(), ct);
         return Results.Ok(new { exists });
     }
 
@@ -67,7 +67,7 @@ public static class EventEndpoints
 
         var isAnonymous = dbUser is null;
         var userId = dbUser?.Id ?? Guid.Empty;
-        var userEmail = dbUser?.Email ?? "";
+        var userEmail = dbUser?.Email?.ToLower() ?? "";
 
         var query = db.Events.AsNoTracking();
         if (isAnonymous)
@@ -78,7 +78,7 @@ public static class EventEndpoints
                 || e.OwnerId == userId
                 || db.EventParticipants.Any(ep => ep.EventId == e.Id && ep.UserId == userId)
                 || db.EventCoAdmins.Any(ca => ca.EventId == e.Id && ca.UserId == userId)
-                || db.EventInvitations.Any(i => i.EventId == e.Id && i.Email == userEmail));
+                || db.EventInvitations.Any(i => i.EventId == e.Id && i.Email.ToLower() == userEmail));
 
         var totalCount = await query.CountAsync(ct);
 
@@ -102,7 +102,7 @@ public static class EventEndpoints
                 e.Cost,
                 ParticipantCount = db.EventParticipants.Count(ep => ep.EventId == e.Id),
                 HasJoined = !isAnonymous && db.EventParticipants.Any(ep => ep.EventId == e.Id && ep.UserId == userId),
-                HasInvitation = !isAnonymous && db.EventInvitations.Any(i => i.EventId == e.Id && i.Email == userEmail)
+                HasInvitation = !isAnonymous && db.EventInvitations.Any(i => i.EventId == e.Id && i.Email.ToLower() == userEmail)
             })
             .ToListAsync(ct);
 
@@ -177,22 +177,27 @@ public static class EventEndpoints
             && evt.OwnerId != dbUser.Id
             && !await db.EventParticipants.AnyAsync(p => p.EventId == eventId && p.UserId == dbUser.Id, ct)
             && !await db.EventCoAdmins.AnyAsync(ca => ca.EventId == eventId && ca.UserId == dbUser.Id, ct)
-            && !await db.EventInvitations.AnyAsync(i => i.EventId == eventId && i.Email == dbUser.Email, ct))
+            && !await db.EventInvitations.AnyAsync(i => i.EventId == eventId && i.Email.ToLower() == dbUser.Email.ToLower(), ct))
             return Results.NotFound(new { error = "Event not found." });
 
         var hasJoined = dbUser is not null && await db.EventParticipants
             .AnyAsync(p => p.EventId == eventId && p.UserId == dbUser.Id, ct);
 
         var hasInvitation = dbUser is not null && await db.EventInvitations
-            .AnyAsync(i => i.EventId == eventId && i.Email == dbUser.Email, ct);
+            .AnyAsync(i => i.EventId == eventId && i.Email.ToLower() == dbUser.Email.ToLower(), ct);
 
         var canJoin = !hasJoined && dbUser is not null
             && (evt.JoinMode == JoinMode.Open || hasInvitation);
 
         var participantCount = await db.EventParticipants.CountAsync(p => p.EventId == eventId, ct);
+        var postCount = await db.DiscussionPosts.CountAsync(p => p.EventId == eventId && p.IsApproved, ct);
 
         var isAdmin = dbUser is not null
             && await IsEventAdmin(db, eventId, dbUser.Id, ct);
+
+        var pendingPostCount = isAdmin
+            ? await db.DiscussionPosts.CountAsync(p => p.EventId == eventId && !p.IsApproved, ct)
+            : 0;
 
         return Results.Ok(new
         {
@@ -210,6 +215,8 @@ public static class EventEndpoints
             evt.Capacity,
             evt.Cost,
             ParticipantCount = participantCount,
+            PostCount = postCount,
+            PendingPostCount = pendingPostCount,
             HasJoined = hasJoined,
             CanJoin = canJoin,
             IsAdmin = isAdmin
@@ -316,7 +323,7 @@ public static class EventEndpoints
             {
                 Id = Guid.NewGuid(),
                 EventId = eventId,
-                Email = email.Trim(),
+                Email = email.Trim().ToLower(),
                 CreatedAt = DateTime.UtcNow
             })
             .ToList();
@@ -376,7 +383,7 @@ public static class EventEndpoints
         if (evt.JoinMode == JoinMode.InviteOnly)
         {
             var hasInvitation = await db.EventInvitations
-                .AnyAsync(i => i.EventId == eventId && i.Email == dbUser.Email, ct);
+                .AnyAsync(i => i.EventId == eventId && i.Email.ToLower() == dbUser.Email.ToLower(), ct);
 
             if (!hasInvitation)
                 return Results.Forbid();
@@ -483,7 +490,7 @@ public static class EventEndpoints
         if (!await IsEventAdmin(db, eventId, dbUser.Id, ct))
             return Results.Forbid();
 
-        var targetUser = await db.Users.FirstOrDefaultAsync(u => u.Email == request.Email, ct);
+        var targetUser = await db.Users.FirstOrDefaultAsync(u => u.Email.ToLower() == request.Email.ToLower(), ct);
         if (targetUser is null)
             return Results.NotFound(new { error = "User not found." });
 
@@ -612,7 +619,7 @@ public static class EventEndpoints
                 || (evt.OwnerId != dbUser.Id
                     && !await db.EventParticipants.AnyAsync(p => p.EventId == eventId && p.UserId == dbUser.Id, ct)
                     && !await db.EventCoAdmins.AnyAsync(ca => ca.EventId == eventId && ca.UserId == dbUser.Id, ct)
-                    && !await db.EventInvitations.AnyAsync(i => i.EventId == eventId && i.Email == dbUser.Email, ct)))
+                    && !await db.EventInvitations.AnyAsync(i => i.EventId == eventId && i.Email.ToLower() == dbUser.Email.ToLower(), ct)))
                 return Results.NotFound(new { error = "Event not found." });
         }
 

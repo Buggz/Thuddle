@@ -38,7 +38,7 @@ public static class ProfileEndpoints
         };
 
         var dbUser = await db.Users.FirstOrDefaultAsync(u => u.KeycloakId == keycloakId, ct)
-            ?? await db.Users.FirstOrDefaultAsync(u => u.Email == email, ct);
+            ?? await db.Users.FirstOrDefaultAsync(u => u.Email.ToLower() == email.ToLower(), ct);
 
         if (dbUser is null)
         {
@@ -95,7 +95,7 @@ public static class ProfileEndpoints
 
         // Only read user, do not write on GET
         var dbUser = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.KeycloakId == keycloakId, ct)
-            ?? await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Email == email, ct);
+            ?? await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Email.ToLower() == email.ToLower(), ct);
 
         // If user does not exist, return minimal info
         if (dbUser is null)

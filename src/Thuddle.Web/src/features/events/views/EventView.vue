@@ -279,6 +279,12 @@ watch(() => auth.isAuthenticated, (authenticated, wasAuthenticated) => {
                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
             >
               Discussion
+              <span v-if="event.postCount" class="ml-1.5 inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600">
+                {{ event.postCount }}
+              </span>
+              <span v-if="event.pendingPostCount" class="ml-1 inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
+                ({{ event.pendingPostCount }})
+              </span>
             </button>
             <button
               @click="selectTab('attendees')"
