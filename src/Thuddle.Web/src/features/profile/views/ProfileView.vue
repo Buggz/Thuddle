@@ -24,7 +24,7 @@ const {
 async function handleSaveDisplayName() {
   await saveDisplayName()
   if (savedName.value) {
-    permissionsStore.markProfileComplete()
+    permissionsStore.updateDisplayName(savedName.value)
   }
 }
 

@@ -8,6 +8,12 @@
   "resetPasswordAllowed": true,
   "bruteForceProtected": true,
   "verifyEmail": true,
+  "rememberMe": true,
+  "accessTokenLifespan": 300,
+  "ssoSessionIdleTimeout": 2592000,
+  "ssoSessionMaxLifespan": 2592000,
+  "ssoSessionIdleTimeoutRememberMe": 2592000,
+  "ssoSessionMaxLifespanRememberMe": 2592000,
   "emailTheme": "thuddle",
   "browserSecurityHeaders": {
     "contentSecurityPolicy": "frame-src 'self' https://www.google.com; frame-ancestors 'self'; object-src 'none'; script-src 'self' https://www.google.com https://www.gstatic.com; style-src 'self' 'unsafe-inline'"

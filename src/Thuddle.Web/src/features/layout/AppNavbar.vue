@@ -1,5 +1,5 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useAuthStore } from '@/features/auth/stores/auth'
 import { useProfileStore } from '@/features/profile/stores/profile'
@@ -10,6 +10,11 @@ const auth = useAuthStore()
 const profile = useProfileStore()
 const permissionsStore = usePermissionsStore()
 const menuOpen = ref(false)
+const pictureFailed = ref(false)
+
+watch(() => profile.pictureVersion, () => {
+  pictureFailed.value = false
+})
 
 function toggleMenu() {
   menuOpen.value = !menuOpen.value
@@ -41,19 +46,19 @@ function closeMenu() {
             Create Event
           </RouterLink>
           <template v-if="auth.isAuthenticated">
-            <span class="text-sm text-gray-600 mr-3">{{ auth.userName }}</span>
+            <span class="text-sm text-gray-600 mr-3">{{ permissionsStore.displayName || auth.userName }}</span>
             <div class="relative">
               <button
                 @click="toggleMenu"
-                class="flex items-center gap-1.5 rounded-full py-1 pl-1 pr-2 hover:bg-gray-100 transition focus:outline-none"
+                class="flex items-center gap-1 rounded-full p-0.5 hover:ring-2 hover:ring-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition"
                 title="Menu"
               >
                 <img
-                  v-if="auth.keycloakId"
+                  v-if="auth.keycloakId && !pictureFailed"
                   :src="apiUrl(`/api/profile/picture/${auth.keycloakId}?v=${profile.pictureVersion}`)"
                   alt=""
                   class="w-8 h-8 rounded-full object-cover"
-                  @error="$event.target.style.display='none'"
+                  @error="pictureFailed = true"
                 />
                 <svg
                   v-else
@@ -63,9 +68,8 @@ function closeMenu() {
                 >
                   <path d="M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v2.4h19.2v-2.4c0-3.2-6.4-4.8-9.6-4.8z" />
                 </svg>
-                <svg class="w-10 h-10 text-gray-400" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.325.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 0 1 1.37.49l1.296 2.247a1.125 1.125 0 0 1-.26 1.431l-1.003.827c-.293.241-.438.613-.43.992a7.723 7.723 0 0 1 0 .255c-.008.378.137.75.43.991l1.004.827c.424.35.534.955.26 1.43l-1.298 2.247a1.125 1.125 0 0 1-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.47 6.47 0 0 1-.22.128c-.331.183-.581.495-.644.869l-.213 1.281c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.019-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 0 1-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 0 1-1.369-.49l-1.297-2.247a1.125 1.125 0 0 1 .26-1.431l1.004-.827c.292-.24.437-.613.43-.991a6.932 6.932 0 0 1 0-.255c.007-.38-.138-.751-.43-.992l-1.004-.827a1.125 1.125 0 0 1-.26-1.43l1.297-2.247a1.125 1.125 0 0 1 1.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.086.22-.128.332-.183.582-.495.644-.869l.214-1.28Z" />
-                  <circle cx="12" cy="12" r="3" />
+                <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
                 </svg>
               </button>
               <div
