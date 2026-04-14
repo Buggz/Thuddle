@@ -4,6 +4,7 @@ import { useApi } from '@/shared/composables/useApi'
 import { useAuthStore } from '@/features/auth/stores/auth'
 import { apiUrl } from '@/api'
 import RichTextEditor from '@/shared/components/RichTextEditor.vue'
+import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
 
 const props = defineProps({
   eventId: { type: String, required: true },
@@ -24,6 +25,22 @@ const showNewPost = shallowRef(false)
 const newPostContent = ref('')
 const sendEmail = shallowRef(false)
 const posting = shallowRef(false)
+
+// Delete confirmation
+const deleteDialog = ref({ open: false, title: '', message: '', onConfirm: null })
+
+function showDeleteConfirm(title, message, onConfirm) {
+  deleteDialog.value = { open: true, title, message, onConfirm }
+}
+
+function closeDeleteDialog() {
+  deleteDialog.value = { open: false, title: '', message: '', onConfirm: null }
+}
+
+function confirmDelete() {
+  deleteDialog.value.onConfirm?.()
+  closeDeleteDialog()
+}
 
 // Comments state per post
 const expandedComments = ref(new Set())
@@ -96,14 +113,26 @@ async function toggleApproval(post) {
   }
 }
 
-async function deletePost(post) {
-  if (!confirm('Delete this post? This will also delete all comments.')) return
-  try {
-    await authFetch(`/api/events/${props.eventId}/discussion/${post.id}`, { method: 'DELETE' })
-    posts.value = posts.value.filter(p => p.id !== post.id)
-  } catch (err) {
-    error.value = err.message || 'Failed to delete post.'
-  }
+function deletePost(post) {
+  const preview = stripHtml(post.content).slice(0, 80)
+  showDeleteConfirm(
+    'Delete post',
+    `This will permanently delete the post by ${post.authorName}${preview ? ' (\u201C' + preview + (post.content.length > 80 ? '\u2026' : '') + '\u201D)' : ''} and all its comments.`,
+    async () => {
+      try {
+        await authFetch(`/api/events/${props.eventId}/discussion/${post.id}`, { method: 'DELETE' })
+        posts.value = posts.value.filter(p => p.id !== post.id)
+      } catch (err) {
+        error.value = err.message || 'Failed to delete post.'
+      }
+    }
+  )
+}
+
+function stripHtml(html) {
+  const div = document.createElement('div')
+  div.innerHTML = html
+  return div.textContent || ''
 }
 
 async function toggleComments(post) {
@@ -169,15 +198,22 @@ async function addComment(postId) {
   }
 }
 
-async function deleteComment(postId, commentId) {
-  try {
-    await authFetch(`/api/events/${props.eventId}/discussion/${postId}/comments/${commentId}`, { method: 'DELETE' })
-    commentsMap.value[postId] = commentsMap.value[postId].filter(c => c.id !== commentId)
-    const post = posts.value.find(p => p.id === postId)
-    if (post) post.commentCount--
-  } catch (err) {
-    error.value = err.message || 'Failed to delete comment.'
-  }
+function deleteComment(postId, comment) {
+  const preview = comment.content.slice(0, 80)
+  showDeleteConfirm(
+    'Delete comment',
+    `This will permanently delete the comment by ${comment.authorName}${preview ? ' (\u201C' + preview + (comment.content.length > 80 ? '\u2026' : '') + '\u201D)' : ''}.`,
+    async () => {
+      try {
+        await authFetch(`/api/events/${props.eventId}/discussion/${postId}/comments/${comment.id}`, { method: 'DELETE' })
+        commentsMap.value[postId] = commentsMap.value[postId].filter(c => c.id !== comment.id)
+        const post = posts.value.find(p => p.id === postId)
+        if (post) post.commentCount--
+      } catch (err) {
+        error.value = err.message || 'Failed to delete comment.'
+      }
+    }
+  )
 }
 
 function profilePictureUrl(keycloakId) {
@@ -229,6 +265,16 @@ onMounted(loadPosts)
 
 <template>
   <div>
+    <ConfirmDialog
+      :open="deleteDialog.open"
+      :title="deleteDialog.title"
+      :message="deleteDialog.message"
+      confirm-label="Delete"
+      variant="danger"
+      @confirm="confirmDelete"
+      @cancel="closeDeleteDialog"
+    />
+
     <div v-if="error" class="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700 mb-4">
       {{ error }}
     </div>
@@ -367,7 +413,7 @@ onMounted(loadPosts)
                     <div class="flex items-baseline gap-2">
                       <span class="text-xs font-medium text-gray-900">{{ comment.authorName }}</span>
                       <span class="text-[10px] text-gray-400">{{ formatRelative(comment.createdAt) }}</span>
-                      <button v-if="isAdmin" @click="deleteComment(post.id, comment.id)"
+                      <button v-if="isAdmin" @click="deleteComment(post.id, comment)"
                         class="text-[10px] text-red-400 hover:text-red-600 ml-auto">
                         Delete
                       </button>
