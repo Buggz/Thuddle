@@ -1,7 +1,7 @@
 <script setup>
 import { useEditor, EditorContent } from '@tiptap/vue-3'
 import StarterKit from '@tiptap/starter-kit'
-import Image from '@tiptap/extension-image'
+import ImageResize from 'tiptap-extension-resize-image'
 import Underline from '@tiptap/extension-underline'
 import { TextStyle } from '@tiptap/extension-text-style'
 import { shallowRef, watch, onBeforeUnmount } from 'vue'
@@ -22,7 +22,7 @@ const editor = useEditor({
     }),
     Underline,
     TextStyle,
-    Image.configure({ inline: false, allowBase64: false })
+    ImageResize.configure({ inline: false, allowBase64: false })
   ],
   editorProps: {
     attributes: {

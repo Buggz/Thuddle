@@ -202,6 +202,7 @@ public static class DiscussionEndpoints
             }
 
             emails = emails.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            emails.Remove(author.Email);
 
             var authorName = author.DisplayName ?? author.Email;
             var subject = $"[{evt.Title}] New update from {authorName}";
