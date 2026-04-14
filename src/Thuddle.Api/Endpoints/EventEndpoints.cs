@@ -102,6 +102,7 @@ public static class EventEndpoints
                 e.Capacity,
                 e.Cost,
                 ParticipantCount = db.EventParticipants.Count(ep => ep.EventId == e.Id),
+                PostCount = db.DiscussionPosts.Count(dp => dp.EventId == e.Id && dp.IsApproved),
                 HasJoined = !isAnonymous && db.EventParticipants.Any(ep => ep.EventId == e.Id && ep.UserId == userId),
                 HasInvitation = !isAnonymous && db.EventInvitations.Any(i => i.EventId == e.Id && i.Email.ToLower() == userEmail)
             })
@@ -122,6 +123,7 @@ public static class EventEndpoints
             e.Capacity,
             e.Cost,
             e.ParticipantCount,
+            e.PostCount,
             e.HasJoined,
             e.HasInvitation,
             CanJoin = !e.HasJoined && !isAnonymous

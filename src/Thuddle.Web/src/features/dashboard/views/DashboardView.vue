@@ -294,6 +294,10 @@ watch(() => perms.loaded, (loaded) => {
                   <template v-else>{{ event.participantCount }}</template>
                 </span>
               </div>
+              <div v-if="event.postCount" class="flex items-center gap-1.5 text-sm text-gray-500">
+                <span>💬</span>
+                <span class="font-medium">{{ event.postCount }}</span>
+              </div>
             </div>
 
             <!-- Attending status -->
