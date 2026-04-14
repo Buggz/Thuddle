@@ -16,6 +16,7 @@ const auth = useAuthStore()
 
 const posts = ref([])
 const settings = ref(null)
+const isMember = shallowRef(false)
 const lastReadAt = ref(null)
 const loading = shallowRef(true)
 const error = shallowRef(null)
@@ -66,6 +67,7 @@ async function loadPosts() {
     const data = await res.json()
     posts.value = data.posts
     settings.value = data.settings
+    isMember.value = data.isMember ?? false
     lastReadAt.value = data.lastReadAt
   } catch (err) {
     error.value = err.message || 'Failed to load discussion.'
@@ -250,9 +252,14 @@ function canPost() {
   if (!auth.isAuthenticated) return false
   if (props.isAdmin) return true
   if (!settings.value) return false
-  // If non-member posts are allowed, or we can't tell membership, allow posting
-  // (the server will enforce membership rules)
-  return true
+  if (isMember.value) return true
+  return settings.value.allowNonMemberPosts
+}
+
+function postDeniedReason() {
+  if (!auth.isAuthenticated) return 'Sign in to write a post.'
+  if (!isMember.value && !settings.value?.allowNonMemberPosts) return 'Only attendees can post in this discussion. Join the event to participate.'
+  return null
 }
 
 function hasNewComments(post) {
@@ -313,6 +320,9 @@ onMounted(loadPosts)
             </div>
           </div>
         </div>
+      </div>
+      <div v-else-if="postDeniedReason()" class="mb-6 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-500">
+        {{ postDeniedReason() }}
       </div>
 
       <!-- Posts list -->

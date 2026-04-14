@@ -294,7 +294,10 @@ watch(() => perms.loaded, (loaded) => {
                   <template v-else>{{ event.participantCount }}</template>
                 </span>
               </div>
-              <div v-if="event.postCount" class="flex items-center gap-1.5 text-sm text-gray-500">
+              <div v-if="event.postCount || event.pendingPostCount" class="flex items-center gap-1.5 text-sm text-gray-500">
+                <span v-if="event.pendingPostCount" class="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-700">
+                  {{ event.pendingPostCount }} pending
+                </span>
                 <span>💬</span>
                 <span class="font-medium">{{ event.postCount }}</span>
                 <span v-if="event.hasUnreadDiscussion" class="relative flex h-2.5 w-2.5">

@@ -116,7 +116,11 @@ public static class EventEndpoints
                         .FirstOrDefault()
                     : null,
                 HasJoined = !isAnonymous && db.EventParticipants.Any(ep => ep.EventId == e.Id && ep.UserId == userId),
-                HasInvitation = !isAnonymous && db.EventInvitations.Any(i => i.EventId == e.Id && i.Email.ToLower() == userEmail)
+                HasInvitation = !isAnonymous && db.EventInvitations.Any(i => i.EventId == e.Id && i.Email.ToLower() == userEmail),
+                IsAdmin = !isAnonymous && (e.OwnerId == userId || db.EventCoAdmins.Any(ca => ca.EventId == e.Id && ca.UserId == userId)),
+                PendingPostCount = !isAnonymous && (e.OwnerId == userId || db.EventCoAdmins.Any(ca => ca.EventId == e.Id && ca.UserId == userId))
+                    ? db.DiscussionPosts.Count(dp => dp.EventId == e.Id && !dp.IsApproved)
+                    : 0
             })
             .ToListAsync(ct);
 
@@ -146,7 +150,9 @@ public static class EventEndpoints
                 e.HasJoined,
                 e.HasInvitation,
                 CanJoin = !e.HasJoined && !isAnonymous
-                    && (e.JoinMode == JoinMode.Open || e.HasInvitation)
+                    && (e.JoinMode == JoinMode.Open || e.HasInvitation),
+                e.IsAdmin,
+                e.PendingPostCount
             };
         });
 

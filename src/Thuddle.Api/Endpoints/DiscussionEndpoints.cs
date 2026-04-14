@@ -58,6 +58,7 @@ public static class DiscussionEndpoints
             : null;
 
         var isAdmin = dbUser is not null && await IsEventAdmin(db, eventId, dbUser.Id, ct);
+        var isMember = dbUser is not null && await IsMember(db, eventId, dbUser.Id, ct);
 
         // Get the user's last read timestamp before updating it
         DateTime? lastReadAt = null;
@@ -124,6 +125,7 @@ public static class DiscussionEndpoints
             posts,
             lastReadAt,
             isAdmin,
+            isMember,
             settings = new
             {
                 memberPostPolicy = (int)evt.MemberPostPolicy,
