@@ -1,5 +1,5 @@
 <script setup>
-import { shallowRef, ref, onMounted, computed, watch } from 'vue'
+import { shallowRef, ref, onMounted, computed, watch, onUnmounted } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useApi } from '@/shared/composables/useApi'
 import { useAuthStore } from '@/features/auth/stores/auth'
@@ -16,6 +16,53 @@ const error = shallowRef(null)
 const page = shallowRef(1)
 const totalPages = shallowRef(1)
 const hintDismissed = shallowRef(localStorage.getItem('thuddle:profile-hint-dismissed') === 'true')
+
+// Loading messages that rotate while waiting for the API
+const loadingMessage = shallowRef('Loading events...')
+let loadingTimers = []
+
+const funnyMessages = [
+  'Constructing additional pylons',
+  'Feeding the pigeons',
+  'Adding hamsters to wheel',
+  'Reticulating splines',
+  'Convincing electrons to cooperate',
+  'Bribing the server hamsters',
+  'Untangling the internet cables',
+  'Polishing the pixels',
+  'Teaching the database to read',
+  'Warming up the flux capacitor',
+  'Calibrating the cloud',
+  'Herding cats',
+  'Consulting the magic 8-ball',
+  'Downloading more RAM',
+  'Inflating the cloud',
+  'Charging the laser sharks',
+  'Tuning the hyperdrives',
+  'Rolling for initiative',
+  'Summoning the data elves',
+  'Shaking the binary tree',
+]
+
+function startLoadingMessages() {
+  loadingTimers.push(setTimeout(() => {
+    loadingMessage.value = 'Warming up API...'
+    let lastIndex = -1
+    loadingTimers.push(setInterval(() => {
+      let idx
+      do { idx = Math.floor(Math.random() * funnyMessages.length) } while (idx === lastIndex)
+      lastIndex = idx
+      loadingMessage.value = funnyMessages[idx] + '...'
+    }, 3000))
+  }, 2000))
+}
+
+function stopLoadingMessages() {
+  loadingTimers.forEach(id => { clearTimeout(id); clearInterval(id) })
+  loadingTimers = []
+}
+
+onUnmounted(stopLoadingMessages)
 
 const showProfileHint = computed(() =>
   auth.isAuthenticated
@@ -40,7 +87,9 @@ const hasNext = computed(() => page.value < totalPages.value)
 
 async function loadEvents() {
   loading.value = true
+  loadingMessage.value = 'Loading events...'
   error.value = null
+  startLoadingMessages()
   try {
     const url = apiUrl(`/api/events?page=${page.value}&pageSize=12`)
     let res
@@ -59,6 +108,7 @@ async function loadEvents() {
   } catch (err) {
     error.value = err.message || 'Failed to load events.'
   } finally {
+    stopLoadingMessages()
     loading.value = false
   }
 }
@@ -124,7 +174,7 @@ watch(() => perms.loaded, (loaded) => {
       <h2 class="text-2xl font-bold text-gray-900">Events</h2>
     </div>
 
-    <div v-if="loading" class="text-center py-12 text-gray-400">Loading events...</div>
+    <div v-if="loading" class="text-center py-12 text-gray-400 text-lg">{{ loadingMessage }}</div>
 
       <div v-else-if="error" class="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
         {{ error }}

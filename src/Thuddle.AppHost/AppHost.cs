@@ -31,7 +31,8 @@ var blobs = storage.AddBlobs("blobs");
 // Database migrations run first, then exit
 var migrations = builder.AddProject<Projects.Thuddle_MigrationService>("migrations")
     .WithReference(thuddleDb)
-    .WaitFor(thuddleDb);
+    .WaitFor(thuddleDb)
+    .WithEnvironment("Seed__AdminEmail", "testuser@thuddle.dev");
 
 // .NET API with Keycloak auth, PostgreSQL, and Azure Blob Storage
 var api = builder.AddProject<Projects.Thuddle_Api>("api")

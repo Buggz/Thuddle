@@ -7,6 +7,12 @@
   "duplicateEmailsAllowed": false,
   "resetPasswordAllowed": true,
   "bruteForceProtected": true,
+  "rememberMe": true,
+  "accessTokenLifespan": 300,
+  "ssoSessionIdleTimeout": 2592000,
+  "ssoSessionMaxLifespan": 2592000,
+  "ssoSessionIdleTimeoutRememberMe": 2592000,
+  "ssoSessionMaxLifespanRememberMe": 2592000,
   "clients": [
     {
       "clientId": "thuddle-web",
@@ -55,6 +61,7 @@
   ],
   "users": [
     {
+      "id": "00000000-0000-0000-0000-000000000001",
       "username": "testuser",
       "email": "testuser@thuddle.dev",
       "emailVerified": true,
@@ -70,16 +77,49 @@
       ]
     },
     {
-      "username": "admin",
-      "email": "admin@thuddle.dev",
+      "id": "00000000-0000-0000-0000-000000000003",
+      "username": "alice",
+      "email": "alice@thuddle.dev",
       "emailVerified": true,
       "enabled": true,
-      "firstName": "Admin",
-      "lastName": "User",
+      "firstName": "Alice",
+      "lastName": "Johnson",
       "credentials": [
         {
           "type": "password",
-          "value": "adminpassword",
+          "value": "testpassword",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "id": "00000000-0000-0000-0000-000000000004",
+      "username": "bob",
+      "email": "bob@thuddle.dev",
+      "emailVerified": true,
+      "enabled": true,
+      "firstName": "Bob",
+      "lastName": "Smith",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "testpassword",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "id": "00000000-0000-0000-0000-000000000005",
+      "username": "charlie",
+      "email": "charlie@thuddle.dev",
+      "emailVerified": true,
+      "enabled": true,
+      "firstName": "Charlie",
+      "lastName": "Brown",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "testpassword",
           "temporary": false
         }
       ]

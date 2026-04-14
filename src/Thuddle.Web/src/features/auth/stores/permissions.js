@@ -16,6 +16,7 @@ export const usePermissionsStore = defineStore('permissions', () => {
   const profileComplete = ref(true)
   const hasDisplayName = ref(true)
   const hasProfilePicture = ref(true)
+  const displayName = ref('')
 
   const { authFetch } = useApi()
 
@@ -25,6 +26,7 @@ export const usePermissionsStore = defineStore('permissions', () => {
       const res = await authFetch('/api/profile')
       const data = await res.json()
       permissions.value = data.permissions || []
+      displayName.value = data.displayName || ''
       hasDisplayName.value = !!data.displayName
       hasProfilePicture.value = !!data.hasProfilePicture
       profileComplete.value = hasDisplayName.value
@@ -47,6 +49,12 @@ export const usePermissionsStore = defineStore('permissions', () => {
     hasDisplayName.value = true
   }
 
+  function updateDisplayName(name) {
+    displayName.value = name
+    hasDisplayName.value = !!name
+    profileComplete.value = hasDisplayName.value
+  }
+
   function markProfilePictureUploaded() {
     hasProfilePicture.value = true
   }
@@ -57,9 +65,11 @@ export const usePermissionsStore = defineStore('permissions', () => {
     profileComplete: readonly(profileComplete),
     hasDisplayName: readonly(hasDisplayName),
     hasProfilePicture: readonly(hasProfilePicture),
+    displayName: readonly(displayName),
     load,
     hasPermission,
     markProfileComplete,
+    updateDisplayName,
     markProfilePictureUploaded,
     ensureUserInitialized
   }
