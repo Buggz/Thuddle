@@ -4,7 +4,8 @@ import Spinner from '@/shared/components/Spinner.vue'
 
 const props = defineProps({
   imageFile: { type: File, required: true },
-  maxDimension: { type: Number, default: 1920 }
+  maxDimension: { type: Number, default: 1920 },
+  outputFormat: { type: String, default: 'image/png' }
 })
 
 const emit = defineEmits(['done', 'cancel'])
@@ -88,7 +89,8 @@ function doSave() {
   canvas.height = outH
   const ctx = canvas.getContext('2d')
   ctx.drawImage(img, 0, 0, outW, outH)
-  canvas.toBlob(blob => emit('done', blob), 'image/jpeg', 0.85)
+  const quality = props.outputFormat === 'image/jpeg' ? 0.85 : undefined
+  canvas.toBlob(blob => emit('done', blob), props.outputFormat, quality)
 }
 </script>
 

@@ -197,6 +197,17 @@ function formatRelative(iso) {
 }
 
 // Can the current user post?
+async function uploadImage(file) {
+  const formData = new FormData()
+  formData.append('file', file)
+  const res = await authFetch(`/api/events/${props.eventId}/images`, {
+    method: 'POST',
+    body: formData
+  })
+  const data = await res.json()
+  return data.url
+}
+
 function canPost() {
   if (!auth.isAuthenticated) return false
   if (props.isAdmin) return true
@@ -229,7 +240,7 @@ onMounted(loadPosts)
         </button>
 
         <div v-else class="rounded-lg border border-gray-200 bg-gray-50 p-4">
-          <RichTextEditor v-model="newPostContent" />
+          <RichTextEditor v-model="newPostContent" :upload-image="uploadImage" />
           <div class="flex items-center justify-between mt-3">
             <label v-if="isAdmin" class="flex items-center gap-2 text-sm text-gray-600">
               <input type="checkbox" v-model="sendEmail"

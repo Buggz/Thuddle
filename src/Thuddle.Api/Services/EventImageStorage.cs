@@ -34,50 +34,60 @@ public sealed class EventImageStorage
 
         await _container.CreateIfNotExistsAsync(PublicAccessType.Blob, cancellationToken: ct);
 
-        var blobName = $"{eventId}/{Guid.NewGuid()}.jpg";
-        var blob = _container.GetBlobClient(blobName);
-
         using var ms = new MemoryStream();
         await content.CopyToAsync(ms, ct);
         var imageData = ms.ToArray();
 
-        var scaled = ScaleIfNeeded(imageData);
+        var outputData = ScaleAndEncode(imageData);
+        var blobName = $"{eventId}/{Guid.NewGuid()}.jpg";
+        var blob = _container.GetBlobClient(blobName);
+
         var headers = new BlobHttpHeaders { ContentType = "image/jpeg" };
-        using var uploadStream = new MemoryStream(scaled);
+        using var uploadStream = new MemoryStream(outputData);
         await blob.UploadAsync(uploadStream, new BlobUploadOptions { HttpHeaders = headers }, ct);
 
         return blob.Uri.ToString();
     }
 
-    private static byte[] ScaleIfNeeded(byte[] imageData)
+    private static byte[] ScaleAndEncode(byte[] imageData)
     {
         using var original = SKBitmap.Decode(imageData)
             ?? throw new ArgumentException("Unable to decode image.");
 
-        if (original.Width <= MaxDimension && original.Height <= MaxDimension)
-        {
-            using var img = SKImage.FromBitmap(original);
-            using var data = img.Encode(SKEncodedImageFormat.Jpeg, 85);
-            return data.ToArray();
-        }
+        var needsScale = original.Width > MaxDimension || original.Height > MaxDimension;
+        SKBitmap target;
 
-        int newW, newH;
-        if (original.Width >= original.Height)
+        if (needsScale)
         {
-            newW = MaxDimension;
-            newH = (int)Math.Round((double)original.Height * MaxDimension / original.Width);
+            int newW, newH;
+            if (original.Width >= original.Height)
+            {
+                newW = MaxDimension;
+                newH = (int)Math.Round((double)original.Height * MaxDimension / original.Width);
+            }
+            else
+            {
+                newH = MaxDimension;
+                newW = (int)Math.Round((double)original.Width * MaxDimension / original.Height);
+            }
+
+            target = original.Resize(new SKImageInfo(newW, newH), SKSamplingOptions.Default)
+                ?? throw new InvalidOperationException("Unable to resize image.");
         }
         else
         {
-            newH = MaxDimension;
-            newW = (int)Math.Round((double)original.Width * MaxDimension / original.Height);
+            target = original;
         }
 
-        using var scaled = original.Resize(new SKImageInfo(newW, newH), SKSamplingOptions.Default)
-            ?? throw new InvalidOperationException("Unable to resize image.");
-
-        using var image = SKImage.FromBitmap(scaled);
-        using var encoded = image.Encode(SKEncodedImageFormat.Jpeg, 85);
-        return encoded.ToArray();
+        try
+        {
+            using var image = SKImage.FromBitmap(target);
+            using var encoded = image.Encode(SKEncodedImageFormat.Jpeg, 85);
+            return encoded.ToArray();
+        }
+        finally
+        {
+            if (needsScale) target.Dispose();
+        }
     }
 }
