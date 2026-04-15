@@ -15,6 +15,7 @@ const emit = defineEmits(['save'])
     <div class="flex gap-3">
       <input
         v-model="displayName"
+        data-testid="profile-displayname-input"
         type="text"
         maxlength="50"
         placeholder="Enter a display name"
@@ -22,6 +23,7 @@ const emit = defineEmits(['save'])
       />
       <button
         @click="emit('save')"
+        data-testid="profile-displayname-save-btn"
         :disabled="saving || displayName === savedName"
         class="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
       >

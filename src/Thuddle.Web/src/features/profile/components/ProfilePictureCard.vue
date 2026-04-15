@@ -39,6 +39,7 @@ function onCancelCrop() {
           v-if="hasProfilePicture && pictureUrl"
           :src="pictureUrl"
           alt="Profile"
+          data-testid="profile-picture-img"
           class="w-full h-full object-cover"
         />
         <svg
@@ -61,6 +62,7 @@ function onCancelCrop() {
           <input
             type="file"
             accept="image/*"
+            data-testid="profile-picture-upload"
             class="hidden"
             @change="onFileChange"
             :disabled="uploading"

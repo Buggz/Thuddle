@@ -40,16 +40,18 @@ onMounted(loadProfile)
 
 <template>
   <div class="max-w-lg mx-auto">
-    <h2 class="text-2xl font-bold text-gray-900 mb-8">Profile</h2>
+    <h2 data-testid="profile-heading" class="text-2xl font-bold text-gray-900 mb-8">Profile</h2>
 
     <div
       v-if="message"
+      data-testid="profile-success-msg"
       class="mb-6 rounded-lg bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700"
     >
       {{ message }}
     </div>
     <div
       v-if="error"
+      data-testid="profile-error-msg"
       class="mb-6 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700"
     >
       {{ error }}
