@@ -25,5 +25,10 @@ Desktop.ini
 # Aspire
 .dcproj.user
 
+# Playwright
+.playwright-cli/
+tests/e2e/test-results/
+tests/e2e/playwright-report/
+
 # Infra deployment outputs (local, per-user)
 infra/.deploy-outputs.json

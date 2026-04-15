@@ -186,7 +186,7 @@ watch(() => perms.loaded, (loaded) => {
     </div>
 
     <div class="flex items-center justify-between mb-8">
-      <h2 class="text-3xl font-extrabold text-gray-900 tracking-tight">Events</h2>
+      <h2 data-testid="events-heading" class="text-3xl font-extrabold text-gray-900 tracking-tight">Events</h2>
     </div>
 
     <div v-if="loading" class="text-center py-12 text-gray-400 text-lg">{{ loadingMessage }}</div>
@@ -201,8 +201,9 @@ watch(() => perms.loaded, (loaded) => {
     </div>
 
     <template v-else>
-      <div class="flex flex-col gap-4">
+      <div data-testid="event-list" class="flex flex-col gap-4">
         <RouterLink
+          data-testid="event-card"
           v-for="(event, idx) in events"
           :key="event.id"
           :to="{ name: 'event', params: { id: event.id } }"

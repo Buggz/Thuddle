@@ -36,6 +36,7 @@ function closeMenu() {
         </div>
         <div class="flex items-center">
           <RouterLink
+            data-testid="event-create-btn"
             v-if="auth.isAuthenticated && permissionsStore.hasPermission('events:write')"
             to="/events/create"
             class="mr-4 inline-flex items-center gap-1.5 bg-indigo-600 text-white px-3 py-1.5 rounded-md text-sm font-medium hover:bg-indigo-700 transition"
@@ -46,9 +47,10 @@ function closeMenu() {
             Create Event
           </RouterLink>
           <template v-if="auth.isAuthenticated">
-            <span class="text-sm text-gray-600 mr-3">{{ permissionsStore.displayName || auth.userName }}</span>
+            <span data-testid="user-display-name" class="text-sm text-gray-600 mr-3">{{ permissionsStore.displayName || auth.userName }}</span>
             <div class="relative">
               <button
+                data-testid="nav-menu-btn"
                 @click="toggleMenu"
                 class="flex items-center gap-1 rounded-full p-0.5 hover:ring-2 hover:ring-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition"
                 title="Menu"
@@ -82,6 +84,7 @@ function closeMenu() {
                 class="absolute right-0 mt-2 w-40 bg-white rounded-md shadow-lg ring-1 ring-black/5 z-20 py-1"
               >
                 <RouterLink
+                  data-testid="nav-profile-link"
                   to="/profile"
                   class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
                   @click="closeMenu"
@@ -89,6 +92,7 @@ function closeMenu() {
                   Profile
                 </RouterLink>
                 <button
+                  data-testid="auth-logout-btn"
                   @click="auth.logout()"
                   class="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
                 >
@@ -99,6 +103,7 @@ function closeMenu() {
           </template>
           <template v-else>
             <button
+              data-testid="auth-login-btn"
               @click="auth.login()"
               class="bg-indigo-600 text-white px-4 py-2 rounded-md text-sm hover:bg-indigo-700"
             >
