@@ -293,6 +293,7 @@ onMounted(loadPosts)
       <div v-if="canPost()" class="mb-6">
         <button
           v-if="!showNewPost"
+          data-testid="discussion-new-post-btn"
           @click="showNewPost = true"
           class="w-full rounded-lg border-2 border-dashed border-gray-300 py-3 text-sm text-gray-500 hover:border-indigo-400 hover:text-indigo-600 transition-colors"
         >
@@ -309,11 +310,11 @@ onMounted(loadPosts)
             </label>
             <span v-else />
             <div class="flex items-center gap-2">
-              <button @click="showNewPost = false; newPostContent = ''"
+              <button data-testid="discussion-cancel-post-btn" @click="showNewPost = false; newPostContent = ''"
                 class="px-3 py-1.5 text-sm text-gray-500 hover:text-gray-700">
                 Cancel
               </button>
-              <button @click="createPost" :disabled="posting || !newPostContent.trim()"
+              <button data-testid="discussion-submit-post-btn" @click="createPost" :disabled="posting || !newPostContent.trim()"
                 class="px-4 py-1.5 text-sm font-semibold rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 transition-colors">
                 {{ posting ? 'Posting…' : 'Post' }}
               </button>
@@ -321,12 +322,12 @@ onMounted(loadPosts)
           </div>
         </div>
       </div>
-      <div v-else-if="postDeniedReason()" class="mb-6 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-500">
+      <div v-else-if="postDeniedReason()" data-testid="discussion-denied-msg" class="mb-6 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-500">
         {{ postDeniedReason() }}
       </div>
 
       <!-- Posts list -->
-      <div v-if="posts.length === 0" class="text-center py-8">
+      <div v-if="posts.length === 0" data-testid="discussion-empty" class="text-center py-8">
         <p class="text-gray-400 text-sm">No posts yet.{{ canPost() ? ' Be the first to start the discussion!' : '' }}</p>
       </div>
 
@@ -334,6 +335,7 @@ onMounted(loadPosts)
         <div
           v-for="post in posts"
           :key="post.id"
+          data-testid="discussion-post"
           class="rounded-lg border bg-white"
           :class="post.isApproved ? 'border-gray-200' : 'border-amber-300 bg-amber-50'"
         >
@@ -360,14 +362,14 @@ onMounted(loadPosts)
                 class="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
                 Pending
               </span>
-              <button v-if="isAdmin && !post.isOwnPost" @click="toggleApproval(post)"
+              <button v-if="isAdmin && !post.isOwnPost" data-testid="discussion-approve-btn" @click="toggleApproval(post)"
                 class="text-xs font-medium px-2 py-1 rounded transition-colors"
                 :class="post.isApproved
                   ? 'text-amber-600 hover:bg-amber-50'
                   : 'text-green-600 hover:bg-green-50'">
                 {{ post.isApproved ? 'Unapprove' : 'Approve' }}
               </button>
-              <button v-if="isAdmin || post.isOwnPost" @click="deletePost(post)"
+              <button v-if="isAdmin || post.isOwnPost" data-testid="discussion-delete-post-btn" @click="deletePost(post)"
                 class="text-xs text-red-500 hover:text-red-700 font-medium px-2 py-1 rounded hover:bg-red-50 transition-colors">
                 Delete
               </button>
@@ -375,11 +377,12 @@ onMounted(loadPosts)
           </div>
 
           <!-- Post content -->
-          <div class="px-4 pb-3 prose prose-sm max-w-none text-gray-700" v-html="post.content" />
+          <div data-testid="discussion-post-content" class="px-4 pb-3 prose prose-sm max-w-none text-gray-700" v-html="post.content" />
 
           <!-- Comments toggle -->
           <div class="border-t border-gray-100 px-4 py-2">
             <button
+              data-testid="discussion-toggle-comments-btn"
               @click="toggleComments(post)"
               class="text-sm text-gray-500 hover:text-indigo-600 transition-colors flex items-center gap-1"
             >
@@ -435,6 +438,7 @@ onMounted(loadPosts)
                 <!-- Add comment -->
                 <div v-if="auth.isAuthenticated" class="flex gap-2 pt-1">
                   <input
+                    data-testid="discussion-comment-input"
                     v-model="newCommentText[post.id]"
                     @keyup.enter="addComment(post.id)"
                     type="text"
@@ -442,6 +446,7 @@ onMounted(loadPosts)
                     class="flex-1 rounded-lg border border-gray-200 px-3 py-1.5 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                   />
                   <button
+                    data-testid="discussion-comment-reply-btn"
                     @click="addComment(post.id)"
                     :disabled="commentPosting.has(post.id) || !(newCommentText[post.id] || '').trim()"
                     class="px-3 py-1.5 text-sm font-medium rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 transition-colors"

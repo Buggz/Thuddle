@@ -280,6 +280,7 @@ watch(() => auth.isAuthenticated, (authenticated, wasAuthenticated) => {
               About this event
             </button>
             <button
+              data-testid="event-tab-discussion"
               @click="selectTab('discussion')"
               class="px-4 py-3 text-sm font-medium border-b-2 transition-colors"
               :class="activeTab === 'discussion'
