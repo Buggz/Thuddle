@@ -11,6 +11,7 @@ var thuddleDb = postgres.AddDatabase("thuddledb");
 // Keycloak: using PostgreSQL as backing store, importing the Thuddle realm
 var keycloak = builder.AddKeycloakContainer("keycloak")
     .WithDataVolume()
+    .WithHttpEndpoint(port: 8080)
     .WithImport("./KeycloakConfiguration/Thuddle-realm.dev.json")
     .WithEnvironment("KC_DB", "postgres")
     .WithEnvironment(context =>
@@ -43,6 +44,7 @@ var api = builder.AddProject<Projects.Thuddle_Api>("api")
     .WaitFor(keycloak)
     .WaitFor(storage)
     .WaitForCompletion(migrations)
+    .WithHttpEndpoint(port: 5208)
     .WithExternalHttpEndpoints();
 
 // Vue.js frontend
@@ -51,6 +53,7 @@ builder.AddViteApp("web", "../Thuddle.Web")
     .WithReference(api)
     .WaitFor(api)
     .WaitFor(keycloak)
+    .WithHttpEndpoint(port: 50279)
     .WithExternalHttpEndpoints()
     .WithEnvironment("VITE_KEYCLOAK_URL", keycloak.GetEndpoint("http"))
     .WithEnvironment("VITE_KEYCLOAK_REALM", "Thuddle")

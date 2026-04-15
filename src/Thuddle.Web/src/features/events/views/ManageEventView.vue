@@ -131,6 +131,8 @@ async function inviteUsers() {
     setTimeout(() => { inviteSuccess.value = false }, 3000)
     // Reset invitees
     invitees.value = [{ id: nextInviteeId++, email: '', exists: null, loading: false, error: null }]
+    // Refresh attendees list to show new pending invitations
+    await loadAttendees()
   } catch (err) {
     inviteError.value = err.message || 'Failed to send invitations.'
   } finally {
@@ -540,7 +542,7 @@ onMounted(async () => {
         <div v-if="activeTab === 'attendees'" class="p-6">
           <div v-if="loadingAttendees" class="text-sm text-gray-400">Loading attendees...</div>
           <div v-else-if="attendeesError" class="text-sm text-red-600">{{ attendeesError }}</div>
-          <div v-else-if="attendees.length === 0 && pendingInvitations.length === 0" class="text-sm text-gray-400">No attendees yet.</div>
+          <div v-else-if="attendees.length === 0 && pendingInvitations.length === 0" data-testid="manage-attendees-empty" class="text-sm text-gray-400">No attendees yet.</div>
 
           <table v-else class="w-full text-sm">
             <thead>
@@ -553,7 +555,7 @@ onMounted(async () => {
               </tr>
             </thead>
             <tbody class="divide-y divide-gray-100">
-              <tr v-for="a in attendees" :key="a.userId">
+              <tr v-for="a in attendees" :key="a.userId" data-testid="manage-attendee-row">
                 <td class="py-2.5 font-medium text-gray-900">{{ a.displayName }}</td>
                 <td class="py-2.5">
                   <span v-if="a.fullName" class="text-gray-700">{{ a.fullName }}</span>
@@ -575,7 +577,7 @@ onMounted(async () => {
                   </button>
                 </td>
               </tr>
-              <tr v-for="inv in pendingInvitations" :key="'inv-' + inv.email" class="opacity-60">
+              <tr v-for="inv in pendingInvitations" :key="'inv-' + inv.email" data-testid="manage-pending-invitation" class="opacity-60">
                 <td class="py-2.5 font-medium text-gray-500 italic">—</td>
                 <td class="py-2.5 text-gray-400">—</td>
                 <td class="py-2.5 text-gray-500">{{ inv.email }}</td>
@@ -599,6 +601,7 @@ onMounted(async () => {
                 @input="onInviteeInput(invitee)"
                 type="email"
                 placeholder="Email address"
+                data-testid="manage-invite-email-input"
                 class="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                 autocomplete="new-password"
                 data-1p-ignore
@@ -606,19 +609,20 @@ onMounted(async () => {
                 data-form-type="other"
               />
               <span v-if="invitee.loading" class="ml-1"><Spinner /></span>
-              <span v-else-if="invitee.exists === true" class="ml-1 text-green-600 text-xs">User exists</span>
-              <span v-else-if="invitee.exists === false" class="ml-1 text-gray-400 text-xs">No user</span>
+              <span v-else-if="invitee.exists === true" data-testid="manage-invite-user-exists" class="ml-1 text-green-600 text-xs">User exists</span>
+              <span v-else-if="invitee.exists === false" data-testid="manage-invite-no-user" class="ml-1 text-gray-400 text-xs">No user</span>
               <span v-if="invitee.error" class="ml-1 text-red-600 text-xs">{{ invitee.error }}</span>
               <button type="button" @click="removeInvitee(invitee)" class="text-xs text-gray-400 hover:text-red-500 px-2">✕</button>
             </div>
-            <button type="button" @click="addInvitee" class="mt-1 mb-4 px-3 py-1 text-xs rounded bg-gray-100 hover:bg-gray-200 text-gray-700">+ Add another</button>
+            <button type="button" @click="addInvitee" data-testid="manage-invite-add-btn" class="mt-1 mb-4 px-3 py-1 text-xs rounded bg-gray-100 hover:bg-gray-200 text-gray-700">+ Add another</button>
             <div class="flex items-center gap-3 pt-2">
               <button @click="inviteUsers" :disabled="inviting || invitees.every(i => !i.email.trim())"
+                data-testid="manage-invite-send-btn"
                 class="px-5 py-2 text-sm font-semibold rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 transition-colors">
                 {{ inviting ? 'Inviting…' : `Invite ${invitees.filter(i => i.email.trim()).length} user${invitees.filter(i => i.email.trim()).length === 1 ? '' : 's'}` }}
               </button>
-              <span v-if="inviteSuccess" class="text-sm text-green-600">Invitations sent!</span>
-              <span v-if="inviteError" class="text-sm text-red-600">{{ inviteError }}</span>
+              <span v-if="inviteSuccess" data-testid="manage-invite-success" class="text-sm text-green-600">Invitations sent!</span>
+              <span v-if="inviteError" data-testid="manage-invite-error" class="text-sm text-red-600">{{ inviteError }}</span>
             </div>
           </div>
         </div>
