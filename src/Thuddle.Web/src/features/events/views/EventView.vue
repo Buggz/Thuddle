@@ -300,6 +300,7 @@ watch(() => auth.isAuthenticated, (authenticated, wasAuthenticated) => {
               </span>
             </button>
             <button
+              data-testid="event-tab-attendees"
               @click="selectTab('attendees')"
               class="px-4 py-3 text-sm font-medium border-b-2 transition-colors"
               :class="activeTab === 'attendees'
@@ -328,13 +329,14 @@ watch(() => auth.isAuthenticated, (authenticated, wasAuthenticated) => {
         <!-- Tab: Attendees -->
         <div v-if="activeTab === 'attendees'" class="px-6 py-5">
           <div v-if="participantsLoading" class="text-center py-8 text-gray-400 text-sm">Loading attendees...</div>
-          <div v-else-if="participants.length === 0" class="text-center py-8">
+          <div v-else-if="participants.length === 0" data-testid="participants-empty" class="text-center py-8">
             <p class="text-gray-400 text-sm">No attendees yet.</p>
           </div>
-          <ul v-else class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <ul v-else data-testid="participants-list" class="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <li
               v-for="p in participants"
               :key="p.keycloakId"
+              data-testid="participant-item"
               class="flex items-center gap-3 rounded-lg border border-gray-100 px-3 py-2.5"
             >
               <img
