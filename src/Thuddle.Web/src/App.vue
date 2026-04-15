@@ -1,8 +1,9 @@
 <script setup>
-import { watch } from 'vue'
+import { computed, watch } from 'vue'
 import { RouterView } from 'vue-router'
 import { useKeycloak } from '@josempgon/vue-keycloak'
 import AppNavbar from '@/features/layout/AppNavbar.vue'
+import AppLoadingScreen from '@/shared/components/AppLoadingScreen.vue'
 import { usePermissionsStore } from '@/features/auth/stores/permissions'
 
 const { isPending, isAuthenticated } = useKeycloak()
@@ -13,14 +14,20 @@ watch(isAuthenticated, (authenticated) => {
     permissionsStore.load()
   }
 }, { immediate: true })
+
+const appReady = computed(() => {
+  if (isPending.value) return false
+  if (isAuthenticated.value && !permissionsStore.loaded) return false
+  return true
+})
 </script>
 
 <template>
-  <div class="min-h-screen bg-gray-50">
+  <AppLoadingScreen v-if="!appReady" />
+  <div v-else class="min-h-screen bg-gray-50">
     <AppNavbar />
     <main class="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
-      <div v-if="isPending" class="text-center py-12 text-gray-400">Loading...</div>
-      <RouterView v-else />
+      <RouterView />
     </main>
   </div>
 </template>
