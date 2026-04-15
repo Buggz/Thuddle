@@ -427,6 +427,7 @@ onMounted(loadPosts)
                       <span class="text-xs font-medium text-gray-900">{{ comment.authorName }}</span>
                       <span class="text-[10px] text-gray-400">{{ formatRelative(comment.createdAt) }}</span>
                       <button v-if="isAdmin" @click="deleteComment(post.id, comment)"
+                        data-testid="discussion-delete-comment-btn"
                         class="text-[10px] text-red-400 hover:text-red-600 ml-auto">
                         Delete
                       </button>
