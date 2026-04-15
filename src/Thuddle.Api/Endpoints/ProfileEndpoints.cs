@@ -78,7 +78,6 @@ public static class ProfileEndpoints
         ThuddleDbContext db,
         CancellationToken ct)
     {
-        await Task.Delay(10_000, ct); // TEMP: remove after testing loading screen
         var keycloakId = GetKeycloakId(user);
         if (keycloakId is null) return Results.Unauthorized();
 

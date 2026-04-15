@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { test, expect } from '../helpers/fixtures'
 import { STORAGE_STATE, uid, futureDates, contextAs } from '../helpers/auth'
 
 /**
@@ -108,8 +108,9 @@ async function searchAndSelectUnknownEmail(
 
 test.describe('Invite users', () => {
   test.describe('positive', () => {
-    test('admin can search and invite a known user', async ({ browser, baseURL }) => {
-      const { manageUrl } = await createInviteOnlyEvent(browser, baseURL!)
+    test('admin can search and invite a known user', async ({ browser, baseURL, createdEvents }) => {
+      const { manageUrl, eventId } = await createInviteOnlyEvent(browser, baseURL!)
+      createdEvents.push(eventId)
 
       const { context, page } = await contextAs(browser, 'admin')
       await goToAttendeesTab(page, manageUrl)
@@ -136,8 +137,9 @@ test.describe('Invite users', () => {
       await context.close()
     })
 
-    test('admin can invite multiple users at once', async ({ browser, baseURL }) => {
-      const { manageUrl } = await createInviteOnlyEvent(browser, baseURL!)
+    test('admin can invite multiple users at once', async ({ browser, baseURL, createdEvents }) => {
+      const { manageUrl, eventId } = await createInviteOnlyEvent(browser, baseURL!)
+      createdEvents.push(eventId)
 
       const { context, page } = await contextAs(browser, 'admin')
       await goToAttendeesTab(page, manageUrl)
@@ -166,8 +168,9 @@ test.describe('Invite users', () => {
       await context.close()
     })
 
-    test('invited user can join invite-only event', async ({ browser, baseURL }) => {
-      const { manageUrl, eventUrl } = await createInviteOnlyEvent(browser, baseURL!)
+    test('invited user can join invite-only event', async ({ browser, baseURL, createdEvents }) => {
+      const { manageUrl, eventUrl, eventId } = await createInviteOnlyEvent(browser, baseURL!)
+      createdEvents.push(eventId)
 
       // Admin invites alice
       const { context: adminCtx, page: adminPage } = await contextAs(browser, 'admin')
@@ -190,8 +193,9 @@ test.describe('Invite users', () => {
       await aliceCtx.close()
     })
 
-    test('invited user appears as attendee after joining', async ({ browser, baseURL }) => {
-      const { manageUrl, eventUrl } = await createInviteOnlyEvent(browser, baseURL!)
+    test('invited user appears as attendee after joining', async ({ browser, baseURL, createdEvents }) => {
+      const { manageUrl, eventUrl, eventId } = await createInviteOnlyEvent(browser, baseURL!)
+      createdEvents.push(eventId)
 
       // Admin invites alice
       const { context: adminCtx, page: adminPage } = await contextAs(browser, 'admin')
@@ -223,8 +227,9 @@ test.describe('Invite users', () => {
       await adminCtx2.close()
     })
 
-    test('search shows matching users in dropdown', async ({ browser, baseURL }) => {
-      const { manageUrl } = await createPublicEvent(browser, baseURL!)
+    test('search shows matching users in dropdown', async ({ browser, baseURL, createdEvents }) => {
+      const { manageUrl, eventId } = await createPublicEvent(browser, baseURL!)
+      createdEvents.push(eventId)
 
       const { context, page } = await contextAs(browser, 'admin')
       await goToAttendeesTab(page, manageUrl)
@@ -238,8 +243,9 @@ test.describe('Invite users', () => {
       await context.close()
     })
 
-    test('typing unknown email shows invite option', async ({ browser, baseURL }) => {
-      const { manageUrl } = await createPublicEvent(browser, baseURL!)
+    test('typing unknown email shows invite option', async ({ browser, baseURL, createdEvents }) => {
+      const { manageUrl, eventId } = await createPublicEvent(browser, baseURL!)
+      createdEvents.push(eventId)
 
       const { context, page } = await contextAs(browser, 'admin')
       await goToAttendeesTab(page, manageUrl)
@@ -254,8 +260,9 @@ test.describe('Invite users', () => {
       await context.close()
     })
 
-    test('admin can invite unknown email', async ({ browser, baseURL }) => {
-      const { manageUrl } = await createPublicEvent(browser, baseURL!)
+    test('admin can invite unknown email', async ({ browser, baseURL, createdEvents }) => {
+      const { manageUrl, eventId } = await createPublicEvent(browser, baseURL!)
+      createdEvents.push(eventId)
 
       const { context, page } = await contextAs(browser, 'admin')
       await goToAttendeesTab(page, manageUrl)
@@ -282,8 +289,9 @@ test.describe('Invite users', () => {
   })
 
   test.describe('negative', () => {
-    test('send button is disabled when no users are selected', async ({ browser, baseURL }) => {
-      const { manageUrl } = await createPublicEvent(browser, baseURL!)
+    test('send button is disabled when no users are selected', async ({ browser, baseURL, createdEvents }) => {
+      const { manageUrl, eventId } = await createPublicEvent(browser, baseURL!)
+      createdEvents.push(eventId)
 
       const { context, page } = await contextAs(browser, 'admin')
       await goToAttendeesTab(page, manageUrl)
@@ -293,8 +301,9 @@ test.describe('Invite users', () => {
       await context.close()
     })
 
-    test('uninvited user cannot join invite-only event', async ({ browser, baseURL }) => {
-      const { eventUrl } = await createInviteOnlyEvent(browser, baseURL!)
+    test('uninvited user cannot join invite-only event', async ({ browser, baseURL, createdEvents }) => {
+      const { eventUrl, eventId } = await createInviteOnlyEvent(browser, baseURL!)
+      createdEvents.push(eventId)
 
       // Bob is NOT invited — should see invite-only message
       const { context, page } = await contextAs(browser, 'bob')

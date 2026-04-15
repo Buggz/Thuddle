@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { test, expect } from '../helpers/fixtures'
 import { STORAGE_STATE, uid, futureDates, contextAs } from '../helpers/auth'
 
 /** Helper: admin creates a public open event and returns the event URL + id. */
@@ -39,9 +39,10 @@ async function goToDiscussion(page: import('@playwright/test').Page, eventUrl: s
 
 test.describe('Discussion', () => {
   test.describe('positive - posting', () => {
-    test('admin can create a discussion post', async ({ browser, baseURL }) => {
+    test('admin can create a discussion post', async ({ browser, baseURL, createdEvents }) => {
       const name = `Disc ${uid()}`
-      const { eventUrl } = await createEvent(browser, baseURL!, name)
+      const { eventUrl, eventId } = await createEvent(browser, baseURL!, name)
+      createdEvents.push(eventId)
 
       const { context, page } = await contextAs(browser, 'admin')
       await goToDiscussion(page, eventUrl)
@@ -66,9 +67,10 @@ test.describe('Discussion', () => {
       await context.close()
     })
 
-    test('member can create a discussion post after joining', async ({ browser, baseURL }) => {
+    test('member can create a discussion post after joining', async ({ browser, baseURL, createdEvents }) => {
       const name = `DiscJoin ${uid()}`
-      const { eventUrl } = await createEvent(browser, baseURL!, name)
+      const { eventUrl, eventId } = await createEvent(browser, baseURL!, name)
+      createdEvents.push(eventId)
 
       // Alice joins the event first
       const { context: aliceCtx, page: alicePage } = await contextAs(browser, 'alice')
@@ -99,9 +101,10 @@ test.describe('Discussion', () => {
   })
 
   test.describe('positive - comments', () => {
-    test('user can add a comment to a post', async ({ browser, baseURL }) => {
+    test('user can add a comment to a post', async ({ browser, baseURL, createdEvents }) => {
       const name = `DiscComment ${uid()}`
-      const { eventUrl } = await createEvent(browser, baseURL!, name)
+      const { eventUrl, eventId } = await createEvent(browser, baseURL!, name)
+      createdEvents.push(eventId)
 
       // Admin creates a post
       const { context: adminCtx, page: adminPage } = await contextAs(browser, 'admin')
@@ -150,9 +153,10 @@ test.describe('Discussion', () => {
   })
 
   test.describe('positive - admin actions', () => {
-    test('admin can delete a post', async ({ browser, baseURL }) => {
+    test('admin can delete a post', async ({ browser, baseURL, createdEvents }) => {
       const name = `DiscDel ${uid()}`
-      const { eventUrl } = await createEvent(browser, baseURL!, name)
+      const { eventUrl, eventId } = await createEvent(browser, baseURL!, name)
+      createdEvents.push(eventId)
 
       // Admin creates a post
       const { context, page } = await contextAs(browser, 'admin')
@@ -183,9 +187,10 @@ test.describe('Discussion', () => {
   })
 
   test.describe('negative', () => {
-    test('non-member sees denied message when posting is restricted', async ({ browser, baseURL }) => {
+    test('non-member sees denied message when posting is restricted', async ({ browser, baseURL, createdEvents }) => {
       const name = `DiscDenied ${uid()}`
-      const { eventUrl } = await createEvent(browser, baseURL!, name)
+      const { eventUrl, eventId } = await createEvent(browser, baseURL!, name)
+      createdEvents.push(eventId)
 
       // Bob visits the event discussion without joining
       const { context: bobCtx, page: bobPage } = await contextAs(browser, 'bob')
@@ -205,9 +210,10 @@ test.describe('Discussion', () => {
       await bobCtx.close()
     })
 
-    test('post button is disabled when content is empty', async ({ browser, baseURL }) => {
+    test('post button is disabled when content is empty', async ({ browser, baseURL, createdEvents }) => {
       const name = `DiscEmpty ${uid()}`
-      const { eventUrl } = await createEvent(browser, baseURL!, name)
+      const { eventUrl, eventId } = await createEvent(browser, baseURL!, name)
+      createdEvents.push(eventId)
 
       const { context, page } = await contextAs(browser, 'admin')
       await goToDiscussion(page, eventUrl)
@@ -219,9 +225,10 @@ test.describe('Discussion', () => {
       await context.close()
     })
 
-    test('cancel button hides the post form', async ({ browser, baseURL }) => {
+    test('cancel button hides the post form', async ({ browser, baseURL, createdEvents }) => {
       const name = `DiscCancel ${uid()}`
-      const { eventUrl } = await createEvent(browser, baseURL!, name)
+      const { eventUrl, eventId } = await createEvent(browser, baseURL!, name)
+      createdEvents.push(eventId)
 
       const { context, page } = await contextAs(browser, 'admin')
       await goToDiscussion(page, eventUrl)
@@ -236,9 +243,10 @@ test.describe('Discussion', () => {
       await context.close()
     })
 
-    test('anonymous user sees empty discussion without post controls', async ({ browser, baseURL }) => {
+    test('anonymous user sees empty discussion without post controls', async ({ browser, baseURL, createdEvents }) => {
       const name = `DiscAnon ${uid()}`
-      const { eventUrl } = await createEvent(browser, baseURL!, name)
+      const { eventUrl, eventId } = await createEvent(browser, baseURL!, name)
+      createdEvents.push(eventId)
 
       const context = await browser.newContext({ storageState: { cookies: [], origins: [] } })
       const page = await context.newPage()

@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { test, expect } from '../helpers/fixtures'
 import { STORAGE_STATE, uid, futureDates, contextAs } from '../helpers/auth'
 
 /** Admin creates a public open event and returns its URL + id. */
@@ -32,8 +32,9 @@ async function createEvent(
 }
 
 test.describe('Participants tab', () => {
-  test('shows empty state when no one has joined', async ({ browser, baseURL }) => {
-    const { eventUrl } = await createEvent(browser, baseURL!)
+  test('shows empty state when no one has joined', async ({ browser, baseURL, createdEvents }) => {
+    const { eventUrl, eventId } = await createEvent(browser, baseURL!)
+    createdEvents.push(eventId)
 
     const { context, page } = await contextAs(browser, 'alice')
     await page.goto(eventUrl)
@@ -45,8 +46,9 @@ test.describe('Participants tab', () => {
     await context.close()
   })
 
-  test('shows participant after user joins event', async ({ browser, baseURL }) => {
-    const { eventUrl } = await createEvent(browser, baseURL!)
+  test('shows participant after user joins event', async ({ browser, baseURL, createdEvents }) => {
+    const { eventUrl, eventId } = await createEvent(browser, baseURL!)
+    createdEvents.push(eventId)
 
     // Alice joins
     const { context: aliceCtx, page: alicePage } = await contextAs(browser, 'alice')
@@ -70,8 +72,9 @@ test.describe('Participants tab', () => {
     await bobCtx.close()
   })
 
-  test('participant count badge updates after joining', async ({ browser, baseURL }) => {
-    const { eventUrl } = await createEvent(browser, baseURL!)
+  test('participant count badge updates after joining', async ({ browser, baseURL, createdEvents }) => {
+    const { eventUrl, eventId } = await createEvent(browser, baseURL!)
+    createdEvents.push(eventId)
 
     const { context, page } = await contextAs(browser, 'alice')
     await page.goto(eventUrl)
@@ -90,8 +93,9 @@ test.describe('Participants tab', () => {
     await context.close()
   })
 
-  test('multiple participants appear in the list', async ({ browser, baseURL }) => {
-    const { eventUrl } = await createEvent(browser, baseURL!)
+  test('multiple participants appear in the list', async ({ browser, baseURL, createdEvents }) => {
+    const { eventUrl, eventId } = await createEvent(browser, baseURL!)
+    createdEvents.push(eventId)
 
     // Alice joins
     const { context: aliceCtx, page: alicePage } = await contextAs(browser, 'alice')
@@ -122,10 +126,11 @@ test.describe('Participants tab', () => {
     await charlieCtx.close()
   })
 
-  test('anonymous user can view participants on public event', async ({ page, baseURL }) => {
+  test('anonymous user can view participants on public event', async ({ page, baseURL, createdEvents }) => {
     // Need an event with a participant — use admin context for setup, then anonymous page
     const browser = page.context().browser()!
-    const { eventUrl } = await createEvent(browser, baseURL!)
+    const { eventUrl, eventId } = await createEvent(browser, baseURL!)
+    createdEvents.push(eventId)
 
     // Alice joins
     const { context: aliceCtx, page: alicePage } = await contextAs(browser, 'alice')

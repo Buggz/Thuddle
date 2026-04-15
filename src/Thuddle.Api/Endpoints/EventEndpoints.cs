@@ -13,6 +13,7 @@ public static class EventEndpoints
         app.MapGet("/api/events/{eventId:guid}", GetEvent).AllowAnonymous();
         app.MapPost("/api/events", CreateEvent).RequireAuthorization("events:write");
         app.MapPut("/api/events/{eventId:guid}", UpdateEvent).RequireAuthorization();
+        app.MapDelete("/api/events/{eventId:guid}", DeleteEvent).RequireAuthorization();
         app.MapPost("/api/events/{eventId:guid}/invitations", InviteUsers).RequireAuthorization();
         app.MapPost("/api/events/{eventId:guid}/join", JoinEvent).RequireAuthorization();
         app.MapPost("/api/events/{eventId:guid}/co-admins", AddCoAdmin).RequireAuthorization();
@@ -76,6 +77,28 @@ public static class EventEndpoints
         return user.FindFirstValue("sub")
             ?? user.FindFirstValue("sid")
             ?? user.FindFirstValue("email");
+    }
+
+    private static async Task<IResult> DeleteEvent(
+        Guid eventId,
+        ClaimsPrincipal user,
+        ThuddleDbContext db,
+        CancellationToken ct)
+    {
+        var keycloakId = GetKeycloakId(user);
+        if (keycloakId is null) return Results.Unauthorized();
+
+        var dbUser = await db.Users.FirstOrDefaultAsync(u => u.KeycloakId == keycloakId, ct);
+        if (dbUser is null) return Results.Unauthorized();
+
+        var evt = await db.Events.FirstOrDefaultAsync(e => e.Id == eventId, ct);
+        if (evt is null) return Results.NotFound();
+        if (evt.OwnerId != dbUser.Id) return Results.Forbid();
+
+        db.Events.Remove(evt);
+        await db.SaveChangesAsync(ct);
+
+        return Results.NoContent();
     }
 
     private static async Task<bool> IsEventAdmin(ThuddleDbContext db, Guid eventId, Guid userId, CancellationToken ct)

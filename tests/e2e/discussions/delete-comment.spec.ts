@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { test, expect } from '../helpers/fixtures'
 import { STORAGE_STATE, uid, futureDates, contextAs } from '../helpers/auth'
 
 /** Admin creates a public open event and returns its URL + id. */
@@ -87,8 +87,9 @@ async function createPostAndComment(
 }
 
 test.describe('Delete comment', () => {
-  test('admin can delete a comment', async ({ browser, baseURL }) => {
-    const { eventUrl } = await createEvent(browser, baseURL!)
+  test('admin can delete a comment', async ({ browser, baseURL, createdEvents }) => {
+    const { eventUrl, eventId } = await createEvent(browser, baseURL!)
+    createdEvents.push(eventId)
     const commentText = await createPostAndComment(browser, baseURL!, eventUrl)
 
     // Admin opens discussion and expands comments
@@ -114,8 +115,9 @@ test.describe('Delete comment', () => {
     await context.close()
   })
 
-  test('admin can cancel delete comment via confirm dialog', async ({ browser, baseURL }) => {
-    const { eventUrl } = await createEvent(browser, baseURL!)
+  test('admin can cancel delete comment via confirm dialog', async ({ browser, baseURL, createdEvents }) => {
+    const { eventUrl, eventId } = await createEvent(browser, baseURL!)
+    createdEvents.push(eventId)
     const commentText = await createPostAndComment(browser, baseURL!, eventUrl)
 
     const { context, page } = await contextAs(browser, 'admin')
@@ -137,8 +139,9 @@ test.describe('Delete comment', () => {
     await context.close()
   })
 
-  test('non-admin member does not see delete comment button', async ({ browser, baseURL }) => {
-    const { eventUrl } = await createEvent(browser, baseURL!)
+  test('non-admin member does not see delete comment button', async ({ browser, baseURL, createdEvents }) => {
+    const { eventUrl, eventId } = await createEvent(browser, baseURL!)
+    createdEvents.push(eventId)
     const commentText = await createPostAndComment(browser, baseURL!, eventUrl)
 
     // Alice (non-admin member) views the comment
@@ -154,8 +157,9 @@ test.describe('Delete comment', () => {
     await context.close()
   })
 
-  test('comment count decreases after deletion', async ({ browser, baseURL }) => {
-    const { eventUrl } = await createEvent(browser, baseURL!)
+  test('comment count decreases after deletion', async ({ browser, baseURL, createdEvents }) => {
+    const { eventUrl, eventId } = await createEvent(browser, baseURL!)
+    createdEvents.push(eventId)
     const commentText = await createPostAndComment(browser, baseURL!, eventUrl)
 
     const { context, page } = await contextAs(browser, 'admin')

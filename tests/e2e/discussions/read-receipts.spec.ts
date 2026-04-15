@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { test, expect } from '../helpers/fixtures'
 import { uid, futureDates, contextAs } from '../helpers/auth'
 
 /** Helper: admin creates a public event, posts in its discussion, returns eventUrl. */
@@ -50,8 +50,9 @@ async function createEventWithPost(
 }
 
 test.describe('Discussion read receipts', () => {
-  test('unread indicator shows on discussion tab for user who has not read', async ({ browser, baseURL }) => {
-    const { eventUrl } = await createEventWithPost(browser, baseURL!)
+  test('unread indicator shows on discussion tab for user who has not read', async ({ browser, baseURL, createdEvents }) => {
+    const { eventUrl, eventId } = await createEventWithPost(browser, baseURL!)
+    createdEvents.push(eventId)
 
     // Alice joins then navigates to the event detail
     const { context: aliceCtx, page: alicePage } = await contextAs(browser, 'alice')
@@ -70,8 +71,9 @@ test.describe('Discussion read receipts', () => {
     await aliceCtx.close()
   })
 
-  test('opening discussion tab clears the unread indicator', async ({ browser, baseURL }) => {
-    const { eventUrl } = await createEventWithPost(browser, baseURL!)
+  test('opening discussion tab clears the unread indicator', async ({ browser, baseURL, createdEvents }) => {
+    const { eventUrl, eventId } = await createEventWithPost(browser, baseURL!)
+    createdEvents.push(eventId)
 
     // Alice joins
     const { context: aliceCtx, page: alicePage } = await contextAs(browser, 'alice')
@@ -103,8 +105,9 @@ test.describe('Discussion read receipts', () => {
     await aliceCtx.close()
   })
 
-  test('new post after read creates a new unread indicator', async ({ browser, baseURL }) => {
-    const { eventUrl } = await createEventWithPost(browser, baseURL!)
+  test('new post after read creates a new unread indicator', async ({ browser, baseURL, createdEvents }) => {
+    const { eventUrl, eventId } = await createEventWithPost(browser, baseURL!)
+    createdEvents.push(eventId)
 
     // Alice joins and reads the discussion
     const { context: aliceCtx, page: alicePage } = await contextAs(browser, 'alice')
@@ -147,5 +150,85 @@ test.describe('Discussion read receipts', () => {
     await expect(alice2Page.getByTestId('discussion-unread-indicator')).toBeVisible()
 
     await alice2Ctx.close()
+  })
+
+  test('author own post does not create unread indicator on dashboard', async ({ browser, baseURL, createdEvents }) => {
+    const title = `OwnPost ${uid()}`
+    const { context: adminCtx, page: adminPage } = await contextAs(browser, 'admin')
+
+    // Create event
+    await adminPage.goto(baseURL!)
+    await adminPage.getByTestId('event-create-btn').waitFor({ state: 'visible', timeout: 20000 })
+    await adminPage.getByTestId('event-create-btn').click()
+
+    await adminPage.getByTestId('event-title-input').fill(title)
+    await adminPage.getByTestId('event-location-input').fill('Own Post Venue')
+
+    const dates = futureDates(8)
+    await adminPage.getByTestId('event-start-input').fill(dates.start)
+    await adminPage.getByTestId('event-end-input').fill(dates.end)
+
+    const createResp = adminPage.waitForResponse(
+      (r) => r.url().includes('/api/events') && r.request().method() === 'POST',
+    )
+    await adminPage.getByTestId('event-submit-btn').click()
+    const resp = await createResp
+    const body = await resp.json()
+    createdEvents.push(body.id)
+    const eventUrl = `${baseURL}/events/${body.id}`
+
+    // Navigate to event and create a discussion post
+    await adminPage.goto(eventUrl)
+    await adminPage.getByTestId('event-detail').waitFor({ state: 'visible', timeout: 20000 })
+    await adminPage.getByTestId('event-tab-discussion').click()
+
+    await adminPage.getByTestId('discussion-new-post-btn').click()
+    await adminPage.locator('.ProseMirror').click()
+    await adminPage.locator('.ProseMirror').fill(`My own post ${uid()}`)
+
+    const postResp = adminPage.waitForResponse(
+      (r) => r.url().includes('/discussion') && r.request().method() === 'POST',
+    )
+    await adminPage.getByTestId('discussion-submit-post-btn').click()
+    await postResp
+    await expect(adminPage.getByTestId('discussion-post')).toBeVisible()
+
+    // Return to dashboard and verify no unread indicator on the event card
+    await adminPage.goto(baseURL!)
+    const card = adminPage.getByTestId('event-card').filter({ hasText: title })
+    await expect(card).toBeVisible()
+    await expect(card.getByTestId('event-unread-indicator')).toBeHidden()
+
+    await adminCtx.close()
+  })
+
+  test('author own comment does not create unread indicator on dashboard', async ({ browser, baseURL, createdEvents }) => {
+    // Create event with a post first
+    const { eventUrl, eventId, title } = await createEventWithPost(browser, baseURL!)
+    createdEvents.push(eventId)
+
+    // Admin reads the discussion (creates read receipt), then adds a comment
+    const { context: adminCtx, page: adminPage } = await contextAs(browser, 'admin')
+    await adminPage.goto(eventUrl)
+    await adminPage.getByTestId('event-detail').waitFor({ state: 'visible', timeout: 20000 })
+    await adminPage.getByTestId('event-tab-discussion').click()
+    await expect(adminPage.getByTestId('discussion-post')).toBeVisible()
+
+    // Expand comments and add a comment to the post
+    await adminPage.getByTestId('discussion-toggle-comments-btn').click()
+    await adminPage.getByTestId('discussion-comment-input').fill(`My own comment ${uid()}`)
+    const commentResp = adminPage.waitForResponse(
+      (r) => r.url().includes('/comments') && r.request().method() === 'POST',
+    )
+    await adminPage.getByTestId('discussion-comment-reply-btn').click()
+    await commentResp
+
+    // Return to dashboard and verify no unread indicator on the event card
+    await adminPage.goto(baseURL!)
+    const card = adminPage.getByTestId('event-card').filter({ hasText: title })
+    await expect(card).toBeVisible()
+    await expect(card.getByTestId('event-unread-indicator')).toBeHidden()
+
+    await adminCtx.close()
   })
 })

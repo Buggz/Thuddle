@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { test, expect } from '../helpers/fixtures'
 import { STORAGE_STATE, uid, futureDates, contextAs } from '../helpers/auth'
 
 /** Admin creates a public open event and returns its URL + id. */
@@ -44,8 +44,9 @@ async function goToDiscussionSettings(page: import('@playwright/test').Page, man
 
 test.describe('Discussion settings', () => {
   test.describe('positive - save settings', () => {
-    test('admin can change member post policy to require approval', async ({ browser, baseURL }) => {
-      const { manageUrl, eventUrl } = await createEvent(browser, baseURL!)
+    test('admin can change member post policy to require approval', async ({ browser, baseURL, createdEvents }) => {
+      const { manageUrl, eventUrl, eventId } = await createEvent(browser, baseURL!)
+      createdEvents.push(eventId)
 
       const { context, page } = await contextAs(browser, 'admin')
       await goToDiscussionSettings(page, manageUrl)
@@ -68,8 +69,9 @@ test.describe('Discussion settings', () => {
       await context.close()
     })
 
-    test('admin can enable non-member posts and set policy', async ({ browser, baseURL }) => {
-      const { manageUrl } = await createEvent(browser, baseURL!)
+    test('admin can enable non-member posts and set policy', async ({ browser, baseURL, createdEvents }) => {
+      const { manageUrl, eventId } = await createEvent(browser, baseURL!)
+      createdEvents.push(eventId)
 
       const { context, page } = await contextAs(browser, 'admin')
       await goToDiscussionSettings(page, manageUrl)
@@ -102,8 +104,9 @@ test.describe('Discussion settings', () => {
       await context.close()
     })
 
-    test('admin can toggle allow non-member comments', async ({ browser, baseURL }) => {
-      const { manageUrl } = await createEvent(browser, baseURL!)
+    test('admin can toggle allow non-member comments', async ({ browser, baseURL, createdEvents }) => {
+      const { manageUrl, eventId } = await createEvent(browser, baseURL!)
+      createdEvents.push(eventId)
 
       const { context, page } = await contextAs(browser, 'admin')
       await goToDiscussionSettings(page, manageUrl)
@@ -131,8 +134,9 @@ test.describe('Discussion settings', () => {
   })
 
   test.describe('positive - moderation effects', () => {
-    test('member post requires approval when policy is set', async ({ browser, baseURL }) => {
-      const { manageUrl, eventUrl } = await createEvent(browser, baseURL!)
+    test('member post requires approval when policy is set', async ({ browser, baseURL, createdEvents }) => {
+      const { manageUrl, eventUrl, eventId } = await createEvent(browser, baseURL!)
+      createdEvents.push(eventId)
 
       // Admin sets member post policy to "Require approval"
       const { context: adminCtx, page: adminPage } = await contextAs(browser, 'admin')
@@ -194,8 +198,9 @@ test.describe('Discussion settings', () => {
       await admin2Ctx.close()
     })
 
-    test('non-member cannot post when allowNonMemberPosts is disabled', async ({ browser, baseURL }) => {
-      const { eventUrl } = await createEvent(browser, baseURL!)
+    test('non-member cannot post when allowNonMemberPosts is disabled', async ({ browser, baseURL, createdEvents }) => {
+      const { eventUrl, eventId } = await createEvent(browser, baseURL!)
+      createdEvents.push(eventId)
 
       // Bob does NOT join — visits discussion directly
       const { context: bobCtx, page: bobPage } = await contextAs(browser, 'bob')
@@ -210,8 +215,9 @@ test.describe('Discussion settings', () => {
       await bobCtx.close()
     })
 
-    test('non-member can post when allowNonMemberPosts is enabled', async ({ browser, baseURL }) => {
-      const { manageUrl, eventUrl } = await createEvent(browser, baseURL!)
+    test('non-member can post when allowNonMemberPosts is enabled', async ({ browser, baseURL, createdEvents }) => {
+      const { manageUrl, eventUrl, eventId } = await createEvent(browser, baseURL!)
+      createdEvents.push(eventId)
 
       // Admin enables non-member posts
       const { context: adminCtx, page: adminPage } = await contextAs(browser, 'admin')
@@ -253,8 +259,9 @@ test.describe('Discussion settings', () => {
   })
 
   test.describe('negative - access control', () => {
-    test('non-admin cannot access discussion settings', async ({ browser, baseURL }) => {
-      const { manageUrl, eventUrl } = await createEvent(browser, baseURL!)
+    test('non-admin cannot access discussion settings', async ({ browser, baseURL, createdEvents }) => {
+      const { manageUrl, eventUrl, eventId } = await createEvent(browser, baseURL!)
+      createdEvents.push(eventId)
 
       // Alice joins the event
       const { context: aliceCtx, page: alicePage } = await contextAs(browser, 'alice')

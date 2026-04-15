@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { test, expect } from '../helpers/fixtures'
 import { STORAGE_STATE, uid, futureDates, contextAs } from '../helpers/auth'
 
 /** Helper: admin creates a public open event and returns the event URL. */
@@ -6,7 +6,7 @@ async function createPublicEvent(
   browser: import('@playwright/test').Browser,
   baseURL: string,
   name: string,
-): Promise<string> {
+): Promise<{ eventUrl: string; eventId: string }> {
   const { context, page } = await contextAs(browser, 'admin')
   await page.goto(baseURL)
   await page.getByTestId('event-create-btn').waitFor({ state: 'visible', timeout: 20000 })
@@ -28,7 +28,7 @@ async function createPublicEvent(
   const eventUrl = `${baseURL}/events/${body.id}`
 
   await context.close()
-  return eventUrl
+  return { eventUrl, eventId: body.id }
 }
 
 /** Helper: admin creates an invite-only event and returns the event URL. */
@@ -36,7 +36,7 @@ async function createInviteOnlyEvent(
   browser: import('@playwright/test').Browser,
   baseURL: string,
   name: string,
-): Promise<string> {
+): Promise<{ eventUrl: string; eventId: string }> {
   const { context, page } = await contextAs(browser, 'admin')
   await page.goto(baseURL)
   await page.getByTestId('event-create-btn').waitFor({ state: 'visible', timeout: 20000 })
@@ -59,14 +59,15 @@ async function createInviteOnlyEvent(
   const eventUrl = `${baseURL}/events/${body.id}`
 
   await context.close()
-  return eventUrl
+  return { eventUrl, eventId: body.id }
 }
 
 test.describe('Join event', () => {
   test.describe('positive', () => {
-    test('authenticated user can join a public open event', async ({ browser, baseURL }) => {
+    test('authenticated user can join a public open event', async ({ browser, baseURL, createdEvents }) => {
       const name = `Join ${uid()}`
-      const eventUrl = await createPublicEvent(browser, baseURL!, name)
+      const { eventUrl, eventId } = await createPublicEvent(browser, baseURL!, name)
+      createdEvents.push(eventId)
 
       // Alice joins
       const { context: aliceCtx, page: alicePage } = await contextAs(browser, 'alice')
@@ -81,9 +82,10 @@ test.describe('Join event', () => {
   })
 
   test.describe('negative', () => {
-    test('anonymous user sees disabled join button', async ({ browser, baseURL }) => {
+    test('anonymous user sees disabled join button', async ({ browser, baseURL, createdEvents }) => {
       const name = `AnonJoin ${uid()}`
-      const eventUrl = await createPublicEvent(browser, baseURL!, name)
+      const { eventUrl, eventId } = await createPublicEvent(browser, baseURL!, name)
+      createdEvents.push(eventId)
 
       const context = await browser.newContext({ storageState: { cookies: [], origins: [] } })
       const page = await context.newPage()
@@ -94,9 +96,10 @@ test.describe('Join event', () => {
       await context.close()
     })
 
-    test('uninvited user sees invite-only message', async ({ browser, baseURL }) => {
+    test('uninvited user sees invite-only message', async ({ browser, baseURL, createdEvents }) => {
       const name = `InvOnly ${uid()}`
-      const eventUrl = await createInviteOnlyEvent(browser, baseURL!, name)
+      const { eventUrl, eventId } = await createInviteOnlyEvent(browser, baseURL!, name)
+      createdEvents.push(eventId)
 
       // Bob (not invited) visits
       const { context: bobCtx, page: bobPage } = await contextAs(browser, 'bob')

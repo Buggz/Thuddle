@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { test, expect } from '../helpers/fixtures'
 import { uid, futureDates, contextAs } from '../helpers/auth'
 
 /** Admin creates event, sets member post policy to require approval. */
@@ -75,8 +75,9 @@ async function aliceJoinsAndPosts(
 }
 
 test.describe('Post approval', () => {
-  test('pending post shows pending badge for admin', async ({ browser, baseURL }) => {
-    const { eventUrl } = await createModerationEvent(browser, baseURL!)
+  test('pending post shows pending badge for admin', async ({ browser, baseURL, createdEvents }) => {
+    const { eventUrl, eventId } = await createModerationEvent(browser, baseURL!)
+    createdEvents.push(eventId)
     await aliceJoinsAndPosts(browser, eventUrl)
 
     // Admin views the discussion
@@ -93,8 +94,9 @@ test.describe('Post approval', () => {
     await context.close()
   })
 
-  test('admin can unapprove a previously approved post', async ({ browser, baseURL }) => {
-    const { eventUrl } = await createModerationEvent(browser, baseURL!)
+  test('admin can unapprove a previously approved post', async ({ browser, baseURL, createdEvents }) => {
+    const { eventUrl, eventId } = await createModerationEvent(browser, baseURL!)
+    createdEvents.push(eventId)
     await aliceJoinsAndPosts(browser, eventUrl)
 
     const { context, page } = await contextAs(browser, 'admin')
@@ -123,8 +125,9 @@ test.describe('Post approval', () => {
     await context.close()
   })
 
-  test('pending post is hidden from other non-admin users', async ({ browser, baseURL }) => {
-    const { eventUrl } = await createModerationEvent(browser, baseURL!)
+  test('pending post is hidden from other non-admin users', async ({ browser, baseURL, createdEvents }) => {
+    const { eventUrl, eventId } = await createModerationEvent(browser, baseURL!)
+    createdEvents.push(eventId)
     await aliceJoinsAndPosts(browser, eventUrl)
 
     // Bob joins and checks discussion — should NOT see alice's pending post
@@ -141,8 +144,9 @@ test.describe('Post approval', () => {
     await bobCtx.close()
   })
 
-  test('author can see their own pending post', async ({ browser, baseURL }) => {
-    const { eventUrl } = await createModerationEvent(browser, baseURL!)
+  test('author can see their own pending post', async ({ browser, baseURL, createdEvents }) => {
+    const { eventUrl, eventId } = await createModerationEvent(browser, baseURL!)
+    createdEvents.push(eventId)
     const { postContent } = await aliceJoinsAndPosts(browser, eventUrl)
 
     // Alice revisits — she should see her own pending post
@@ -160,8 +164,9 @@ test.describe('Post approval', () => {
     await context.close()
   })
 
-  test('admin posts are always auto-approved regardless of policy', async ({ browser, baseURL }) => {
-    const { eventUrl } = await createModerationEvent(browser, baseURL!)
+  test('admin posts are always auto-approved regardless of policy', async ({ browser, baseURL, createdEvents }) => {
+    const { eventUrl, eventId } = await createModerationEvent(browser, baseURL!)
+    createdEvents.push(eventId)
 
     // Admin creates a post — should be auto-approved
     const { context, page } = await contextAs(browser, 'admin')
@@ -188,8 +193,9 @@ test.describe('Post approval', () => {
     await context.close()
   })
 
-  test('approved post becomes visible to other users', async ({ browser, baseURL }) => {
-    const { eventUrl } = await createModerationEvent(browser, baseURL!)
+  test('approved post becomes visible to other users', async ({ browser, baseURL, createdEvents }) => {
+    const { eventUrl, eventId } = await createModerationEvent(browser, baseURL!)
+    createdEvents.push(eventId)
     const { postContent } = await aliceJoinsAndPosts(browser, eventUrl)
 
     // Admin approves the post

@@ -190,6 +190,25 @@ public static class DiscussionEndpoints
         };
 
         db.DiscussionPosts.Add(post);
+
+        // Mark the author as having read up to this point so their own post doesn't show as unread
+        var receipt = await db.DiscussionReadReceipts
+            .FirstOrDefaultAsync(r => r.EventId == eventId && r.UserId == dbUser.Id, ct);
+        if (receipt is not null)
+        {
+            receipt.LastReadAt = post.CreatedAt;
+            db.DiscussionReadReceipts.Update(receipt);
+        }
+        else
+        {
+            db.DiscussionReadReceipts.Add(new DiscussionReadReceipt
+            {
+                EventId = eventId,
+                UserId = dbUser.Id,
+                LastReadAt = post.CreatedAt
+            });
+        }
+
         await db.SaveChangesAsync(ct);
 
         // Send email if requested and user is admin
@@ -429,6 +448,25 @@ public static class DiscussionEndpoints
         };
 
         db.DiscussionComments.Add(comment);
+
+        // Mark the author as having read up to this point so their own comment doesn't show as unread
+        var receipt = await db.DiscussionReadReceipts
+            .FirstOrDefaultAsync(r => r.EventId == eventId && r.UserId == dbUser.Id, ct);
+        if (receipt is not null)
+        {
+            receipt.LastReadAt = comment.CreatedAt;
+            db.DiscussionReadReceipts.Update(receipt);
+        }
+        else
+        {
+            db.DiscussionReadReceipts.Add(new DiscussionReadReceipt
+            {
+                EventId = eventId,
+                UserId = dbUser.Id,
+                LastReadAt = comment.CreatedAt
+            });
+        }
+
         await db.SaveChangesAsync(ct);
 
         return Results.Created($"/api/events/{eventId}/discussion/{postId}/comments/{comment.Id}", new

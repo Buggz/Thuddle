@@ -1,11 +1,11 @@
-import { test, expect } from '@playwright/test'
+import { test, expect } from '../helpers/fixtures'
 import { STORAGE_STATE, uid, futureDates } from '../helpers/auth'
 
 test.describe('Create event', () => {
   test.describe('positive', () => {
     test.use({ storageState: STORAGE_STATE.admin })
 
-    test('admin can create a public open event', async ({ page, baseURL }) => {
+    test('admin can create a public open event', async ({ page, baseURL, createdEvents }) => {
       const name = `Public ${uid()}`
 
       await page.goto(baseURL!)
@@ -28,11 +28,13 @@ test.describe('Create event', () => {
       await page.getByTestId('event-submit-btn').click()
       const response = await responsePromise
       expect(response.status()).toBe(201)
+      const body = await response.json()
+      createdEvents.push(body.id)
 
       await expect(page).toHaveURL(baseURL!, { timeout: 15000 })
     })
 
-    test('admin can create an invite-only event', async ({ page, baseURL }) => {
+    test('admin can create an invite-only event', async ({ page, baseURL, createdEvents }) => {
       const name = `InviteOnly ${uid()}`
 
       await page.goto(baseURL!)
@@ -53,11 +55,13 @@ test.describe('Create event', () => {
       await page.getByTestId('event-submit-btn').click()
       const response = await responsePromise
       expect(response.status()).toBe(201)
+      const body2 = await response.json()
+      createdEvents.push(body2.id)
 
       await expect(page).toHaveURL(baseURL!, { timeout: 15000 })
     })
 
-    test('admin can create an event with capacity', async ({ page, baseURL }) => {
+    test('admin can create an event with capacity', async ({ page, baseURL, createdEvents }) => {
       const name = `Capacity ${uid()}`
 
       await page.goto(baseURL!)
@@ -78,6 +82,8 @@ test.describe('Create event', () => {
       await page.getByTestId('event-submit-btn').click()
       const response = await responsePromise
       expect(response.status()).toBe(201)
+      const body3 = await response.json()
+      createdEvents.push(body3.id)
 
       await expect(page).toHaveURL(baseURL!, { timeout: 15000 })
     })

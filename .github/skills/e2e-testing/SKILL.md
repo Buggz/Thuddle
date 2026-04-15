@@ -448,6 +448,80 @@ await page.goto(`${baseURL}/events/${body.id}`)
 await expect(page.getByTestId('event-title')).toHaveText(name)
 ```
 
+## Event cleanup: `createdEvents` fixture
+
+Tests that create events **must** clean them up to keep the database tidy. Without cleanup, events accumulate across test runs and push newer events off page 1 of the dashboard, breaking GUI assertions.
+
+### How it works
+
+A custom Playwright fixture in `helpers/fixtures.ts` provides a `createdEvents: string[]` array. Tests push event IDs into it; after the test finishes (pass or fail), the fixture automatically deletes them via the `DELETE /api/events/{eventId}` endpoint using a JWT obtained from Keycloak's direct-access grant.
+
+### Import from fixtures, not @playwright/test
+
+All test files that create events **must** import `test` and `expect` from the custom fixture instead of `@playwright/test`:
+
+```typescript
+// ✅ Correct — uses cleanup fixture
+import { test, expect } from '../helpers/fixtures'
+
+// ❌ Wrong — no cleanup
+import { test, expect } from '@playwright/test'
+```
+
+### Tracking created events
+
+After creating an event, capture the event ID from the API response and push it:
+
+```typescript
+test('admin can create an event', async ({ page, baseURL, createdEvents }) => {
+  // ... fill form ...
+  const responsePromise = page.waitForResponse(
+    (r) => r.url().includes('/api/events') && r.request().method() === 'POST',
+  )
+  await page.getByTestId('event-submit-btn').click()
+  const response = await responsePromise
+  const body = await response.json()
+  createdEvents.push(body.id)  // ← track for cleanup
+})
+```
+
+For helper functions that create events, return the event ID alongside the URL:
+
+```typescript
+async function createEvent(browser: Browser, baseURL: string): Promise<{ eventUrl: string; eventId: string }> {
+  // ... create event, capture response ...
+  const body = await resp.json()
+  return { eventUrl: `${baseURL}/events/${body.id}`, eventId: body.id }
+}
+
+test('something with an event', async ({ browser, baseURL, createdEvents }) => {
+  const { eventUrl, eventId } = await createEvent(browser, baseURL!)
+  createdEvents.push(eventId)
+  // ... test logic ...
+})
+```
+
+### Tests that don't create events
+
+Tests that don't create events (e.g., `login.spec.ts`, `edit-profile.spec.ts`) can continue importing from `@playwright/test` or from the fixture — the `createdEvents` param is optional to destructure.
+
+### Self-contained tests for dashboard assertions
+
+Because cleanup removes events after each test, tests that assert on the dashboard event list **must create their own event first** — don't assume events from other tests still exist:
+
+```typescript
+test('anonymous user can see public events', async ({ browser, page, baseURL, createdEvents }) => {
+  // Create an event as admin first
+  const { context: adminCtx, page: adminPage } = await contextAs(browser, 'admin')
+  // ... create event, push ID to createdEvents ...
+  await adminCtx.close()
+
+  // Now verify the anonymous user can see it
+  await page.goto(baseURL!)
+  await expect(page.getByTestId('event-list')).toBeVisible()
+})
+```
+
 ## Concurrency: single worker
 
 Run with `workers: 1` in the Playwright config. Multiple workers cause concurrent Keycloak SSO redirects for the same user session, leading to intermittent 403 errors on API calls. The storageState pattern avoids per-test login overhead, so single-worker execution is fast (~9 seconds for 22 tests).
@@ -460,8 +534,9 @@ Run with `workers: 1` in the Playwright config. Multiple workers cause concurren
 4. **Use storageState for auth** — authenticate once in setup project, reuse session cookies; only `auth/login.spec.ts` should use direct `loginAs()`
 5. **Use `uid()` for all test data names** — never hardcode entity names; collisions cause flaky assertions
 6. **Verify creation via API response** — don't rely on paginated dashboard lists to confirm a create succeeded
-7. **Run with `workers: 1`** — concurrent SSO redirects cause 403 errors
-8. **Wait for SSO after navigation** — `waitFor('user-display-name')` or `waitFor('event-create-btn')` before interacting
-9. **Start the full Aspire stack** before running tests — these are true end-to-end tests
-10. **Keep tests independent** — each test should create its own data; don't rely on test execution order
-11. **Use the seeded users consistently** — `testuser` for admin, `bob` for uninvited/negative cases
+7. **Clean up created events** — import from `helpers/fixtures` and push event IDs into `createdEvents`; never leave test data behind
+8. **Run with `workers: 1`** — concurrent SSO redirects cause 403 errors
+9. **Wait for SSO after navigation** — `waitFor('user-display-name')` or `waitFor('event-create-btn')` before interacting
+10. **Start the full Aspire stack** before running tests — these are true end-to-end tests
+11. **Keep tests independent** — each test should create its own data; don't rely on test execution order or leftover data from other tests
+12. **Use the seeded users consistently** — `testuser` for admin, `bob` for uninvited/negative cases
