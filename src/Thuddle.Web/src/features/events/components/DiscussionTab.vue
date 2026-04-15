@@ -358,7 +358,7 @@ onMounted(loadPosts)
               <p class="text-xs text-gray-400">{{ formatRelative(post.createdAt) }}</p>
             </div>
             <div class="flex items-center gap-2">
-              <span v-if="!post.isApproved"
+              <span v-if="!post.isApproved" data-testid="discussion-pending-badge"
                 class="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
                 Pending
               </span>
