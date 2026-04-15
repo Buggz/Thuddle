@@ -18,6 +18,8 @@ public class ThuddleDbContext(DbContextOptions<ThuddleDbContext> options) : DbCo
     {
         base.OnModelCreating(modelBuilder);
 
+        modelBuilder.HasPostgresExtension("pg_trgm");
+
         modelBuilder.Entity<User>(entity =>
         {
             entity.HasIndex(u => u.KeycloakId).IsUnique();

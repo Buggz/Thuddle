@@ -24,6 +24,7 @@ public static class EventEndpoints
         app.MapPost("/api/events/{eventId:guid}/picture", UploadEventPicture).RequireAuthorization().DisableAntiforgery();
 
         app.MapGet("/api/users/exists", UserExistsByEmail).RequireAuthorization();
+        app.MapGet("/api/users/search", SearchUsers).RequireAuthorization();
     }
 
     // GET /api/users/exists?email=...
@@ -34,6 +35,40 @@ public static class EventEndpoints
 
         var exists = await db.Users.AsNoTracking().AnyAsync(u => u.Email.ToLower() == email.ToLower(), ct);
         return Results.Ok(new { exists });
+    }
+
+    // GET /api/users/search?q=...
+    private static async Task<IResult> SearchUsers(
+        string q,
+        ClaimsPrincipal user,
+        ThuddleDbContext db,
+        CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(q) || q.Length < 2)
+            return Results.Ok(Array.Empty<object>());
+
+        var keycloakId = GetKeycloakId(user);
+        var pattern = $"%{q}%";
+
+        var results = await db.Users
+            .AsNoTracking()
+            .Where(u => u.KeycloakId != keycloakId
+                && (EF.Functions.ILike(u.Email, pattern)
+                    || (u.DisplayName != null && EF.Functions.ILike(u.DisplayName, pattern))
+                    || (u.FullName != null && EF.Functions.ILike(u.FullName, pattern))))
+            .OrderByDescending(u => EF.Functions.TrigramsSimilarity(u.Email, q))
+            .Take(10)
+            .Select(u => new
+            {
+                u.Id,
+                u.Email,
+                u.DisplayName,
+                u.FullName,
+                HasProfilePicture = u.ScaledPicturePath != null
+            })
+            .ToListAsync(ct);
+
+        return Results.Ok(results);
     }
 
     private static string? GetKeycloakId(ClaimsPrincipal user)

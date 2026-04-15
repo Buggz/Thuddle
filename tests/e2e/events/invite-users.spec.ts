@@ -81,19 +81,44 @@ async function goToAttendeesTab(page: import('@playwright/test').Page, manageUrl
   await page.getByTestId('manage-tab-attendees').click()
 }
 
+/** Type into the user search combobox and pick a result from the dropdown. */
+async function searchAndSelectUser(
+  page: import('@playwright/test').Page,
+  query: string,
+  resultText: string,
+) {
+  const combobox = page.getByTestId('user-search-combobox').first()
+  const input = combobox.getByTestId('user-search-input')
+  await input.fill(query)
+  await combobox.getByTestId('user-search-results').waitFor({ state: 'visible', timeout: 10000 })
+  await combobox.getByTestId('user-search-result').filter({ hasText: resultText }).click()
+}
+
+/** Type into the user search combobox and pick the "invite unknown email" option. */
+async function searchAndSelectUnknownEmail(
+  page: import('@playwright/test').Page,
+  email: string,
+) {
+  const combobox = page.getByTestId('user-search-combobox').first()
+  const input = combobox.getByTestId('user-search-input')
+  await input.fill(email)
+  await combobox.getByTestId('user-search-results').waitFor({ state: 'visible', timeout: 10000 })
+  await combobox.getByTestId('user-search-invite-option').click()
+}
+
 test.describe('Invite users', () => {
   test.describe('positive', () => {
-    test('admin can invite a user by email', async ({ browser, baseURL }) => {
+    test('admin can search and invite a known user', async ({ browser, baseURL }) => {
       const { manageUrl } = await createInviteOnlyEvent(browser, baseURL!)
 
       const { context, page } = await contextAs(browser, 'admin')
       await goToAttendeesTab(page, manageUrl)
 
-      // Fill an email address
-      await page.getByTestId('manage-invite-email-input').fill('alice@thuddle.dev')
+      // Search for alice and select her
+      await searchAndSelectUser(page, 'alice', 'alice@thuddle.dev')
 
-      // Wait for user-exists check
-      await expect(page.getByTestId('manage-invite-user-exists')).toBeVisible({ timeout: 10000 })
+      // Chip should appear
+      await expect(page.getByTestId('manage-invite-chip')).toBeVisible()
 
       // Send invitation
       const inviteResp = page.waitForResponse(
@@ -117,14 +142,14 @@ test.describe('Invite users', () => {
       const { context, page } = await contextAs(browser, 'admin')
       await goToAttendeesTab(page, manageUrl)
 
-      // Fill first email
-      await page.getByTestId('manage-invite-email-input').first().fill('alice@thuddle.dev')
+      // Search and select alice
+      await searchAndSelectUser(page, 'alice', 'alice@thuddle.dev')
 
-      // Add another row
-      await page.getByTestId('manage-invite-add-btn').click()
+      // Search and select bob
+      await searchAndSelectUser(page, 'bob', 'bob@thuddle.dev')
 
-      // Fill second email
-      await page.getByTestId('manage-invite-email-input').last().fill('bob@thuddle.dev')
+      // Both chips visible
+      await expect(page.getByTestId('manage-invite-chip')).toHaveCount(2)
 
       // Send invitations
       const inviteResp = page.waitForResponse(
@@ -147,7 +172,7 @@ test.describe('Invite users', () => {
       // Admin invites alice
       const { context: adminCtx, page: adminPage } = await contextAs(browser, 'admin')
       await goToAttendeesTab(adminPage, manageUrl)
-      await adminPage.getByTestId('manage-invite-email-input').fill('alice@thuddle.dev')
+      await searchAndSelectUser(adminPage, 'alice', 'alice@thuddle.dev')
       const inviteResp = adminPage.waitForResponse(
         (r) => r.url().includes('/invitations') && r.request().method() === 'POST',
       )
@@ -171,7 +196,7 @@ test.describe('Invite users', () => {
       // Admin invites alice
       const { context: adminCtx, page: adminPage } = await contextAs(browser, 'admin')
       await goToAttendeesTab(adminPage, manageUrl)
-      await adminPage.getByTestId('manage-invite-email-input').fill('alice@thuddle.dev')
+      await searchAndSelectUser(adminPage, 'alice', 'alice@thuddle.dev')
       const inviteResp = adminPage.waitForResponse(
         (r) => r.url().includes('/invitations') && r.request().method() === 'POST',
       )
@@ -198,33 +223,66 @@ test.describe('Invite users', () => {
       await adminCtx2.close()
     })
 
-    test('email lookup shows "User exists" for known user', async ({ browser, baseURL }) => {
+    test('search shows matching users in dropdown', async ({ browser, baseURL }) => {
       const { manageUrl } = await createPublicEvent(browser, baseURL!)
 
       const { context, page } = await contextAs(browser, 'admin')
       await goToAttendeesTab(page, manageUrl)
 
-      await page.getByTestId('manage-invite-email-input').fill('alice@thuddle.dev')
-      await expect(page.getByTestId('manage-invite-user-exists')).toBeVisible({ timeout: 10000 })
+      const combobox = page.getByTestId('user-search-combobox').first()
+      await combobox.getByTestId('user-search-input').fill('alice')
+      await combobox.getByTestId('user-search-results').waitFor({ state: 'visible', timeout: 10000 })
+      await expect(combobox.getByTestId('user-search-result')).toBeVisible()
+      await expect(combobox.getByTestId('user-search-result').first()).toContainText('alice@thuddle.dev')
 
       await context.close()
     })
 
-    test('email lookup shows "No user" for unknown email', async ({ browser, baseURL }) => {
+    test('typing unknown email shows invite option', async ({ browser, baseURL }) => {
       const { manageUrl } = await createPublicEvent(browser, baseURL!)
 
       const { context, page } = await contextAs(browser, 'admin')
       await goToAttendeesTab(page, manageUrl)
 
-      await page.getByTestId('manage-invite-email-input').fill(`unknown-${uid()}@example.com`)
-      await expect(page.getByTestId('manage-invite-no-user')).toBeVisible({ timeout: 10000 })
+      const unknownEmail = `unknown-${uid()}@example.com`
+      const combobox = page.getByTestId('user-search-combobox').first()
+      await combobox.getByTestId('user-search-input').fill(unknownEmail)
+      await combobox.getByTestId('user-search-results').waitFor({ state: 'visible', timeout: 10000 })
+      await expect(combobox.getByTestId('user-search-invite-option')).toBeVisible()
+      await expect(combobox.getByTestId('user-search-invite-option')).toContainText(unknownEmail)
+
+      await context.close()
+    })
+
+    test('admin can invite unknown email', async ({ browser, baseURL }) => {
+      const { manageUrl } = await createPublicEvent(browser, baseURL!)
+
+      const { context, page } = await contextAs(browser, 'admin')
+      await goToAttendeesTab(page, manageUrl)
+
+      const unknownEmail = `unknown-${uid()}@example.com`
+      await searchAndSelectUnknownEmail(page, unknownEmail)
+
+      // Chip appears
+      await expect(page.getByTestId('manage-invite-chip')).toBeVisible()
+      await expect(page.getByTestId('manage-invite-chip')).toContainText(unknownEmail)
+
+      // Send invitation
+      const inviteResp = page.waitForResponse(
+        (r) => r.url().includes('/invitations') && r.request().method() === 'POST',
+      )
+      await page.getByTestId('manage-invite-send-btn').click()
+      await inviteResp
+
+      await expect(page.getByTestId('manage-invite-success')).toBeVisible({ timeout: 5000 })
+      await expect(page.getByTestId('manage-pending-invitation')).toBeVisible()
 
       await context.close()
     })
   })
 
   test.describe('negative', () => {
-    test('send button is disabled when email is empty', async ({ browser, baseURL }) => {
+    test('send button is disabled when no users are selected', async ({ browser, baseURL }) => {
       const { manageUrl } = await createPublicEvent(browser, baseURL!)
 
       const { context, page } = await contextAs(browser, 'admin')

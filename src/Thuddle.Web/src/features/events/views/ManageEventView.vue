@@ -5,6 +5,7 @@ import { useApi } from '@/shared/composables/useApi'
 import RichTextEditor from '@/shared/components/RichTextEditor.vue'
 import ImageCropper from '@/features/profile/components/ImageCropper.vue'
 import Spinner from '@/shared/components/Spinner.vue'
+import UserSearchComboBox from '@/shared/components/UserSearchComboBox.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -46,7 +47,6 @@ const loadingAttendees = shallowRef(true)
 const attendeesError = shallowRef(null)
 
 // Co-admin form
-const newCoAdminEmail = ref('')
 const addingCoAdmin = shallowRef(false)
 const coAdminError = shallowRef(null)
 
@@ -69,55 +69,35 @@ const error = shallowRef(null)
 const hasCost = computed(() => eventData.value?.cost != null && eventData.value.cost > 0)
 
 // Invitation form state
-let nextInviteeId = 1
-const invitees = ref([
-  { id: nextInviteeId++, email: '', exists: null, loading: false, error: null }
-])
+const selectedInvitees = ref([])
 const inviting = shallowRef(false)
 const inviteError = shallowRef(null)
 const inviteSuccess = shallowRef(false)
 
-function addInvitee() {
-  invitees.value.push({ id: nextInviteeId++, email: '', exists: null, loading: false, error: null })
-}
-function removeInvitee(invitee) {
-  if (inviteeTimers.has(invitee.id)) clearTimeout(inviteeTimers.get(invitee.id))
-  inviteeTimers.delete(invitee.id)
-  if (invitees.value.length > 1) invitees.value = invitees.value.filter(i => i.id !== invitee.id)
+const excludedInviteEmails = computed(() => {
+  const emails = selectedInvitees.value.map(i => i.email.toLowerCase())
+  for (const a of attendees.value) emails.push(a.email.toLowerCase())
+  for (const inv of pendingInvitations.value) emails.push(inv.email.toLowerCase())
+  return emails
+})
+
+function onInviteeSelect(item) {
+  const email = item.email.toLowerCase()
+  if (selectedInvitees.value.some(i => i.email.toLowerCase() === email)) return
+  selectedInvitees.value.push(item)
 }
 
-const inviteeTimers = new Map()
-function onInviteeInput(invitee) {
-  invitee.exists = null
-  invitee.error = null
-  if (inviteeTimers.has(invitee.id)) clearTimeout(inviteeTimers.get(invitee.id))
-  if (!invitee.email || !invitee.email.includes('@')) {
-    invitee.loading = false
-    return
-  }
-  invitee.loading = true
-  inviteeTimers.set(invitee.id, setTimeout(async () => {
-    try {
-      const res = await authFetch(`/api/users/exists?email=${encodeURIComponent(invitee.email)}`)
-      const data = await res.json()
-      invitee.exists = !!data.exists
-      invitee.error = null
-    } catch (err) {
-      invitee.error = 'Error checking user.'
-      invitee.exists = null
-    } finally {
-      invitee.loading = false
-    }
-  }, 500))
+function removeSelectedInvitee(item) {
+  selectedInvitees.value = selectedInvitees.value.filter(i => i.email !== item.email)
 }
 
 async function inviteUsers() {
   inviting.value = true
   inviteError.value = null
   inviteSuccess.value = false
-  const emails = invitees.value.map(i => i.email.trim()).filter(e => e)
+  const emails = selectedInvitees.value.map(i => i.email.trim()).filter(e => e)
   if (emails.length === 0) {
-    inviteError.value = 'Please enter at least one email.'
+    inviteError.value = 'Please add at least one user.'
     inviting.value = false
     return
   }
@@ -129,9 +109,7 @@ async function inviteUsers() {
     })
     inviteSuccess.value = true
     setTimeout(() => { inviteSuccess.value = false }, 3000)
-    // Reset invitees
-    invitees.value = [{ id: nextInviteeId++, email: '', exists: null, loading: false, error: null }]
-    // Refresh attendees list to show new pending invitations
+    selectedInvitees.value = []
     await loadAttendees()
   } catch (err) {
     inviteError.value = err.message || 'Failed to send invitations.'
@@ -260,19 +238,22 @@ async function togglePaid(attendee) {
   }
 }
 
-async function addCoAdmin() {
-  if (!newCoAdminEmail.value.trim()) return
+const excludedCoAdminEmails = computed(() => {
+  return coAdmins.value.map(c => c.email.toLowerCase())
+})
+
+async function onCoAdminSelect(item) {
+  if (item.type !== 'user') return
   addingCoAdmin.value = true
   coAdminError.value = null
   try {
     const res = await authFetch(`/api/events/${eventId}/co-admins`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: newCoAdminEmail.value.trim() })
+      body: JSON.stringify({ email: item.email })
     })
     const data = await res.json()
     coAdmins.value.push(data)
-    newCoAdminEmail.value = ''
   } catch (err) {
     coAdminError.value = err.message || 'Failed to add co-admin.'
   } finally {
@@ -594,32 +575,40 @@ onMounted(async () => {
 
           <!-- Invite Users -->
           <div class="border-t border-gray-100 mt-6 pt-6">
-            <h3 class="text-base font-semibold text-gray-900 mb-4">Invite by Email</h3>
-            <div v-for="invitee in invitees" :key="invitee.id" class="flex items-center gap-2 mb-2">
-              <input
-                v-model="invitee.email"
-                @input="onInviteeInput(invitee)"
-                type="email"
-                placeholder="Email address"
-                data-testid="manage-invite-email-input"
-                class="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                autocomplete="new-password"
-                data-1p-ignore
-                data-lpignore="true"
-                data-form-type="other"
-              />
-              <span v-if="invitee.loading" class="ml-1"><Spinner /></span>
-              <span v-else-if="invitee.exists === true" data-testid="manage-invite-user-exists" class="ml-1 text-green-600 text-xs">User exists</span>
-              <span v-else-if="invitee.exists === false" data-testid="manage-invite-no-user" class="ml-1 text-gray-400 text-xs">No user</span>
-              <span v-if="invitee.error" class="ml-1 text-red-600 text-xs">{{ invitee.error }}</span>
-              <button type="button" @click="removeInvitee(invitee)" class="text-xs text-gray-400 hover:text-red-500 px-2">✕</button>
+            <h3 class="text-base font-semibold text-gray-900 mb-4">Invite Users</h3>
+            <UserSearchComboBox
+              :allow-unknown-email="true"
+              :exclude-emails="excludedInviteEmails"
+              placeholder="Search by name or email…"
+              @select="onInviteeSelect"
+            />
+
+            <!-- Selected invitees chips -->
+            <div v-if="selectedInvitees.length" class="flex flex-wrap gap-2 mt-3" data-testid="manage-invite-chip-list">
+              <span
+                v-for="invitee in selectedInvitees"
+                :key="invitee.email"
+                data-testid="manage-invite-chip"
+                class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm"
+                :class="invitee.type === 'user'
+                  ? 'bg-indigo-50 text-indigo-700'
+                  : 'bg-amber-50 text-amber-700'"
+              >
+                <span class="truncate max-w-[200px]">{{ invitee.displayName || invitee.email }}</span>
+                <button
+                  type="button"
+                  @click="removeSelectedInvitee(invitee)"
+                  data-testid="manage-invite-chip-remove"
+                  class="shrink-0 text-current opacity-60 hover:opacity-100"
+                >✕</button>
+              </span>
             </div>
-            <button type="button" @click="addInvitee" data-testid="manage-invite-add-btn" class="mt-1 mb-4 px-3 py-1 text-xs rounded bg-gray-100 hover:bg-gray-200 text-gray-700">+ Add another</button>
-            <div class="flex items-center gap-3 pt-2">
-              <button @click="inviteUsers" :disabled="inviting || invitees.every(i => !i.email.trim())"
+
+            <div class="flex items-center gap-3 pt-3">
+              <button @click="inviteUsers" :disabled="inviting || selectedInvitees.length === 0"
                 data-testid="manage-invite-send-btn"
                 class="px-5 py-2 text-sm font-semibold rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 transition-colors">
-                {{ inviting ? 'Inviting…' : `Invite ${invitees.filter(i => i.email.trim()).length} user${invitees.filter(i => i.email.trim()).length === 1 ? '' : 's'}` }}
+                {{ inviting ? 'Inviting…' : `Invite ${selectedInvitees.length} user${selectedInvitees.length === 1 ? '' : 's'}` }}
               </button>
               <span v-if="inviteSuccess" data-testid="manage-invite-success" class="text-sm text-green-600">Invitations sent!</span>
               <span v-if="inviteError" data-testid="manage-invite-error" class="text-sm text-red-600">{{ inviteError }}</span>
@@ -629,24 +618,15 @@ onMounted(async () => {
 
         <!-- Tab: Co-Admins -->
         <div v-if="activeTab === 'coadmins'" class="p-6">
-          <div class="flex gap-2 mb-4">
-            <input
-              v-model="newCoAdminEmail"
-              type="email"
-              placeholder="Email address"
-              class="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-              @keyup.enter="addCoAdmin"
-            />
-            <button
-              :disabled="addingCoAdmin || !newCoAdminEmail.trim()"
-              @click="addCoAdmin"
-              class="px-4 py-2 text-sm font-medium rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 transition-colors"
-            >
-              {{ addingCoAdmin ? 'Adding…' : 'Add' }}
-            </button>
-          </div>
-          <div v-if="coAdminError" class="text-sm text-red-600 mb-3">{{ coAdminError }}</div>
-          <div v-if="coAdmins.length === 0" class="text-sm text-gray-400">No co-admins yet.</div>
+          <UserSearchComboBox
+            :allow-unknown-email="false"
+            :exclude-emails="excludedCoAdminEmails"
+            placeholder="Search for a co-admin by name or email…"
+            @select="onCoAdminSelect"
+          />
+          <div v-if="addingCoAdmin" class="mt-2 text-sm text-gray-400">Adding…</div>
+          <div v-if="coAdminError" class="text-sm text-red-600 mt-2 mb-3">{{ coAdminError }}</div>
+          <div v-if="coAdmins.length === 0 && !addingCoAdmin" class="text-sm text-gray-400 mt-4">No co-admins yet.</div>
           <ul v-else class="divide-y divide-gray-100">
             <li v-for="admin in coAdmins" :key="admin.userId" class="flex items-center justify-between py-2.5">
               <div>
