@@ -301,7 +301,7 @@ watch(() => perms.loaded, (loaded) => {
                 </span>
                 <span>💬</span>
                 <span class="font-medium">{{ event.postCount }}</span>
-                <span v-if="event.hasUnreadDiscussion" class="relative flex h-2.5 w-2.5">
+                <span v-if="event.hasUnreadDiscussion" data-testid="event-unread-indicator" class="relative flex h-2.5 w-2.5">
                   <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
                   <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-indigo-500"></span>
                 </span>
