@@ -16,7 +16,7 @@ for (const account of accounts) {
   const authFile = path.join(authDir, `${account.name}.json`)
 
   setup(`authenticate as ${account.name}`, async ({ page }) => {
-    await page.goto('/')
+    await page.goto('/', { waitUntil: 'networkidle', timeout: 120_000 })
     await page.getByTestId('auth-login-btn').click()
 
     // Wait for Keycloak login form to be fully interactive
