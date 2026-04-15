@@ -366,6 +366,7 @@ onMounted(async () => {
                 { key: 'coadmins', label: 'Co-Admins' }
               ]"
               :key="tab.key"
+              :data-testid="`manage-tab-${tab.key}`"
               @click="activeTab = tab.key"
               class="px-4 py-3 text-sm font-medium border-b-2 transition-colors"
               :class="activeTab === tab.key
@@ -490,6 +491,7 @@ onMounted(async () => {
               <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">Member posts</label>
                 <select v-model.number="discussionSettings.memberPostPolicy"
+                  data-testid="manage-member-post-policy"
                   class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
                   <option :value="1">Post freely</option>
                   <option :value="0">Require approval</option>
@@ -499,6 +501,7 @@ onMounted(async () => {
               <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">Non-member posts</label>
                 <select v-model.number="discussionSettings.nonMemberPostPolicy"
+                  data-testid="manage-nonmember-post-policy"
                   :disabled="!discussionSettings.allowNonMemberPosts"
                   class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 disabled:bg-gray-100 disabled:text-gray-500">
                   <option :value="1">Post freely</option>
@@ -510,22 +513,25 @@ onMounted(async () => {
             <div class="flex flex-col gap-3">
               <label class="flex items-center gap-2 text-sm text-gray-700">
                 <input type="checkbox" v-model="discussionSettings.allowNonMemberPosts"
+                  data-testid="manage-allow-nonmember-posts"
                   class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
                 Allow non-members to create posts
               </label>
               <label class="flex items-center gap-2 text-sm text-gray-700">
                 <input type="checkbox" v-model="discussionSettings.allowNonMemberComments"
+                  data-testid="manage-allow-nonmember-comments"
                   class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
                 Allow non-members to comment
               </label>
             </div>
             <div class="flex items-center gap-3 pt-2">
               <button @click="saveDiscussionSettings" :disabled="savingDiscussion"
+                data-testid="manage-save-discussion-btn"
                 class="px-5 py-2 text-sm font-semibold rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 transition-colors">
                 {{ savingDiscussion ? 'Saving…' : 'Save Settings' }}
               </button>
-              <span v-if="discussionSaveSuccess" class="text-sm text-green-600">Saved!</span>
-              <span v-if="discussionSaveError" class="text-sm text-red-600">{{ discussionSaveError }}</span>
+              <span v-if="discussionSaveSuccess" data-testid="manage-discussion-save-success" class="text-sm text-green-600">Saved!</span>
+              <span v-if="discussionSaveError" data-testid="manage-discussion-save-error" class="text-sm text-red-600">{{ discussionSaveError }}</span>
             </div>
           </div>
         </div>
