@@ -140,10 +140,10 @@ watch(() => auth.isAuthenticated, (authenticated, wasAuthenticated) => {
     </div>
 
     <template v-else-if="event">
-      <div class="bg-white shadow rounded-xl overflow-hidden">
+      <div data-testid="event-detail" class="bg-white shadow rounded-xl overflow-hidden">
         <!-- Header -->
         <div class="px-6 pt-6 pb-4 border-b border-gray-100">
-          <h1 class="text-2xl font-bold text-gray-900">{{ event.title }}</h1>
+          <h1 data-testid="event-title" class="text-2xl font-bold text-gray-900">{{ event.title }}</h1>
           <p class="mt-1 text-sm text-gray-500">Hosted by {{ event.ownerName }}</p>
         </div>
 
@@ -221,6 +221,7 @@ watch(() => auth.isAuthenticated, (authenticated, wasAuthenticated) => {
           <!-- Join / Status -->
           <div class="flex items-center gap-3 pt-2">
             <RouterLink
+              data-testid="event-manage-btn"
               v-if="event.isAdmin"
               :to="{ name: 'manage-event', params: { id: event.id } }"
               class="px-5 py-2.5 text-sm font-semibold rounded-lg bg-gray-800 text-white hover:bg-gray-900 transition-colors"
@@ -229,6 +230,7 @@ watch(() => auth.isAuthenticated, (authenticated, wasAuthenticated) => {
             </RouterLink>
             <button
               v-if="!auth.isAuthenticated"
+              data-testid="event-join-btn-disabled"
               disabled
               class="px-5 py-2.5 text-sm font-semibold rounded-lg bg-gray-300 text-gray-500 cursor-not-allowed"
               title="Sign in to join this event"
@@ -237,6 +239,7 @@ watch(() => auth.isAuthenticated, (authenticated, wasAuthenticated) => {
             </button>
             <button
               v-else-if="event.canJoin"
+              data-testid="event-join-btn"
               :disabled="joining"
               @click="joinEvent"
               class="px-5 py-2.5 text-sm font-semibold rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
@@ -245,6 +248,7 @@ watch(() => auth.isAuthenticated, (authenticated, wasAuthenticated) => {
             </button>
             <span
               v-else-if="event.hasJoined"
+              data-testid="event-joined-badge"
               class="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-green-700 bg-green-100 rounded-lg"
             >
               <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
@@ -254,6 +258,7 @@ watch(() => auth.isAuthenticated, (authenticated, wasAuthenticated) => {
             </span>
             <span
               v-else-if="event.joinMode === 1"
+              data-testid="event-invite-only-msg"
               class="text-sm text-gray-500"
             >
               This event is invite only

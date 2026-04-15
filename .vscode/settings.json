@@ -8,6 +8,7 @@
             "matchCommandLine": true
         },
         "aspire": true,
-        "ConvertFrom-Json": true
+        "ConvertFrom-Json": true,
+        "npx playwright": true
     }
 }

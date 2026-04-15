@@ -108,6 +108,7 @@ async function submit() {
       <label for="title" class="block text-sm font-medium text-gray-700 mb-1">Title</label>
       <input
         id="title"
+        data-testid="event-title-input"
         v-model="form.title"
         type="text"
         required
@@ -120,6 +121,7 @@ async function submit() {
       <label for="location" class="block text-sm font-medium text-gray-700 mb-1">Location</label>
       <textarea
         id="location"
+        data-testid="event-location-input"
         v-model="form.location"
         rows="3"
         class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
@@ -132,6 +134,7 @@ async function submit() {
         <label for="start" class="block text-sm font-medium text-gray-700 mb-1">Start</label>
         <input
           id="start"
+          data-testid="event-start-input"
           v-model="form.start"
           type="datetime-local"
           required
@@ -142,6 +145,7 @@ async function submit() {
         <label for="end" class="block text-sm font-medium text-gray-700 mb-1">End</label>
         <input
           id="end"
+          data-testid="event-end-input"
           v-model="form.end"
           type="datetime-local"
           required
@@ -155,6 +159,7 @@ async function submit() {
         <label for="visibility" class="block text-sm font-medium text-gray-700 mb-1">Visibility</label>
         <select
           id="visibility"
+          data-testid="event-visibility-select"
           v-model="form.visibility"
           class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
         >
@@ -166,6 +171,7 @@ async function submit() {
         <label for="joinMode" class="block text-sm font-medium text-gray-700 mb-1">Who can join?</label>
         <select
           id="joinMode"
+          data-testid="event-joinmode-select"
           v-model="form.joinMode"
           :disabled="form.visibility === 'Unlisted'"
           class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 disabled:bg-gray-100 disabled:text-gray-500"
@@ -182,6 +188,7 @@ async function submit() {
       </label>
       <input
         id="capacity"
+        data-testid="event-capacity-input"
         v-model="form.capacity"
         type="number"
         min="1"
@@ -234,6 +241,7 @@ async function submit() {
     <div class="flex items-center gap-3 pt-2">
       <button
         type="submit"
+        data-testid="event-submit-btn"
         :disabled="!isValid || submitting"
         class="bg-indigo-600 text-white px-5 py-2 rounded-md text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition"
       >

@@ -119,79 +119,189 @@ The Keycloak dev realm (`Thuddle-realm.dev.json`) has four pre-configured users.
 | bob | bob@thuddle.dev | Regular user | Uninvited user (negative tests) |
 | charlie | charlie@thuddle.dev | Regular user | Third-party observer |
 
-## Multi-user testing
+## Authentication: storageState setup project
 
-Many flows require multiple users acting in sequence (e.g., one user creates an event, another tries to join). Use **separate browser contexts** — not separate browser instances — to manage multiple authenticated sessions.
+**Never log in via the Keycloak UI inside every test.** Keycloak's login form is flaky under automation — JavaScript on the page can clear `fill()` values, and concurrent SSO redirects for the same user cause 403 errors. Instead, use Playwright's **storageState** pattern: authenticate once in a setup project, save session cookies, and reuse them for all tests.
 
-### Login helper
+### Setup project (`auth.setup.ts`)
 
-Create a reusable helper that logs in via Keycloak and returns an authenticated browser context:
+The setup project authenticates all four users once before any spec runs:
 
 ```typescript
-// tests/e2e/helpers/auth.ts
-import { type Browser, type BrowserContext, type Page } from '@playwright/test'
+// tests/e2e/auth.setup.ts
+import { test as setup, expect } from '@playwright/test'
+import fs from 'fs'
+import path from 'path'
 
-interface TestUser {
-  username: string
-  password: string
+const authDir = path.join(__dirname, 'playwright/.auth')
+fs.mkdirSync(authDir, { recursive: true })
+
+const accounts = [
+  { name: 'admin', username: 'testuser', password: 'testpassword' },
+  { name: 'alice', username: 'alice', password: 'testpassword' },
+  { name: 'bob', username: 'bob', password: 'testpassword' },
+  { name: 'charlie', username: 'charlie', password: 'testpassword' },
+]
+
+for (const account of accounts) {
+  const authFile = path.join(authDir, `${account.name}.json`)
+
+  setup(`authenticate as ${account.name}`, async ({ page }) => {
+    await page.goto('/')
+    await page.getByTestId('auth-login-btn').click()
+
+    await page.locator('#username').waitFor({ state: 'visible' })
+    await page.locator('#password').waitFor({ state: 'visible' })
+
+    // Fill and verify — Keycloak JS can clear values
+    await page.locator('#username').fill(account.username)
+    await page.locator('#password').fill(account.password)
+
+    if ((await page.locator('#username').inputValue()) !== account.username) {
+      await page.locator('#username').clear()
+      await page.locator('#username').pressSequentially(account.username, { delay: 30 })
+    }
+    if ((await page.locator('#password').inputValue()) !== account.password) {
+      await page.locator('#password').clear()
+      await page.locator('#password').pressSequentially(account.password, { delay: 30 })
+    }
+
+    await page.locator('#kc-login').click()
+    await page.waitForURL((url) => !url.toString().includes('/realms/'), { timeout: 30000 })
+    await expect(page.getByTestId('user-display-name')).toBeVisible({ timeout: 15000 })
+
+    await page.context().storageState({ path: authFile })
+  })
+}
+```
+
+### Playwright config with setup dependency
+
+```typescript
+// playwright.config.ts
+projects: [
+  { name: 'setup', testMatch: /auth\.setup\.ts/ },
+  {
+    name: 'chromium',
+    use: { browserName: 'chromium' },
+    dependencies: ['setup'],
+  },
+],
+```
+
+### Storage state paths and helpers (`helpers/auth.ts`)
+
+```typescript
+import { type Browser, type BrowserContext, type Page } from '@playwright/test'
+import path from 'path'
+
+export const STORAGE_STATE = {
+  admin: path.join(__dirname, '../playwright/.auth/admin.json'),
+  alice: path.join(__dirname, '../playwright/.auth/alice.json'),
+  bob: path.join(__dirname, '../playwright/.auth/bob.json'),
+  charlie: path.join(__dirname, '../playwright/.auth/charlie.json'),
 }
 
-export const users = {
-  admin: { username: 'testuser', password: 'testpassword' },
-  alice: { username: 'alice', password: 'testpassword' },
-  bob:   { username: 'bob',   password: 'testpassword' },
-  charlie: { username: 'charlie', password: 'testpassword' },
-} as const
-
-export async function loginAs(
+/** Create a browser context pre-authenticated as the given user. */
+export async function contextAs(
   browser: Browser,
-  user: TestUser,
-  baseURL: string
+  user: keyof typeof STORAGE_STATE,
 ): Promise<{ context: BrowserContext; page: Page }> {
-  const context = await browser.newContext()
+  const context = await browser.newContext({ storageState: STORAGE_STATE[user] })
   const page = await context.newPage()
-  await page.goto(baseURL)
-  await page.getByTestId('auth-login-btn').click()
-
-  // Keycloak login form
-  await page.locator('#username').fill(user.username)
-  await page.locator('#password').fill(user.password)
-  await page.locator('#kc-login').click()
-
-  // Wait for redirect back to the app
-  await page.waitForURL(url => !url.toString().includes('/realms/'))
-
   return { context, page }
 }
 ```
+
+### Using storageState in tests
+
+For **single-user** tests, use `test.use()` at the describe level:
+
+```typescript
+test.describe('Create event', () => {
+  test.use({ storageState: STORAGE_STATE.admin })
+
+  test('admin can create an event', async ({ page, baseURL }) => {
+    await page.goto(baseURL!)
+    await page.getByTestId('event-create-btn').waitFor({ state: 'visible', timeout: 20000 })
+    // ... no loginAs() needed — SSO happens automatically via session cookies
+  })
+})
+```
+
+For **anonymous** tests, use an empty storageState:
+
+```typescript
+test.use({ storageState: { cookies: [], origins: [] } })
+```
+
+For **multi-user** tests, use `contextAs()` with the browser fixture:
+
+```typescript
+test('alice can join an event created by admin', async ({ browser, baseURL }) => {
+  const { context: adminCtx, page: adminPage } = await contextAs(browser, 'admin')
+  // ... admin creates event
+  await adminCtx.close()
+
+  const { context: aliceCtx, page: alicePage } = await contextAs(browser, 'alice')
+  // ... alice joins event
+  await aliceCtx.close()
+})
+```
+
+### Important: wait for SSO completion after navigation
+
+StorageState stores Keycloak session cookies. When a page loads, the app detects the session and performs a silent SSO redirect. **Always wait for SSO to complete** before interacting with authenticated UI elements:
+
+```typescript
+await page.goto(baseURL!)
+// Wait for SSO + profile/permissions to load
+await page.getByTestId('event-create-btn').waitFor({ state: 'visible', timeout: 20000 })
+// or
+await page.getByTestId('user-display-name').waitFor({ state: 'visible', timeout: 20000 })
+```
+
+### When to keep `loginAs()` (UI login)
+
+Keep the `loginAs()` helper only for tests that **verify the login flow itself** (`auth/login.spec.ts`). All other tests must use storageState.
+
+### `.gitignore`
+
+Add `tests/e2e/playwright/.auth/` to `.gitignore` — these files contain session tokens.
+
+## Multi-user testing
+
+Many flows require multiple users acting in sequence (e.g., one user creates an event, another tries to join). Use `contextAs()` to create **separate browser contexts** with pre-authenticated storageState.
 
 ### Multi-user test pattern
 
 ```typescript
 import { test, expect } from '@playwright/test'
-import { loginAs, users } from '../helpers/auth'
+import { contextAs, uid } from '../helpers/auth'
 
-test('invited user can join, uninvited user cannot', async ({ browser }) => {
-  const baseURL = '...' // from Aspire describe
+test('invited user can join, uninvited user cannot', async ({ browser, baseURL }) => {
+  const name = `InvOnly ${uid()}`
 
-  // User 1: admin creates an invite-only event and invites alice
-  const admin = await loginAs(browser, users.admin, baseURL)
-  await admin.page.getByTestId('event-create-btn').click()
-  // ... fill form, set JoinMode to InviteOnly, submit
-  // ... invite alice@thuddle.dev
+  // User 1: admin creates an invite-only event
+  const { context: adminCtx, page: adminPage } = await contextAs(browser, 'admin')
+  await adminPage.goto(baseURL!)
+  await adminPage.getByTestId('event-create-btn').waitFor({ state: 'visible', timeout: 20000 })
+  // ... fill form, submit, capture event URL from API response
+  await adminCtx.close()
 
   // User 2: alice (invited) can join
-  const alice = await loginAs(browser, users.alice, baseURL)
-  // ... navigate to event, click join — expect success
+  const { context: aliceCtx, page: alicePage } = await contextAs(browser, 'alice')
+  await alicePage.goto(eventUrl)
+  await alicePage.getByTestId('user-display-name').waitFor({ state: 'visible', timeout: 20000 })
+  // ... expect join button visible
+  await aliceCtx.close()
 
   // User 3: bob (NOT invited) cannot join
-  const bob = await loginAs(browser, users.bob, baseURL)
-  // ... navigate to event — join button should be absent or disabled
-
-  // Cleanup contexts
-  await admin.context.close()
-  await alice.context.close()
-  await bob.context.close()
+  const { context: bobCtx, page: bobPage } = await contextAs(browser, 'bob')
+  await bobPage.goto(eventUrl)
+  await bobPage.getByTestId('user-display-name').waitFor({ state: 'visible', timeout: 20000 })
+  // ... expect invite-only message
+  await bobCtx.close()
 })
 ```
 
@@ -296,12 +406,62 @@ npx playwright test auth/              # one feature
 npx playwright test --grep "invite"    # by name
 ```
 
+## Unique test data: avoid name collisions
+
+Tests run against a shared database that persists across runs. **Never use hardcoded names** for created entities (events, posts, etc.) — they collide across test runs and cause false positives/negatives when asserting on dashboard lists.
+
+Use the `uid()` helper to generate unique 8-character suffixes:
+
+```typescript
+import { uid } from '../helpers/auth'
+
+const name = `Public ${uid()}`  // e.g. "Public 1bcc96bc"
+```
+
+### Why this matters
+
+- Dashboard lists are paginated — a newly created event may not appear on page 1 if many previous test events exist
+- Assertions like `toContainText(name)` fail if another event with the same name appears first
+- Multiple CI runs can happen in parallel against the same environment
+
+### Verifying creation: use API responses, not dashboard lists
+
+Don't assert that a newly created event appears in the paginated dashboard list — it may be pushed to page 2+. Instead, capture the API response and verify the status code:
+
+```typescript
+const responsePromise = page.waitForResponse(
+  (r) => r.url().includes('/api/events') && r.request().method() === 'POST'
+)
+await page.getByTestId('event-submit-btn').click()
+const response = await responsePromise
+expect(response.status()).toBe(201)
+
+// Then verify redirect happened
+await expect(page).toHaveURL(baseURL!, { timeout: 15000 })
+```
+
+To test the detail page, navigate directly using the event ID from the response:
+
+```typescript
+const body = await response.json()
+await page.goto(`${baseURL}/events/${body.id}`)
+await expect(page.getByTestId('event-title')).toHaveText(name)
+```
+
+## Concurrency: single worker
+
+Run with `workers: 1` in the Playwright config. Multiple workers cause concurrent Keycloak SSO redirects for the same user session, leading to intermittent 403 errors on API calls. The storageState pattern avoids per-test login overhead, so single-worker execution is fast (~9 seconds for 22 tests).
+
 ## Key rules
 
 1. **Always add `data-testid`** to Vue components before writing tests that target them
 2. **Never use snapshot refs** (`e15`) in committed test code — use `getByTestId()` or role locators
 3. **Every positive test needs a negative counterpart** — test denial, not just access
-4. **Use separate browser contexts** for multi-user tests, not separate browser instances
-5. **Start the full Aspire stack** before running tests — these are true end-to-end tests
-6. **Keep tests independent** — each test should create its own data; don't rely on test execution order
-7. **Use the seeded users consistently** — `testuser` for admin, `bob` for uninvited/negative cases
+4. **Use storageState for auth** — authenticate once in setup project, reuse session cookies; only `auth/login.spec.ts` should use direct `loginAs()`
+5. **Use `uid()` for all test data names** — never hardcode entity names; collisions cause flaky assertions
+6. **Verify creation via API response** — don't rely on paginated dashboard lists to confirm a create succeeded
+7. **Run with `workers: 1`** — concurrent SSO redirects cause 403 errors
+8. **Wait for SSO after navigation** — `waitFor('user-display-name')` or `waitFor('event-create-btn')` before interacting
+9. **Start the full Aspire stack** before running tests — these are true end-to-end tests
+10. **Keep tests independent** — each test should create its own data; don't rely on test execution order
+11. **Use the seeded users consistently** — `testuser` for admin, `bob` for uninvited/negative cases
