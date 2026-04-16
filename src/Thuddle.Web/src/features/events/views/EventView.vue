@@ -5,6 +5,7 @@ import { useApi } from '@/shared/composables/useApi'
 import { useAuthStore } from '@/features/auth/stores/auth'
 import { apiUrl } from '@/api'
 import DiscussionTab from '@/features/events/components/DiscussionTab.vue'
+import FunnyLoader from '@/shared/components/FunnyLoader.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -152,7 +153,9 @@ watch(() => auth.isAuthenticated, (authenticated, wasAuthenticated) => {
       Back
     </button>
 
-    <div v-if="loading" class="text-center py-16 text-gray-400">Loading event...</div>
+    <div v-if="loading" class="py-12">
+      <FunnyLoader title="Loading event" />
+    </div>
 
     <div v-else-if="error && !event" class="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
       {{ error }}

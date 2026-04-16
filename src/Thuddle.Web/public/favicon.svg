@@ -1,0 +1,9 @@
+<svg viewBox="48 43 86 85" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <polygon id="hex" points="20,0 40,11.5 40,34.6 20,46 0,34.6 0,11.5" />
+  </defs>
+  <!-- Board Hexes -->
+  <use href="#hex" x="50" y="80" fill="#F4A261" />
+  <use href="#hex" x="71" y="43.6" fill="#2A9D8F" />
+  <use href="#hex" x="92" y="80" fill="#E9C46A" />
+</svg>

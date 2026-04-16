@@ -31,13 +31,9 @@ function closeMenu() {
       <div class="flex justify-between items-center h-16">
         <!-- Logo -->
         <div class="flex items-center">
-          <RouterLink to="/" class="flex items-center gap-2 group">
-            <div class="w-8 h-8 rounded-xl bg-gradient-to-tr from-indigo-600 to-purple-500 flex items-center justify-center text-white shadow-md group-hover:shadow-lg group-hover:-translate-y-0.5 transition-all">
-              <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z" />
-              </svg>
-            </div>
-            <span class="text-xl font-extrabold bg-clip-text text-transparent bg-gradient-to-r from-gray-900 to-gray-700 tracking-tight">
+          <RouterLink to="/" class="flex items-center gap-3 pr-2 group">
+            <img src="@/assets/logo.svg" alt="Thuddle Logo" class="w-10 h-10 group-hover:scale-105 transition-transform drop-shadow-sm" />
+            <span class="text-2xl font-extrabold text-purple-700 tracking-tight">
               Thuddle
             </span>
           </RouterLink>

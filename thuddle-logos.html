@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Thuddle Logos</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            background-color: #f8f9fa;
+            color: #333;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+        h1 { text-align: center; color: #2c3e50; }
+        .logo-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2rem;
+            margin-top: 2rem;
+        }
+        .logo-card {
+            background: white;
+            border-radius: 12px;
+            padding: 2rem;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+        }
+        .logo-card h3 {
+            margin-top: 1.5rem;
+            margin-bottom: 0.5rem;
+            color: #2c3e50;
+        }
+        .logo-card p {
+            font-size: 0.9rem;
+            color: #666;
+            margin: 0;
+        }
+        svg {
+            max-width: 100%;
+            height: auto;
+        }
+    </style>
+</head>
+<body>
+    <h1>Thuddle Logo Concepts</h1>
+    <div class="logo-grid">
+
+        <!-- Concept 1: The Meeple Huddle -->
+        <div class="logo-card">
+            <svg viewBox="0 0 400 200" width="300" height="150" xmlns="http://www.w3.org/2000/svg">
+                <defs>
+                    <!-- Simple Meeple Path -->
+                    <g id="meeple">
+                        <path d="M 0 -20 C 10 -20 15 -10 15 -5 C 25 -5 30 5 30 15 C 30 20 20 20 15 15 C 15 25 20 40 25 50 L 5 50 L 0 35 L -5 50 L -25 50 C -20 40 -15 25 -15 15 C -20 20 -30 20 -30 15 C -30 5 -25 -5 -15 -5 C -15 -10 -10 -20 0 -20 Z" fill="#E63946"/>
+                    </g>
+                </defs>
+                <text x="200" y="140" font-family="Arial, sans-serif" font-weight="900" font-size="72" text-anchor="middle" fill="#2c3e50">TH     DDLE</text>
+                <text x="165" y="140" font-family="Arial, sans-serif" font-weight="900" font-size="72" text-anchor="middle" fill="#2c3e50">U</text>
+                <!-- Meeples as the umlaut -->
+                <use href="#meeple" x="145" y="55" transform="scale(0.4) rotate(15) translate(330, 80)" />
+                <use href="#meeple" x="180" y="55" transform="scale(0.4) rotate(-15) translate(410, 200)" fill="#457B9D" />
+            </svg>
+            <h3>1. The Meeple Huddle</h3>
+            <p>Meeples leaning in, forming the umlaut over the U.</p>
+        </div>
+
+        <!-- Concept 2: The 2-Pip Die -->
+        <div class="logo-card">
+            <svg viewBox="0 0 400 200" width="300" height="150" xmlns="http://www.w3.org/2000/svg">
+                <!-- Isometric-ish Die -->
+                <path d="M 170 30 L 230 30 L 250 80 L 150 80 Z" fill="#E63946" stroke="#c1121f" stroke-width="4" stroke-linejoin="round"/>
+                <path d="M 150 80 L 250 80 L 230 110 L 170 110 Z" fill="#c1121f" />
+                <!-- Pips -->
+                <circle cx="185" cy="55" r="8" fill="#fff" />
+                <circle cx="215" cy="55" r="8" fill="#fff" />
+                <text x="200" y="160" font-family="Arial, sans-serif" font-weight="900" font-size="52" text-anchor="middle" fill="#2c3e50" letter-spacing="2">THUDDLE</text>
+            </svg>
+            <h3>2. The 2-Pip Die</h3>
+            <p>A boldly colored 6-sided die showing the 2 face as the umlaut.</p>
+        </div>
+
+        <!-- Concept 3: The Hexagon Float -->
+        <div class="logo-card">
+            <svg viewBox="0 0 400 200" width="300" height="150" xmlns="http://www.w3.org/2000/svg">
+                <defs>
+                    <polygon id="hex" points="20,0 40,11.5 40,34.6 20,46 0,34.6 0,11.5" />
+                </defs>
+                <!-- Board Hexes -->
+                <use href="#hex" x="160" y="110" fill="#F4A261" />
+                <use href="#hex" x="181" y="75" fill="#2A9D8F" />
+                <use href="#hex" x="202" y="110" fill="#E9C46A" />
+                
+                <!-- Centered Floating Umlaut Hexes -->
+                <use href="#hex" x="350" y="80" fill="#E63946" transform="scale(0.5)" />
+                <use href="#hex" x="414" y="80" fill="#E63946" transform="scale(0.5)" />
+            </svg>
+            <h3>3. The Hexagon Float</h3>
+            <p>Catan-style hexes gathering, with two floating above.</p>
+        </div>
+
+        <!-- Concept 4: The Tabletop Top-Down -->
+        <div class="logo-card">
+            <svg viewBox="0 0 400 200" width="300" height="150" xmlns="http://www.w3.org/2000/svg">
+                <!-- Table -->
+                <circle cx="200" cy="90" r="60" fill="#8B5A2B" stroke="#5C3A21" stroke-width="6"/>
+                <!-- Umlaut Game Pieces -->
+                <circle cx="180" cy="55" r="10" fill="#F4A261" stroke="#333" stroke-width="2"/>
+                <circle cx="220" cy="55" r="10" fill="#2A9D8F" stroke="#333" stroke-width="2"/>
+                <!-- Players / Chairs huddle -->
+                <path d="M 140 100 A 70 70 0 0 0 260 100" fill="none" stroke="#2c3e50" stroke-width="12" stroke-linecap="round"/>
+                <path d="M 155 70 A 75 75 0 0 0 145 85" fill="none" stroke="#E63946" stroke-width="12" stroke-linecap="round"/>
+                <path d="M 245 70 A 75 75 0 0 1 255 85" fill="none" stroke="#E63946" stroke-width="12" stroke-linecap="round"/>
+                
+                <text x="200" y="190" font-family="Arial, sans-serif" font-weight="900" font-size="36" text-anchor="middle" fill="#2c3e50">THUDDLE</text>
+            </svg>
+            <h3>4. The Tabletop Top-Down</h3>
+            <p>Round table with two playing pieces (dots) and chairs forming a huddle/smile.</p>
+        </div>
+
+        <!-- Concept 5: The Dwarven Thud -->
+        <div class="logo-card">
+            <svg viewBox="0 0 400 200" width="300" height="150" xmlns="http://www.w3.org/2000/svg">
+                <!-- Stone Thud Piece -->
+                <path d="M 170 80 L 230 80 L 210 130 L 190 130 Z" fill="#6C7A89" />
+                <path d="M 190 50 L 210 50 L 230 80 L 170 80 Z" fill="#95A5A6" />
+                <!-- Impact Lines -->
+                <path d="M 150 130 L 250 130" stroke="#E63946" stroke-width="4" stroke-linecap="round"/>
+                <!-- Sparks / Umlaut -->
+                <polygon points="175,20 185,40 165,40" fill="#F4A261" />
+                <polygon points="225,20 235,40 215,40" fill="#F4A261" />
+                
+                <text x="200" y="180" font-family="Verdana, sans-serif" font-weight="900" font-size="46" text-anchor="middle" fill="#2c3e50" letter-spacing="1">THUDDLE</text>
+            </svg>
+            <h3>5. The Dwarven Thud</h3>
+            <p>A heavy dwarven game piece striking the board, throwing up two sparks.</p>
+        </div>
+
+    </div>
+</body>
+</html>

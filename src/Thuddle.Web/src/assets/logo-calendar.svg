@@ -1,0 +1,28 @@
+<svg viewBox="30 5 122 195" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <polygon id="hex" points="20,0 40,11.5 40,34.6 20,46 0,34.6 0,11.5" />
+  </defs>
+
+  <!-- Calendar Background Block -->
+  <rect x="36" y="44" width="110" height="142" rx="12" fill="#ffffff" stroke="#2c3e50" stroke-width="6" />
+  
+  <!-- Calendar Header Line -->
+  <path d="M 36 82 L 146 82" stroke="#2c3e50" stroke-width="6" />
+  
+  <!-- Calendar Rings / Binders -->
+  <line x1="60" y1="36" x2="60" y2="56" stroke="#2c3e50" stroke-width="7" stroke-linecap="round" />
+  <line x1="122" y1="36" x2="122" y2="56" stroke="#2c3e50" stroke-width="7" stroke-linecap="round" />
+
+  <!-- Umlaut Hexes (Centered between the top edge and header line, between the rings) -->
+  <g fill="#7e22ce" transform="scale(0.5)">
+    <use href="#hex" x="136" y="103" />
+    <use href="#hex" x="188" y="103" />
+  </g>
+
+  <!-- Inner Board Hexes (Shifted down to avoid header line) -->
+  <!-- Centered exactly at X: 91 -->
+  <use href="#hex" x="50" y="127.4" fill="#F4A261" />
+  <use href="#hex" x="71" y="91" fill="#2A9D8F" />
+  <use href="#hex" x="92" y="127.4" fill="#E9C46A" />
+
+</svg>

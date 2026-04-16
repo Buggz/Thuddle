@@ -1,0 +1,14 @@
+<svg viewBox="48 23 86 125" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <polygon id="hex" points="20,0 40,11.5 40,34.6 20,46 0,34.6 0,11.5" />
+  </defs>
+  <!-- Board Hexes (Centered exactly at X: 91) -->
+  <use href="#hex" x="50" y="100" fill="#F4A261" />
+  <use href="#hex" x="71" y="63.6" fill="#2A9D8F" />
+  <use href="#hex" x="92" y="100" fill="#E9C46A" />
+  <!-- Umlaut Hexes (Perfectly centered above the group) -->
+  <g fill="#7e22ce" transform="scale(0.5)">
+    <use href="#hex" x="136" y="50" />
+    <use href="#hex" x="188" y="50" />
+  </g>
+</svg>
