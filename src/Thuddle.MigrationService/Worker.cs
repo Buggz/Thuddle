@@ -214,5 +214,21 @@ public class MigrationWorker(
             await dbContext.SaveChangesAsync(ct);
             logger.LogInformation("Granted groups:manage permission to {Email}.", adminEmail);
         }
+
+        var hasAdminPermission = await dbContext.UserPermissions
+            .AnyAsync(p => p.UserId == user.Id && p.Permission == "admin:access", ct);
+
+        if (!hasAdminPermission)
+        {
+            dbContext.UserPermissions.Add(new UserPermission
+            {
+                Id = Guid.NewGuid(),
+                UserId = user.Id,
+                Permission = "admin:access",
+                GrantedAt = DateTime.UtcNow
+            });
+            await dbContext.SaveChangesAsync(ct);
+            logger.LogInformation("Granted admin:access permission to {Email}.", adminEmail);
+        }
     }
 }

@@ -39,6 +39,12 @@ export default function initRouter() {
         name: 'manage-event',
         component: () => import('@/features/events/views/ManageEventView.vue'),
         meta: { requiresAuth: true }
+      },
+      {
+        path: '/admin',
+        name: 'admin',
+        component: () => import('@/features/admin/views/AdminView.vue'),
+        meta: { requiresAuth: true, requiredPermission: 'admin:access' }
       }
     ]
   })
