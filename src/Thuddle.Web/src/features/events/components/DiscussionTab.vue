@@ -380,24 +380,29 @@ onMounted(loadPosts)
           <div data-testid="discussion-post-content" class="px-4 pb-3 prose prose-sm max-w-none text-gray-700" v-html="post.content" />
 
           <!-- Comments toggle -->
-          <div class="border-t border-gray-100 px-4 py-2">
+          <div class="border-t border-gray-100 px-4 py-3">
             <button
               data-testid="discussion-toggle-comments-btn"
               @click="toggleComments(post)"
-              class="text-sm text-gray-500 hover:text-indigo-600 transition-colors flex items-center gap-1"
+              class="group flex items-center transition-colors"
             >
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M8.625 12a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0zm4.125 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0zm4.125 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0z" />
-                <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 12.76c0 1.6 1.123 2.994 2.707 3.227 1.068.157 2.148.279 3.238.364.466.037.893.281 1.153.671L12 21l2.652-3.978c.26-.39.687-.634 1.153-.671 1.09-.085 2.17-.207 3.238-.364 1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0 0 12 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018z" />
-              </svg>
-              {{ post.commentCount }} {{ post.commentCount === 1 ? 'comment' : 'comments' }}
-              <span v-if="hasNewComments(post)" data-testid="discussion-new-comments-indicator" class="relative flex h-2 w-2 ml-0.5">
-                <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
-                <span class="relative inline-flex rounded-full h-2 w-2 bg-indigo-500"></span>
-              </span>
-              <svg class="w-3 h-3 transition-transform" :class="{ 'rotate-180': expandedComments.has(post.id) }" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
-              </svg>
+              <div class="relative flex items-center gap-1.5 rounded-md px-2.5 py-1 transition-colors"
+                   :class="hasNewComments(post) ? 'bg-indigo-50 text-indigo-700 border border-indigo-200 shadow-sm' : 'bg-gray-50 text-gray-600 border border-gray-200/60 group-hover:bg-gray-100'">
+                <div class="relative">
+                  <svg class="w-4 h-4" :class="hasNewComments(post) ? 'text-indigo-600' : 'opacity-70'" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 20.25c4.97 0 9-3.694 9-8.25s-4.03-8.25-9-8.25S3 7.444 3 12c0 2.104.859 4.023 2.273 5.48.432.447.74 1.04.586 1.641a4.483 4.483 0 0 1-.923 1.785A5.969 5.969 0 0 0 6 21c1.282 0 2.47-.402 3.445-1.087.81.22 1.668.337 2.555.337Z" />
+                  </svg>
+                  <!-- Notification dot specifically on the icon -->
+                  <span v-if="hasNewComments(post)" data-testid="discussion-new-comments-indicator" class="absolute -top-1 -right-1.5 flex h-2 w-2">
+                    <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                    <span class="relative inline-flex rounded-full h-2 w-2 bg-rose-500 ring-2 ring-indigo-50"></span>
+                  </span>
+                </div>
+                <span class="text-xs" :class="{'font-bold': hasNewComments(post)}">{{ post.commentCount }} {{ post.commentCount === 1 ? 'comment' : 'comments' }}</span>
+                <svg class="w-3.5 h-3.5 ml-0.5 transition-transform opacity-70" :class="{ 'rotate-180': expandedComments.has(post.id) }" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+                </svg>
+              </div>
             </button>
 
             <!-- Comments section -->
