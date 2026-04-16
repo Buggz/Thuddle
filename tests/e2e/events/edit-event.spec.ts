@@ -169,6 +169,65 @@ test.describe('Edit event details', () => {
       await context.close()
     })
 
+    test('owner can add a description', async ({ browser, baseURL, createdEvents }) => {
+      const { eventId, manageUrl, eventUrl } = await createEvent(browser, baseURL!)
+      createdEvents.push(eventId)
+
+      const descText = `Event description ${uid()}`
+      const { context, page } = await contextAs(browser, 'admin')
+      await goToManageAbout(page, manageUrl)
+
+      // Type into the WYSIWYG editor
+      const editor = page.getByTestId('manage-description-editor').locator('.ProseMirror')
+      await editor.click()
+      await editor.fill(descText)
+
+      const saveResp = page.waitForResponse(
+        (r) => r.url().includes(`/api/events/${eventId}`) && r.request().method() === 'PUT',
+      )
+      await page.getByTestId('manage-save-btn').click()
+      const resp = await saveResp
+      expect(resp.status()).toBe(200)
+      const body = await resp.json()
+      expect(body.description).toContain(descText)
+
+      await expect(page.getByTestId('manage-save-success')).toBeVisible({ timeout: 5000 })
+
+      // Verify description on the event detail page
+      await page.goto(eventUrl)
+      await expect(page.getByTestId('event-description')).toContainText(descText, { timeout: 10000 })
+
+      await context.close()
+    })
+
+    test('description persists after page reload', async ({ browser, baseURL, createdEvents }) => {
+      const { eventId, manageUrl } = await createEvent(browser, baseURL!)
+      createdEvents.push(eventId)
+
+      const descText = `Persistent desc ${uid()}`
+      const { context, page } = await contextAs(browser, 'admin')
+      await goToManageAbout(page, manageUrl)
+
+      const editor = page.getByTestId('manage-description-editor').locator('.ProseMirror')
+      await editor.click()
+      await editor.fill(descText)
+
+      const saveResp = page.waitForResponse(
+        (r) => r.url().includes(`/api/events/${eventId}`) && r.request().method() === 'PUT',
+      )
+      await page.getByTestId('manage-save-btn').click()
+      await saveResp
+      await expect(page.getByTestId('manage-save-success')).toBeVisible({ timeout: 5000 })
+
+      // Reload and verify
+      await page.reload()
+      await page.getByTestId('manage-title-input').waitFor({ state: 'visible', timeout: 10000 })
+      const reloadedEditor = page.getByTestId('manage-description-editor').locator('.ProseMirror')
+      await expect(reloadedEditor).toContainText(descText)
+
+      await context.close()
+    })
+
     test('owner can update multiple fields at once', async ({ browser, baseURL, createdEvents }) => {
       const { eventId, manageUrl, eventUrl } = await createEvent(browser, baseURL!)
       createdEvents.push(eventId)

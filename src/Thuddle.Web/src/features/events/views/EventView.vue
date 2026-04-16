@@ -317,8 +317,8 @@ watch(() => auth.isAuthenticated, (authenticated, wasAuthenticated) => {
 
         <!-- Tab: About -->
         <div v-if="activeTab === 'about'" class="px-6 py-5">
-          <div v-if="event.description" class="prose prose-sm max-w-none text-gray-700" v-html="event.description" />
-          <p v-else class="text-sm text-gray-400">No description provided.</p>
+          <div v-if="event.description" data-testid="event-description" class="prose prose-sm max-w-none text-gray-700" v-html="event.description" />
+          <p v-else data-testid="event-description-empty" class="text-sm text-gray-400">No description provided.</p>
         </div>
 
         <!-- Tab: Discussion -->

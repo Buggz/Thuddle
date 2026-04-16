@@ -48,7 +48,7 @@ async function createInviteOnlyEvent(
   const dates = futureDates(6, 16)
   await page.getByTestId('event-start-input').fill(dates.start)
   await page.getByTestId('event-end-input').fill(dates.end)
-  await page.getByTestId('event-joinmode-select').selectOption('InviteOnly')
+  await page.getByTestId('event-joinmode-select').selectOption('1')
 
   const responsePromise = page.waitForResponse(
     (r) => r.url().includes('/api/events') && r.request().method() === 'POST',

@@ -1,68 +1,34 @@
 <script setup>
-import { reactive, shallowRef, ref, computed, watch } from 'vue'
+import { ref, shallowRef } from 'vue'
 import { useRouter } from 'vue-router'
 import { useApi } from '@/shared/composables/useApi'
 import ImageCropper from '@/features/profile/components/ImageCropper.vue'
+import EventForm from '@/features/events/components/EventForm.vue'
 
 const router = useRouter()
 const { authFetch } = useApi()
 
-const form = reactive({
+const form = ref({
   title: '',
   location: '',
+  description: '',
   start: '',
   end: '',
-  visibility: 'Public',
-  joinMode: 'Open',
-  capacity: ''
+  visibility: 0,
+  joinMode: 0,
+  capacity: null,
+  cost: null
 })
 
 const submitting = shallowRef(false)
 const error = shallowRef(null)
 const submitted = shallowRef(false)
+const eventFormRef = ref(null)
 
 // Event image
 const selectedFile = ref(null)
 const croppedBlob = ref(null)
 const previewUrl = ref(null)
-
-watch(() => form.visibility, (v) => {
-  if (v === 'Unlisted') form.joinMode = 'InviteOnly'
-})
-
-/** Earliest selectable datetime (start of today, so 15-min steps align to :00/:15/:30/:45). */
-const nowLocal = computed(() => {
-  const d = new Date()
-  const pad = (n) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T00:00`
-})
-
-/** End picker cannot be earlier than the chosen start. */
-const minEnd = computed(() => form.start || nowLocal.value)
-
-const isValid = computed(() =>
-  form.title.trim().length > 0 &&
-  form.location.trim().length > 0 &&
-  form.start &&
-  form.end &&
-  new Date(form.start) > new Date() &&
-  new Date(form.end) > new Date(form.start) &&
-  (form.capacity === '' || (Number.isInteger(Number(form.capacity)) && Number(form.capacity) >= 1))
-)
-
-const fieldErrors = computed(() => {
-  if (!submitted.value) return {}
-  const errs = {}
-  if (!form.title.trim()) errs.title = 'Title is required.'
-  if (!form.location.trim()) errs.location = 'Location is required.'
-  if (!form.start) errs.start = 'Start date is required.'
-  else if (new Date(form.start) <= new Date()) errs.start = 'Start must be in the future.'
-  if (!form.end) errs.end = 'End date is required.'
-  else if (form.start && new Date(form.end) <= new Date(form.start)) errs.end = 'End must be after start.'
-  if (form.capacity !== '' && (!Number.isInteger(Number(form.capacity)) || Number(form.capacity) < 1))
-    errs.capacity = 'Capacity must be at least 1.'
-  return errs
-})
 
 function onFileChange(event) {
   const file = event.target.files?.[0]
@@ -89,20 +55,23 @@ function removeImage() {
 
 async function submit() {
   submitted.value = true
-  if (!isValid.value) return
+  if (!eventFormRef.value?.isValid) return
 
   submitting.value = true
   error.value = null
 
   try {
+    const f = form.value
     const body = {
-      title: form.title.trim(),
-      location: form.location.trim(),
-      start: new Date(form.start).toISOString(),
-      end: new Date(form.end).toISOString(),
-      visibility: form.visibility === 'Public' ? 0 : 1,
-      joinMode: form.joinMode === 'Open' ? 0 : 1,
-      capacity: form.capacity ? Number(form.capacity) : null
+      title: f.title.trim(),
+      location: f.location.trim(),
+      description: f.description || null,
+      start: new Date(f.start).toISOString(),
+      end: new Date(f.end).toISOString(),
+      visibility: f.visibility,
+      joinMode: f.joinMode,
+      capacity: f.capacity || null,
+      cost: f.cost || null
     }
 
     const res = await authFetch('/api/events', {
@@ -132,107 +101,12 @@ async function submit() {
 
 <template>
   <form @submit.prevent="submit" class="space-y-5">
-    <div>
-      <label for="title" class="block text-sm font-medium text-gray-700 mb-1">Title <span class="text-red-400">*</span></label>
-      <input
-        id="title"
-        data-testid="event-title-input"
-        v-model="form.title"
-        type="text"
-        required
-        :class="['w-full rounded-md border px-3 py-2 text-sm shadow-sm focus:ring-1 focus:ring-indigo-500', fieldErrors.title ? 'border-red-400 focus:border-red-500 focus:ring-red-500' : 'border-gray-300 focus:border-indigo-500']"
-        placeholder="Event title"
-      />
-      <p v-if="fieldErrors.title" data-testid="event-title-error" class="mt-1 text-xs text-red-600">{{ fieldErrors.title }}</p>
-    </div>
-
-    <div>
-      <label for="location" class="block text-sm font-medium text-gray-700 mb-1">Location <span class="text-red-400">*</span></label>
-      <textarea
-        id="location"
-        data-testid="event-location-input"
-        v-model="form.location"
-        rows="3"
-        :class="['w-full rounded-md border px-3 py-2 text-sm shadow-sm focus:ring-1 focus:ring-indigo-500', fieldErrors.location ? 'border-red-400 focus:border-red-500 focus:ring-red-500' : 'border-gray-300 focus:border-indigo-500']"
-        placeholder="Where is this event?"
-      />
-      <p v-if="fieldErrors.location" data-testid="event-location-error" class="mt-1 text-xs text-red-600">{{ fieldErrors.location }}</p>
-    </div>
-
-    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-      <div>
-        <label for="start" class="block text-sm font-medium text-gray-700 mb-1">Start <span class="text-red-400">*</span></label>
-        <input
-          id="start"
-          data-testid="event-start-input"
-          v-model="form.start"
-          type="datetime-local"
-          required
-          step="900"
-          :min="nowLocal"
-          :class="['w-full rounded-md border px-3 py-2 text-sm shadow-sm focus:ring-1 focus:ring-indigo-500', fieldErrors.start ? 'border-red-400 focus:border-red-500 focus:ring-red-500' : 'border-gray-300 focus:border-indigo-500']"
-        />
-        <p v-if="fieldErrors.start" data-testid="event-start-error" class="mt-1 text-xs text-red-600">{{ fieldErrors.start }}</p>
-      </div>
-      <div>
-        <label for="end" class="block text-sm font-medium text-gray-700 mb-1">End <span class="text-red-400">*</span></label>
-        <input
-          id="end"
-          data-testid="event-end-input"
-          v-model="form.end"
-          type="datetime-local"
-          required
-          step="900"
-          :min="minEnd"
-          :class="['w-full rounded-md border px-3 py-2 text-sm shadow-sm focus:ring-1 focus:ring-indigo-500', fieldErrors.end ? 'border-red-400 focus:border-red-500 focus:ring-red-500' : 'border-gray-300 focus:border-indigo-500']"
-        />
-        <p v-if="fieldErrors.end" data-testid="event-end-error" class="mt-1 text-xs text-red-600">{{ fieldErrors.end }}</p>
-      </div>
-    </div>
-
-    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-      <div>
-        <label for="visibility" class="block text-sm font-medium text-gray-700 mb-1">Visibility</label>
-        <select
-          id="visibility"
-          data-testid="event-visibility-select"
-          v-model="form.visibility"
-          class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
-        >
-          <option value="Public">Public</option>
-          <option value="Unlisted">Unlisted</option>
-        </select>
-      </div>
-      <div>
-        <label for="joinMode" class="block text-sm font-medium text-gray-700 mb-1">Who can join?</label>
-        <select
-          id="joinMode"
-          data-testid="event-joinmode-select"
-          v-model="form.joinMode"
-          :disabled="form.visibility === 'Unlisted'"
-          class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 disabled:bg-gray-100 disabled:text-gray-500"
-        >
-          <option value="Open">Anyone</option>
-          <option value="InviteOnly">Invite only</option>
-        </select>
-      </div>
-    </div>
-
-    <div>
-      <label for="capacity" class="block text-sm font-medium text-gray-700 mb-1">
-        Max attendees <span class="text-gray-400 font-normal">(optional)</span>
-      </label>
-      <input
-        id="capacity"
-        data-testid="event-capacity-input"
-        v-model="form.capacity"
-        type="number"
-        min="1"
-        :class="['w-full rounded-md border px-3 py-2 text-sm shadow-sm focus:ring-1 focus:ring-indigo-500 sm:max-w-[12rem]', fieldErrors.capacity ? 'border-red-400 focus:border-red-500 focus:ring-red-500' : 'border-gray-300 focus:border-indigo-500']"
-        placeholder="No limit"
-      />
-      <p v-if="fieldErrors.capacity" data-testid="event-capacity-error" class="mt-1 text-xs text-red-600">{{ fieldErrors.capacity }}</p>
-    </div>
+    <EventForm
+      ref="eventFormRef"
+      v-model="form"
+      :submitted="submitted"
+      test-id-prefix="event"
+    />
 
     <div>
       <label class="block text-sm font-medium text-gray-700 mb-1">
@@ -279,7 +153,7 @@ async function submit() {
       <button
         type="submit"
         data-testid="event-submit-btn"
-        :disabled="!isValid || submitting"
+        :disabled="!eventFormRef?.isValid || submitting"
         class="bg-indigo-600 text-white px-5 py-2 rounded-md text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition"
       >
         {{ submitting ? 'Creating...' : 'Create Event' }}

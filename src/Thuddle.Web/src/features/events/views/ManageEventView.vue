@@ -2,7 +2,7 @@
 import { shallowRef, ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useApi } from '@/shared/composables/useApi'
-import RichTextEditor from '@/shared/components/RichTextEditor.vue'
+import EventForm from '@/features/events/components/EventForm.vue'
 import ImageCropper from '@/features/profile/components/ImageCropper.vue'
 import Spinner from '@/shared/components/Spinner.vue'
 import UserSearchComboBox from '@/shared/components/UserSearchComboBox.vue'
@@ -30,46 +30,12 @@ const saving = shallowRef(false)
 const saveError = shallowRef(null)
 const saveSuccess = shallowRef(false)
 const submitted = shallowRef(false)
+const eventFormRef = ref(null)
 
 // Event image
 const selectedImageFile = ref(null)
 const uploadingImage = shallowRef(false)
 const imageError = shallowRef(null)
-
-watch(() => form.value.visibility, (v) => {
-  if (v === 1) form.value.joinMode = 1
-})
-
-/** Earliest selectable datetime (start of today, so 15-min steps align to :00/:15/:30/:45). */
-const nowLocal = computed(() => {
-  const d = new Date()
-  const pad = (n) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T00:00`
-})
-
-/** End picker cannot be earlier than the chosen start. */
-const minEnd = computed(() => form.value.start || nowLocal.value)
-
-const isFormValid = computed(() =>
-  form.value.title?.trim().length > 0 &&
-  form.value.location?.trim().length > 0 &&
-  form.value.start &&
-  form.value.end &&
-  new Date(form.value.end) > new Date(form.value.start) &&
-  new Date(form.value.start) > new Date()
-)
-
-const fieldErrors = computed(() => {
-  if (!submitted.value) return {}
-  const errs = {}
-  if (!form.value.title?.trim()) errs.title = 'Title is required.'
-  if (!form.value.location?.trim()) errs.location = 'Location is required.'
-  if (!form.value.start) errs.start = 'Start date is required.'
-  else if (new Date(form.value.start) <= new Date()) errs.start = 'Start must be in the future.'
-  if (!form.value.end) errs.end = 'End date is required.'
-  else if (form.value.start && new Date(form.value.end) <= new Date(form.value.start)) errs.end = 'End must be after start.'
-  return errs
-})
 
 // Attendees
 const attendees = ref([])
@@ -214,7 +180,7 @@ async function loadEvent() {
 
 async function saveEvent() {
   submitted.value = true
-  if (!isFormValid.value) return
+  if (!eventFormRef.value?.isValid) return
   saving.value = true
   saveError.value = null
   saveSuccess.value = false
@@ -432,82 +398,17 @@ onMounted(async () => {
           </div>
 
           <form @submit.prevent="saveEvent" class="space-y-4">
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">Title <span class="text-red-400">*</span></label>
-              <input v-model="form.title" type="text" required
-                data-testid="manage-title-input"
-                :class="['w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500', fieldErrors.title ? 'border-red-400 focus:border-red-500 focus:ring-red-500' : 'border-gray-300 focus:border-indigo-500']" />
-              <p v-if="fieldErrors.title" data-testid="manage-title-error" class="mt-1 text-xs text-red-600">{{ fieldErrors.title }}</p>
-            </div>
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">Location <span class="text-red-400">*</span></label>
-              <textarea v-model="form.location" rows="3"
-                data-testid="manage-location-input"
-                :class="['w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500', fieldErrors.location ? 'border-red-400 focus:border-red-500 focus:ring-red-500' : 'border-gray-300 focus:border-indigo-500']" />
-              <p v-if="fieldErrors.location" data-testid="manage-location-error" class="mt-1 text-xs text-red-600">{{ fieldErrors.location }}</p>
-            </div>
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">Description</label>
-              <RichTextEditor v-model="form.description" :upload-image="uploadDescriptionImage" />
-            </div>
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">Start <span class="text-red-400">*</span></label>
-                <input v-model="form.start" type="datetime-local" required
-                  data-testid="manage-start-input"
-                  step="900"
-                  :min="nowLocal"
-                  :class="['w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500', fieldErrors.start ? 'border-red-400 focus:border-red-500 focus:ring-red-500' : 'border-gray-300 focus:border-indigo-500']" />
-                <p v-if="fieldErrors.start" data-testid="manage-start-error" class="mt-1 text-xs text-red-600">{{ fieldErrors.start }}</p>
-              </div>
-              <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">End <span class="text-red-400">*</span></label>
-                <input v-model="form.end" type="datetime-local" required
-                  data-testid="manage-end-input"
-                  step="900"
-                  :min="minEnd"
-                  :class="['w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500', fieldErrors.end ? 'border-red-400 focus:border-red-500 focus:ring-red-500' : 'border-gray-300 focus:border-indigo-500']" />
-                <p v-if="fieldErrors.end" data-testid="manage-end-error" class="mt-1 text-xs text-red-600">{{ fieldErrors.end }}</p>
-              </div>
-            </div>
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">Visibility</label>
-                <select v-model.number="form.visibility"
-                  data-testid="manage-visibility-select"
-                  class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
-                  <option :value="0">Public</option>
-                  <option :value="1">Unlisted</option>
-                </select>
-              </div>
-              <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">Join Mode</label>
-                <select v-model.number="form.joinMode"
-                  :disabled="form.visibility === 1"
-                  data-testid="manage-joinmode-select"
-                  class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 disabled:bg-gray-100 disabled:text-gray-500">
-                  <option :value="0">Open</option>
-                  <option :value="1">Invite only</option>
-                </select>
-              </div>
-            </div>
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">Capacity</label>
-                <input v-model.number="form.capacity" type="number" min="1" placeholder="Unlimited"
-                  data-testid="manage-capacity-input"
-                  class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
-              </div>
-              <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">Cost</label>
-                <input v-model.number="form.cost" type="number" min="0" step="0.01" placeholder="Free"
-                  data-testid="manage-cost-input"
-                  class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
-              </div>
-            </div>
+            <EventForm
+              ref="eventFormRef"
+              v-model="form"
+              :submitted="submitted"
+              test-id-prefix="manage"
+              :upload-image="uploadDescriptionImage"
+              :show-cost="true"
+            />
 
             <div class="flex items-center gap-3 pt-2">
-              <button type="submit" :disabled="saving || !isFormValid"
+              <button type="submit" :disabled="saving || !eventFormRef?.isValid"
                 data-testid="manage-save-btn"
                 class="px-5 py-2 text-sm font-semibold rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 transition-colors">
                 {{ saving ? 'Saving…' : 'Save Changes' }}

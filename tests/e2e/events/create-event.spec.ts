@@ -19,8 +19,8 @@ test.describe('Create event', () => {
       await page.getByTestId('event-start-input').fill(dates.start)
       await page.getByTestId('event-end-input').fill(dates.end)
 
-      await expect(page.getByTestId('event-visibility-select')).toHaveValue('Public')
-      await expect(page.getByTestId('event-joinmode-select')).toHaveValue('Open')
+      await expect(page.getByTestId('event-visibility-select')).toHaveValue('0')
+      await expect(page.getByTestId('event-joinmode-select')).toHaveValue('0')
 
       const responsePromise = page.waitForResponse(
         (r) => r.url().includes('/api/events') && r.request().method() === 'POST'
@@ -47,7 +47,7 @@ test.describe('Create event', () => {
       const dates = futureDates(2, 14)
       await page.getByTestId('event-start-input').fill(dates.start)
       await page.getByTestId('event-end-input').fill(dates.end)
-      await page.getByTestId('event-joinmode-select').selectOption('InviteOnly')
+      await page.getByTestId('event-joinmode-select').selectOption('1')
 
       const responsePromise = page.waitForResponse(
         (r) => r.url().includes('/api/events') && r.request().method() === 'POST'
@@ -86,6 +86,41 @@ test.describe('Create event', () => {
       createdEvents.push(body3.id)
 
       await expect(page).toHaveURL(baseURL!, { timeout: 15000 })
+    })
+
+    test('admin can create an event with a description', async ({ page, baseURL, createdEvents }) => {
+      const name = `Described ${uid()}`
+      const descText = `This is a test description ${uid()}`
+
+      await page.goto(baseURL!)
+      await page.getByTestId('event-create-btn').waitFor({ state: 'visible', timeout: 20000 })
+      await page.getByTestId('event-create-btn').click()
+
+      await page.getByTestId('event-title-input').fill(name)
+      await page.getByTestId('event-location-input').fill('Description Venue')
+
+      // Type into the WYSIWYG editor
+      const editor = page.getByTestId('event-description-editor').locator('.ProseMirror')
+      await editor.click()
+      await editor.fill(descText)
+
+      const dates = futureDates(4, 10)
+      await page.getByTestId('event-start-input').fill(dates.start)
+      await page.getByTestId('event-end-input').fill(dates.end)
+
+      const responsePromise = page.waitForResponse(
+        (r) => r.url().includes('/api/events') && r.request().method() === 'POST'
+      )
+      await page.getByTestId('event-submit-btn').click()
+      const response = await responsePromise
+      expect(response.status()).toBe(201)
+      const body = await response.json()
+      createdEvents.push(body.id)
+      expect(body.description).toContain(descText)
+
+      // Verify description on the event detail page
+      await page.goto(`${baseURL}/events/${body.id}`)
+      await expect(page.getByTestId('event-description')).toContainText(descText, { timeout: 10000 })
     })
   })
 
