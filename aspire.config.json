@@ -1,0 +1,5 @@
+{
+  "appHost": {
+    "path": "src/Thuddle.AppHost/Thuddle.AppHost.csproj"
+  }
+}

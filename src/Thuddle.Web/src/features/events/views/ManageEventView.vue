@@ -401,11 +401,13 @@ onMounted(async () => {
             <div>
               <label class="block text-sm font-medium text-gray-700 mb-1">Title</label>
               <input v-model="form.title" type="text" required
+                data-testid="manage-title-input"
                 class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
             </div>
             <div>
               <label class="block text-sm font-medium text-gray-700 mb-1">Location</label>
               <textarea v-model="form.location" rows="3"
+                data-testid="manage-location-input"
                 class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
             </div>
             <div>
@@ -416,11 +418,13 @@ onMounted(async () => {
               <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">Start</label>
                 <input v-model="form.start" type="datetime-local" required
+                  data-testid="manage-start-input"
                   class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
               </div>
               <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">End</label>
                 <input v-model="form.end" type="datetime-local" required
+                  data-testid="manage-end-input"
                   class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
               </div>
             </div>
@@ -428,6 +432,7 @@ onMounted(async () => {
               <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">Visibility</label>
                 <select v-model.number="form.visibility"
+                  data-testid="manage-visibility-select"
                   class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
                   <option :value="0">Public</option>
                   <option :value="1">Unlisted</option>
@@ -437,6 +442,7 @@ onMounted(async () => {
                 <label class="block text-sm font-medium text-gray-700 mb-1">Join Mode</label>
                 <select v-model.number="form.joinMode"
                   :disabled="form.visibility === 1"
+                  data-testid="manage-joinmode-select"
                   class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 disabled:bg-gray-100 disabled:text-gray-500">
                   <option :value="0">Open</option>
                   <option :value="1">Invite only</option>
@@ -447,22 +453,25 @@ onMounted(async () => {
               <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">Capacity</label>
                 <input v-model.number="form.capacity" type="number" min="1" placeholder="Unlimited"
+                  data-testid="manage-capacity-input"
                   class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
               </div>
               <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">Cost</label>
                 <input v-model.number="form.cost" type="number" min="0" step="0.01" placeholder="Free"
+                  data-testid="manage-cost-input"
                   class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
               </div>
             </div>
 
             <div class="flex items-center gap-3 pt-2">
               <button type="submit" :disabled="saving"
+                data-testid="manage-save-btn"
                 class="px-5 py-2 text-sm font-semibold rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 transition-colors">
                 {{ saving ? 'Saving…' : 'Save Changes' }}
               </button>
-              <span v-if="saveSuccess" class="text-sm text-green-600">Saved!</span>
-              <span v-if="saveError" class="text-sm text-red-600">{{ saveError }}</span>
+              <span v-if="saveSuccess" data-testid="manage-save-success" class="text-sm text-green-600">Saved!</span>
+              <span v-if="saveError" data-testid="manage-save-error" class="text-sm text-red-600">{{ saveError }}</span>
             </div>
           </form>
         </div>
