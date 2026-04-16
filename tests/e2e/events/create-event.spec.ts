@@ -88,6 +88,65 @@ test.describe('Create event', () => {
       await expect(page).toHaveURL(baseURL!, { timeout: 15000 })
     })
 
+    test('admin can create an event with a cost', async ({ page, baseURL, createdEvents }) => {
+      const name = `Paid ${uid()}`
+
+      await page.goto(baseURL!)
+      await page.getByTestId('event-create-btn').waitFor({ state: 'visible', timeout: 20000 })
+      await page.getByTestId('event-create-btn').click()
+
+      await page.getByTestId('event-title-input').fill(name)
+      await page.getByTestId('event-location-input').fill('Paid Venue')
+
+      const dates = futureDates(3, 14)
+      await page.getByTestId('event-start-input').fill(dates.start)
+      await page.getByTestId('event-end-input').fill(dates.end)
+      await page.getByTestId('event-cost-input').fill('25.50')
+
+      const responsePromise = page.waitForResponse(
+        (r) => r.url().includes('/api/events') && r.request().method() === 'POST',
+      )
+      await page.getByTestId('event-submit-btn').click()
+      const response = await responsePromise
+      expect(response.status()).toBe(201)
+      const body = await response.json()
+      createdEvents.push(body.id)
+      expect(body.cost).toBe(25.5)
+
+      // Verify cost shows on the event detail page
+      await page.goto(`${baseURL}/events/${body.id}`)
+      await page.getByTestId('event-detail').waitFor({ state: 'visible', timeout: 15000 })
+      await expect(page.getByTestId('event-detail')).toContainText('25.5')
+    })
+
+    test('event created without cost defaults to free', async ({ page, baseURL, createdEvents }) => {
+      const name = `Free ${uid()}`
+
+      await page.goto(baseURL!)
+      await page.getByTestId('event-create-btn').waitFor({ state: 'visible', timeout: 20000 })
+      await page.getByTestId('event-create-btn').click()
+
+      await page.getByTestId('event-title-input').fill(name)
+      await page.getByTestId('event-location-input').fill('Free Venue')
+
+      const dates = futureDates(4, 10)
+      await page.getByTestId('event-start-input').fill(dates.start)
+      await page.getByTestId('event-end-input').fill(dates.end)
+
+      // Leave cost empty
+      await expect(page.getByTestId('event-cost-input')).toHaveValue('')
+
+      const responsePromise = page.waitForResponse(
+        (r) => r.url().includes('/api/events') && r.request().method() === 'POST',
+      )
+      await page.getByTestId('event-submit-btn').click()
+      const response = await responsePromise
+      expect(response.status()).toBe(201)
+      const body = await response.json()
+      createdEvents.push(body.id)
+      expect(body.cost).toBeNull()
+    })
+
     test('admin can create an event with a description', async ({ page, baseURL, createdEvents }) => {
       const name = `Described ${uid()}`
       const descText = `This is a test description ${uid()}`
