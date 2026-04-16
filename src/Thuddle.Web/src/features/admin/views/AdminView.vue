@@ -1,6 +1,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useAdminApi } from '@/features/admin/composables/useAdminApi'
+import UserSearchComboBox from '@/shared/components/UserSearchComboBox.vue'
 
 const {
   entries,
@@ -11,7 +12,7 @@ const {
   revokePermission,
 } = useAdminApi()
 
-const grantEmail = ref('')
+const selectedUser = ref(null)
 const grantPerm = ref('')
 const granting = ref(false)
 const error = ref(null)
@@ -50,15 +51,25 @@ onMounted(async () => {
   }
 })
 
+function onUserSelected(result) {
+  if (result.type === 'user') {
+    selectedUser.value = { id: result.id, email: result.email, displayName: result.displayName || result.fullName || result.email }
+  }
+}
+
+function clearSelectedUser() {
+  selectedUser.value = null
+}
+
 async function onGrant() {
-  const email = grantEmail.value.trim()
+  if (!selectedUser.value || !grantPerm.value) return
+  const { email } = selectedUser.value
   const perm = grantPerm.value
-  if (!email || !perm) return
   granting.value = true
   error.value = null
   try {
     await grantPermission(email, perm)
-    grantEmail.value = ''
+    selectedUser.value = null
     showToast(`Granted ${perm} to ${email}`)
   } catch (err) {
     error.value = err.message || 'Failed to grant permission.'
@@ -110,20 +121,27 @@ function badgeClass(perm) {
     <!-- Grant permission form -->
     <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 mb-8">
       <h2 class="text-base font-bold text-slate-900 mb-4">Grant Permission</h2>
-      <form @submit.prevent="onGrant" class="flex flex-col sm:flex-row gap-3" autocomplete="off">
-        <input
-          v-model="grantEmail"
-          type="email"
-          placeholder="User email…"
-          data-testid="admin-grant-email-input"
-          name="thuddle-admin-email"
-          autocomplete="off"
-          data-lpignore="true"
-          data-1p-ignore="true"
-          data-form-type="other"
-          data-bwignore="true"
-          class="flex-1 rounded-xl border border-slate-200 px-4 py-2.5 text-sm shadow-sm placeholder:text-slate-400 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all font-medium"
-        />
+      <form @submit.prevent="onGrant" class="flex flex-col sm:flex-row gap-3 items-start" autocomplete="off">
+        <div class="flex-1 min-w-0" data-testid="admin-grant-user-picker">
+          <div v-if="selectedUser" class="flex items-center gap-2 rounded-xl border border-indigo-200 bg-indigo-50/50 px-4 py-2.5 text-sm font-medium">
+            <span class="truncate" data-testid="admin-grant-selected-user">{{ selectedUser.displayName }} <span class="text-slate-500 font-normal">({{ selectedUser.email }})</span></span>
+            <button
+              type="button"
+              data-testid="admin-grant-clear-user"
+              class="shrink-0 ml-auto text-slate-400 hover:text-red-500 transition-colors"
+              @click="clearSelectedUser"
+            >
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+          <UserSearchComboBox
+            v-else
+            placeholder="Search for a user…"
+            @select="onUserSelected"
+          />
+        </div>
         <select
           v-model="grantPerm"
           data-testid="admin-grant-permission-select"
@@ -133,7 +151,7 @@ function badgeClass(perm) {
         </select>
         <button
           type="submit"
-          :disabled="granting || !grantEmail.trim() || !grantPerm"
+          :disabled="granting || !selectedUser || !grantPerm"
           data-testid="admin-grant-btn"
           class="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 text-white text-sm font-bold shadow-sm hover:bg-indigo-700 hover:shadow-md disabled:opacity-40 disabled:cursor-not-allowed transition-all"
         >
@@ -171,6 +189,8 @@ function badgeClass(perm) {
               v-for="(perm, idx) in user.permissions"
               :key="perm"
               data-testid="admin-permission-row"
+              :data-user-email="user.email"
+              :data-permission="perm"
               class="group hover:bg-slate-50/50 transition-colors"
             >
               <td v-if="idx === 0" :rowspan="user.permissions.length" class="px-6 py-3 align-top">

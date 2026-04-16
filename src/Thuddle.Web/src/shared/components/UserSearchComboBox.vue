@@ -199,7 +199,7 @@ function userInitials(user) {
     </div>
 
     <ul
-      v-if="open && (matchingGroups.length || filteredResults.length || showUnknownOption || loading)"
+      v-if="open && (matchingGroups.length || filteredResults.length || showUnknownOption || loading || query.trim().length >= 2)"
       ref="listRef"
       id="user-search-listbox"
       role="listbox"

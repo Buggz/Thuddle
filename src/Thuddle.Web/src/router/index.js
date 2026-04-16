@@ -49,7 +49,7 @@ export default function initRouter() {
     ]
   })
 
-  router.beforeEach((to) => {
+  router.beforeEach(async (to) => {
     const auth = useAuthStore()
 
     if (to.meta.requiresAuth && !auth.isAuthenticated) {
@@ -59,6 +59,12 @@ export default function initRouter() {
 
     if (to.meta.requiredPermission) {
       const permissions = usePermissionsStore()
+      // Wait for permissions to finish loading before checking.
+      // Without this, direct navigation (e.g. page reload on /admin) can
+      // race the async permission load and incorrectly redirect to /.
+      if (auth.isAuthenticated && !permissions.loaded) {
+        await permissions.load()
+      }
       if (!permissions.hasPermission(to.meta.requiredPermission)) {
         return { path: '/' }
       }
