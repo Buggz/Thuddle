@@ -106,6 +106,7 @@ async function submit() {
       v-model="form"
       :submitted="submitted"
       test-id-prefix="event"
+      :show-cost="true"
     />
 
     <div>

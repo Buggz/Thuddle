@@ -501,6 +501,7 @@ onMounted(async () => {
                 <td v-if="hasCost" class="py-2.5 text-center">
                   <button
                     @click="togglePaid(a)"
+                    data-testid="manage-payment-toggle-btn"
                     class="inline-flex items-center justify-center gap-1.5 w-[88px] px-3 py-1.5 text-xs font-semibold rounded-lg ring-1 ring-inset shadow-sm transition-all focus:outline-none focus:ring-2 focus:ring-offset-1 active:scale-95"
                     :class="a.hasPaid
                       ? 'bg-emerald-50 text-emerald-700 ring-emerald-600/30 hover:bg-emerald-100 focus:ring-emerald-600'
