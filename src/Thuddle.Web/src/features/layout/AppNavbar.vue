@@ -120,6 +120,7 @@ function closeMenu() {
                     </RouterLink>
                     
                     <RouterLink
+                      v-if="permissionsStore.hasPermission('groups:manage')"
                       data-testid="nav-groups-link"
                       to="/groups"
                       class="flex items-center gap-2 w-full px-3 py-2 text-sm font-medium text-gray-700 rounded-xl hover:bg-gray-50 hover:text-indigo-600 transition-colors"

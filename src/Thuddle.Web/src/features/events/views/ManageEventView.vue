@@ -7,10 +7,12 @@ import ImageCropper from '@/features/profile/components/ImageCropper.vue'
 import Spinner from '@/shared/components/Spinner.vue'
 import UserSearchComboBox from '@/shared/components/UserSearchComboBox.vue'
 import GroupSelectorPopover from '@/features/groups/components/GroupSelectorPopover.vue'
+import { usePermissionsStore } from '@/features/auth/stores/permissions'
 
 const route = useRoute()
 const router = useRouter()
 const { authFetch } = useApi()
+const permissionsStore = usePermissionsStore()
 
 const eventId = route.params.id
 const activeTab = shallowRef('about')
@@ -536,7 +538,7 @@ onMounted(async () => {
           <template v-else>
             <div class="flex items-center justify-between mb-4">
               <span class="text-[11px] font-bold tracking-wider uppercase text-slate-400">{{ attendees.length }} {{ attendees.length === 1 ? 'attendee' : 'attendees' }}</span>
-              <div class="relative" v-if="attendees.length > 0">
+              <div class="relative" v-if="attendees.length > 0 && permissionsStore.hasPermission('groups:manage')">
                 <button
                   type="button"
                   data-testid="manage-save-attendees-as-group-btn"
@@ -550,6 +552,7 @@ onMounted(async () => {
                 </button>
                 <div v-if="groupPopoverFor === 'all'" class="absolute right-0 mt-1.5 z-40">
                   <GroupSelectorPopover
+                    v-if="permissionsStore.hasPermission('groups:manage')"
                     :user-ids="popoverUserIds()"
                     title="Add everyone to group"
                     @added="onGroupAdded"
@@ -577,7 +580,7 @@ onMounted(async () => {
                 <th class="px-4 py-3">Email</th>
                 <th class="px-4 py-3">Joined</th>
                 <th v-if="hasCost" class="px-4 py-3 text-center">Paid</th>
-                <th class="px-4 py-3 w-12"></th>
+                <th v-if="permissionsStore.hasPermission('groups:manage')" class="px-4 py-3 w-12"></th>
               </tr>
             </thead>
             <tbody class="divide-y divide-slate-100 bg-white">
@@ -610,7 +613,7 @@ onMounted(async () => {
                     {{ a.hasPaid ? 'Paid' : 'Unpaid' }}
                   </button>
                 </td>
-                <td class="px-4 py-3 text-right relative">
+                <td v-if="permissionsStore.hasPermission('groups:manage')" class="px-4 py-3 text-right relative">
                   <button
                     type="button"
                     :data-testid="`manage-attendee-add-to-group-btn`"
@@ -626,6 +629,7 @@ onMounted(async () => {
                   </button>
                   <div v-if="groupPopoverFor === a.userId" class="absolute right-6 mt-1 z-40">
                     <GroupSelectorPopover
+                      v-if="permissionsStore.hasPermission('groups:manage')"
                       :user-ids="[a.userId]"
                       :title="`Add ${a.displayName}`"
                       @added="onGroupAdded"
@@ -658,7 +662,7 @@ onMounted(async () => {
             <UserSearchComboBox
               :allow-unknown-email="true"
               :exclude-emails="excludedInviteEmails"
-              :include-groups="true"
+              :include-groups="permissionsStore.hasPermission('groups:manage')"
               placeholder="Search people, groups, or type an email…"
               @select="onInviteeSelect"
             />

@@ -8,14 +8,14 @@ public static class ContactGroupEndpoints
 {
     public static void MapContactGroupEndpoints(this WebApplication app)
     {
-        app.MapGet("/api/groups", GetGroups).RequireAuthorization();
-        app.MapGet("/api/groups/{groupId:guid}", GetGroup).RequireAuthorization();
-        app.MapPost("/api/groups", CreateGroup).RequireAuthorization();
-        app.MapPut("/api/groups/{groupId:guid}", RenameGroup).RequireAuthorization();
-        app.MapDelete("/api/groups/{groupId:guid}", DeleteGroup).RequireAuthorization();
-        app.MapPost("/api/groups/{groupId:guid}/members", AddMembers).RequireAuthorization();
-        app.MapDelete("/api/groups/{groupId:guid}/members/{userId:guid}", RemoveMember).RequireAuthorization();
-        app.MapPost("/api/groups/{groupId:guid}/import-attendees/{eventId:guid}", ImportAttendees).RequireAuthorization();
+        app.MapGet("/api/groups", GetGroups).RequireAuthorization("groups:manage");
+        app.MapGet("/api/groups/{groupId:guid}", GetGroup).RequireAuthorization("groups:manage");
+        app.MapPost("/api/groups", CreateGroup).RequireAuthorization("groups:manage");
+        app.MapPut("/api/groups/{groupId:guid}", RenameGroup).RequireAuthorization("groups:manage");
+        app.MapDelete("/api/groups/{groupId:guid}", DeleteGroup).RequireAuthorization("groups:manage");
+        app.MapPost("/api/groups/{groupId:guid}/members", AddMembers).RequireAuthorization("groups:manage");
+        app.MapDelete("/api/groups/{groupId:guid}/members/{userId:guid}", RemoveMember).RequireAuthorization("groups:manage");
+        app.MapPost("/api/groups/{groupId:guid}/import-attendees/{eventId:guid}", ImportAttendees).RequireAuthorization("groups:manage");
     }
 
     private static string? GetKeycloakId(ClaimsPrincipal user)

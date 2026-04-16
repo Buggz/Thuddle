@@ -47,7 +47,9 @@ builder.Services.AddAuthorizationBuilder()
         .RequireAuthenticatedUser()
         .Build())
     .AddPolicy("events:write", policy =>
-        policy.Requirements.Add(new PermissionRequirement("events:write")));
+        policy.Requirements.Add(new PermissionRequirement("events:write")))
+    .AddPolicy("groups:manage", policy =>
+        policy.Requirements.Add(new PermissionRequirement("groups:manage")));
 
 builder.Services.AddScoped<IAuthorizationHandler, PermissionHandler>();
 

@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '@/features/auth/stores/auth'
+import { usePermissionsStore } from '@/features/auth/stores/permissions'
 
 export default function initRouter() {
   const router = createRouter({
@@ -20,7 +21,7 @@ export default function initRouter() {
         path: '/groups',
         name: 'groups',
         component: () => import('@/features/groups/views/GroupsView.vue'),
-        meta: { requiresAuth: true }
+        meta: { requiresAuth: true, requiredPermission: 'groups:manage' }
       },
       {
         path: '/events/create',
@@ -48,6 +49,13 @@ export default function initRouter() {
     if (to.meta.requiresAuth && !auth.isAuthenticated) {
       auth.login(to.fullPath)
       return false
+    }
+
+    if (to.meta.requiredPermission) {
+      const permissions = usePermissionsStore()
+      if (!permissions.hasPermission(to.meta.requiredPermission)) {
+        return { path: '/' }
+      }
     }
   })
 
