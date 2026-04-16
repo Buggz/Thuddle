@@ -382,13 +382,17 @@ test.describe('Join event', () => {
 
 ## Running tests
 
-### Start the app first
+### Start the app first (without volumes)
+
+Tests require a clean database on every run. Start the Aspire app **without persistent volumes** so PostgreSQL and Keycloak start fresh each time:
 
 ```bash
-aspire start
+aspire start -- --NoVolumes=true
 aspire wait api
 aspire wait web
 ```
+
+The `--NoVolumes=true` flag is passed through to the AppHost configuration and disables `WithDataVolume()` on PostgreSQL and Keycloak containers. Without this flag, stale data from previous runs can cause test failures.
 
 ### Discover the frontend URL
 

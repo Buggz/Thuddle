@@ -576,11 +576,11 @@ onMounted(async () => {
             placeholder="Search for a co-admin by name or email…"
             @select="onCoAdminSelect"
           />
-          <div v-if="addingCoAdmin" class="mt-2 text-sm text-gray-400">Adding…</div>
-          <div v-if="coAdminError" class="text-sm text-red-600 mt-2 mb-3">{{ coAdminError }}</div>
-          <div v-if="coAdmins.length === 0 && !addingCoAdmin" class="text-sm text-gray-400 mt-4">No co-admins yet.</div>
-          <ul v-else class="divide-y divide-gray-100">
-            <li v-for="admin in coAdmins" :key="admin.userId" class="flex items-center justify-between py-2.5">
+          <div v-if="addingCoAdmin" data-testid="manage-coadmin-adding" class="mt-2 text-sm text-gray-400">Adding…</div>
+          <div v-if="coAdminError" data-testid="manage-coadmin-error" class="text-sm text-red-600 mt-2 mb-3">{{ coAdminError }}</div>
+          <div v-if="coAdmins.length === 0 && !addingCoAdmin" data-testid="manage-coadmin-empty" class="text-sm text-gray-400 mt-4">No co-admins yet.</div>
+          <ul v-else data-testid="manage-coadmin-list" class="divide-y divide-gray-100">
+            <li v-for="admin in coAdmins" :key="admin.userId" data-testid="manage-coadmin-row" class="flex items-center justify-between py-2.5">
               <div>
                 <p class="text-sm font-medium text-gray-900">{{ admin.displayName }}</p>
                 <p class="text-xs text-gray-500">
@@ -591,6 +591,7 @@ onMounted(async () => {
               </div>
               <button
                 @click="removeCoAdmin(admin)"
+                data-testid="manage-coadmin-remove-btn"
                 class="text-xs text-red-600 hover:text-red-800 font-medium"
               >
                 Remove
