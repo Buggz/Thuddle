@@ -201,7 +201,7 @@ watch(() => auth.isAuthenticated, (authenticated, wasAuthenticated) => {
             <p class="mt-2 text-sm font-medium text-white/80">Hosted by <span class="text-white">{{ event.ownerName }}</span></p>
           </div>
           
-          <div v-if="event.hasJoined" class="absolute top-4 right-4 flex items-center gap-1 rounded-full bg-emerald-500 px-3 py-1.5 text-xs font-bold text-white shadow-lg uppercase tracking-wide">
+          <div v-if="event.hasJoined" data-testid="event-joined-badge" class="absolute top-4 right-4 flex items-center gap-1 rounded-full bg-emerald-500 px-3 py-1.5 text-xs font-bold text-white shadow-lg uppercase tracking-wide">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" />
             </svg>
@@ -278,14 +278,22 @@ watch(() => auth.isAuthenticated, (authenticated, wasAuthenticated) => {
           <div class="flex flex-col sm:flex-row items-center w-full sm:w-auto gap-3">
             <template v-if="!event.hasJoined">
               <button
-                v-if="event.canJoin || event.hasInvitation"
+                v-if="auth.isAuthenticated && (event.canJoin || event.hasInvitation)"
                 data-testid="event-join-btn"
                 @click="joinEvent"
                 class="w-full sm:w-auto justify-center inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-8 py-3 text-sm font-bold text-white shadow-md hover:bg-indigo-500 hover:shadow-lg hover:-translate-y-0.5 transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
               >
                 Join Event
               </button>
-              <div v-else-if="!event.hasInvitation && event.joinMode === 1" class="text-sm font-medium text-gray-500 bg-gray-50 rounded-lg px-4 py-2 border border-gray-200">
+              <button
+                v-else-if="!auth.isAuthenticated && event.joinMode !== 1"
+                data-testid="event-join-btn-disabled"
+                disabled
+                class="w-full sm:w-auto justify-center inline-flex items-center gap-2 rounded-xl bg-indigo-300 px-8 py-3 text-sm font-bold text-white cursor-not-allowed"
+              >
+                Join Event
+              </button>
+              <div v-else-if="!event.hasInvitation && event.joinMode === 1" data-testid="event-invite-only-msg" class="text-sm font-medium text-gray-500 bg-gray-50 rounded-lg px-4 py-2 border border-gray-200">
                 This event is invite only.
               </div>
             </template>
@@ -340,7 +348,7 @@ watch(() => auth.isAuthenticated, (authenticated, wasAuthenticated) => {
               <div v-if="event.postCount" class="ml-2.5 flex items-center transition-colors">
                 <div class="relative flex items-center justify-center px-2 py-0.5 rounded-md border text-xs font-semibold shadow-sm"
                      :class="(event.hasUnreadDiscussion && activeTab !== 'discussion') || activeTab === 'discussion' ? 'bg-indigo-50 text-indigo-700 border-indigo-100' : 'bg-white text-gray-500 border-gray-200/60'">
-                  <span v-if="event.hasUnreadDiscussion && activeTab !== 'discussion'" class="absolute -top-1 -right-1 flex h-2.5 w-2.5">
+                  <span v-if="event.hasUnreadDiscussion && activeTab !== 'discussion'" data-testid="discussion-unread-indicator" class="absolute -top-1 -right-1 flex h-2.5 w-2.5">
                     <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
                     <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-rose-500 ring-2 ring-white"></span>
                   </span>
