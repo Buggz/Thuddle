@@ -169,6 +169,7 @@ watch(() => auth.isAuthenticated, (authenticated, wasAuthenticated) => {
             v-if="event.picturePath"
             :src="event.picturePath"
             :alt="event.title"
+            data-testid="event-hero-image"
             class="absolute inset-0 w-full h-full object-cover"
           />
           <div
@@ -315,6 +316,7 @@ watch(() => auth.isAuthenticated, (authenticated, wasAuthenticated) => {
             <RouterLink
               v-if="event.isAdmin"
               :to="{ name: 'manage-event', params: { id: event.id } }"
+              data-testid="event-manage-link"
               class="w-full sm:w-auto flex justify-center items-center gap-2 rounded-xl bg-white px-6 py-3 text-sm font-bold text-gray-700 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 hover:text-gray-900 transition-all"
             >
               <svg class="w-4 h-4 opacity-70" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">

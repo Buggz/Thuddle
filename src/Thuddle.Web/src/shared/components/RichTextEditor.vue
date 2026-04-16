@@ -98,41 +98,41 @@ function isActive(name, attrs) {
 <template>
   <div class="rounded-lg border border-gray-300 overflow-hidden focus-within:ring-2 focus-within:ring-indigo-500 focus-within:border-indigo-500">
     <!-- Toolbar -->
-    <div class="flex flex-wrap items-center gap-0.5 px-2 py-1.5 bg-gray-50 border-b border-gray-200">
+    <div class="flex flex-wrap items-center gap-0.5 px-2 py-1.5 bg-gray-50 border-b border-gray-200" data-testid="rte-toolbar">
       <!-- Block Type -->
-      <button type="button" @click="setParagraph()"
+      <button type="button" @click="setParagraph()" data-testid="rte-btn-paragraph"
         :class="['rounded px-2 py-1 text-xs font-medium transition-colors', isActive('paragraph') ? 'bg-indigo-100 text-indigo-700' : 'text-gray-600 hover:bg-gray-200']"
       >P</button>
-      <button type="button" @click="setHeading(1)"
+      <button type="button" @click="setHeading(1)" data-testid="rte-btn-h1"
         :class="['rounded px-2 py-1 text-xs font-bold transition-colors', isActive('heading', { level: 1 }) ? 'bg-indigo-100 text-indigo-700' : 'text-gray-600 hover:bg-gray-200']"
       >H1</button>
-      <button type="button" @click="setHeading(2)"
+      <button type="button" @click="setHeading(2)" data-testid="rte-btn-h2"
         :class="['rounded px-2 py-1 text-xs font-bold transition-colors', isActive('heading', { level: 2 }) ? 'bg-indigo-100 text-indigo-700' : 'text-gray-600 hover:bg-gray-200']"
       >H2</button>
-      <button type="button" @click="setHeading(3)"
+      <button type="button" @click="setHeading(3)" data-testid="rte-btn-h3"
         :class="['rounded px-2 py-1 text-xs font-bold transition-colors', isActive('heading', { level: 3 }) ? 'bg-indigo-100 text-indigo-700' : 'text-gray-600 hover:bg-gray-200']"
       >H3</button>
 
       <div class="w-px h-5 bg-gray-300 mx-1" />
 
       <!-- Inline formatting -->
-      <button type="button" @click="toggleBold()"
+      <button type="button" @click="toggleBold()" data-testid="rte-btn-bold"
         :class="['rounded px-2 py-1 text-xs font-bold transition-colors', isActive('bold') ? 'bg-indigo-100 text-indigo-700' : 'text-gray-600 hover:bg-gray-200']"
       >B</button>
-      <button type="button" @click="toggleItalic()"
+      <button type="button" @click="toggleItalic()" data-testid="rte-btn-italic"
         :class="['rounded px-2 py-1 text-xs font-medium italic transition-colors', isActive('italic') ? 'bg-indigo-100 text-indigo-700' : 'text-gray-600 hover:bg-gray-200']"
       >I</button>
-      <button type="button" @click="toggleUnderline()"
+      <button type="button" @click="toggleUnderline()" data-testid="rte-btn-underline"
         :class="['rounded px-2 py-1 text-xs font-medium underline transition-colors', isActive('underline') ? 'bg-indigo-100 text-indigo-700' : 'text-gray-600 hover:bg-gray-200']"
       >U</button>
-      <button type="button" @click="toggleStrike()"
+      <button type="button" @click="toggleStrike()" data-testid="rte-btn-strike"
         :class="['rounded px-2 py-1 text-xs font-medium line-through transition-colors', isActive('strike') ? 'bg-indigo-100 text-indigo-700' : 'text-gray-600 hover:bg-gray-200']"
       >S</button>
 
       <div class="w-px h-5 bg-gray-300 mx-1" />
 
       <!-- Image upload -->
-      <button v-if="uploadImage" type="button" @click="insertImage()" :disabled="uploading"
+      <button v-if="uploadImage" type="button" @click="insertImage()" :disabled="uploading" data-testid="rte-btn-image"
         :class="['rounded px-2 py-1 text-xs font-medium transition-colors', uploading ? 'opacity-50 cursor-wait' : 'text-gray-600 hover:bg-gray-200']"
       >
         <svg class="w-4 h-4 inline-block" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">

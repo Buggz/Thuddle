@@ -368,12 +368,12 @@ onMounted(async () => {
           <div class="mb-6">
             <label class="block text-sm font-medium text-gray-700 mb-2">Event image</label>
             <div v-if="eventData?.picturePath" class="mb-3">
-              <img :src="eventData.picturePath" alt="Event image" class="rounded-lg max-h-48 object-cover" />
+              <img :src="eventData.picturePath" alt="Event image" data-testid="manage-event-image" class="rounded-lg max-h-48 object-cover" />
               <div class="flex gap-2 mt-2">
                 <label class="inline-flex items-center px-3 py-1.5 text-xs font-medium text-gray-700 bg-gray-100 rounded-lg cursor-pointer hover:bg-gray-200 transition"
                   :class="{ 'opacity-50 pointer-events-none': uploadingImage }">
                   {{ uploadingImage ? 'Uploading...' : 'Change' }}
-                  <input type="file" accept="image/*" class="hidden" @change="onImageFileChange" :disabled="uploadingImage" />
+                  <input type="file" accept="image/*" class="hidden" data-testid="manage-event-image-input" @change="onImageFileChange" :disabled="uploadingImage" />
                 </label>
               </div>
             </div>
@@ -381,11 +381,11 @@ onMounted(async () => {
               <label class="inline-flex items-center px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg cursor-pointer hover:bg-gray-50 transition"
                 :class="{ 'opacity-50 pointer-events-none': uploadingImage }">
                 {{ uploadingImage ? 'Uploading...' : 'Upload image' }}
-                <input type="file" accept="image/*" class="hidden" @change="onImageFileChange" :disabled="uploadingImage" />
+                <input type="file" accept="image/*" class="hidden" data-testid="manage-event-image-input" @change="onImageFileChange" :disabled="uploadingImage" />
               </label>
               <p class="mt-1.5 text-xs text-gray-400">PNG, JPG up to 10MB. Will be shown on the event card.</p>
             </div>
-            <div v-if="imageError" class="mt-2 text-sm text-red-600">{{ imageError }}</div>
+            <div v-if="imageError" data-testid="manage-event-image-error" class="mt-2 text-sm text-red-600">{{ imageError }}</div>
             <ImageCropper
               v-if="selectedImageFile"
               :image-file="selectedImageFile"
@@ -501,11 +501,19 @@ onMounted(async () => {
                 <td v-if="hasCost" class="py-2.5 text-center">
                   <button
                     @click="togglePaid(a)"
-                    class="inline-flex items-center gap-1 text-xs font-medium rounded-full px-2.5 py-1 transition-colors"
+                    data-testid="manage-payment-toggle-btn"
+                    class="inline-flex items-center justify-center gap-1.5 w-[88px] px-3 py-1.5 text-xs font-semibold rounded-lg ring-1 ring-inset shadow-sm transition-all focus:outline-none focus:ring-2 focus:ring-offset-1 active:scale-95"
                     :class="a.hasPaid
-                      ? 'bg-green-100 text-green-700 hover:bg-green-200'
-                      : 'bg-red-100 text-red-700 hover:bg-red-200'"
+                      ? 'bg-emerald-50 text-emerald-700 ring-emerald-600/30 hover:bg-emerald-100 focus:ring-emerald-600'
+                      : 'bg-amber-50 text-amber-700 ring-amber-600/30 hover:bg-amber-100 focus:ring-amber-500'"
+                    :title="a.hasPaid ? 'Click to mark as Unpaid' : 'Click to mark as Paid'"
                   >
+                    <svg v-if="a.hasPaid" class="w-3.5 h-3.5" viewBox="0 0 20 20" fill="currentColor">
+                      <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                    </svg>
+                    <svg v-else class="w-3.5 h-3.5 opacity-70" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
                     {{ a.hasPaid ? 'Paid' : 'Unpaid' }}
                   </button>
                 </td>
@@ -576,11 +584,11 @@ onMounted(async () => {
             placeholder="Search for a co-admin by name or email…"
             @select="onCoAdminSelect"
           />
-          <div v-if="addingCoAdmin" class="mt-2 text-sm text-gray-400">Adding…</div>
-          <div v-if="coAdminError" class="text-sm text-red-600 mt-2 mb-3">{{ coAdminError }}</div>
-          <div v-if="coAdmins.length === 0 && !addingCoAdmin" class="text-sm text-gray-400 mt-4">No co-admins yet.</div>
-          <ul v-else class="divide-y divide-gray-100">
-            <li v-for="admin in coAdmins" :key="admin.userId" class="flex items-center justify-between py-2.5">
+          <div v-if="addingCoAdmin" data-testid="manage-coadmin-adding" class="mt-2 text-sm text-gray-400">Adding…</div>
+          <div v-if="coAdminError" data-testid="manage-coadmin-error" class="text-sm text-red-600 mt-2 mb-3">{{ coAdminError }}</div>
+          <div v-if="coAdmins.length === 0 && !addingCoAdmin" data-testid="manage-coadmin-empty" class="text-sm text-gray-400 mt-4">No co-admins yet.</div>
+          <ul v-else data-testid="manage-coadmin-list" class="divide-y divide-gray-100">
+            <li v-for="admin in coAdmins" :key="admin.userId" data-testid="manage-coadmin-row" class="flex items-center justify-between py-2.5">
               <div>
                 <p class="text-sm font-medium text-gray-900">{{ admin.displayName }}</p>
                 <p class="text-xs text-gray-500">
@@ -591,6 +599,7 @@ onMounted(async () => {
               </div>
               <button
                 @click="removeCoAdmin(admin)"
+                data-testid="manage-coadmin-remove-btn"
                 class="text-xs text-red-600 hover:text-red-800 font-medium"
               >
                 Remove

@@ -2,6 +2,11 @@ name: CI
 
 on:
   push:
+    tags:
+      - '*'
+    branches:
+      - 'feature/*'
+      - 'hotfix/*'
   pull_request:
 
 env:
