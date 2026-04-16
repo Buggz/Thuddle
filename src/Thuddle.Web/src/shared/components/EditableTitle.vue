@@ -74,7 +74,7 @@ function onKeydown(e) {
       data-1p-ignore="true"
       data-form-type="other"
       data-bwignore="true"
-      class="bg-transparent border-b-2 border-indigo-500 px-0.5 outline-none font-bold text-gray-900 w-full min-w-[8ch]"
+      class="bg-transparent border-b-2 border-indigo-500 text-indigo-900 px-0.5 outline-none font-bold w-full min-w-[8ch] selection:bg-indigo-100"
       :style="{ font: 'inherit' }"
       @keydown="onKeydown"
       @blur="commit"
@@ -83,7 +83,7 @@ function onKeydown(e) {
       v-else
       type="button"
       :data-testid="testId"
-      class="font-bold text-gray-900 cursor-text hover:ring-2 hover:ring-indigo-200 hover:ring-offset-2 rounded-sm transition-all text-left"
+      class="font-bold text-slate-900 cursor-text hover:text-indigo-600 rounded-sm transition-all text-left outline-none focus:ring-2 focus:ring-indigo-200 focus:ring-offset-2"
       :style="{ font: 'inherit' }"
       :aria-label="`Rename ${ariaLabel.toLowerCase()}`"
       @click="startEdit"
@@ -91,8 +91,8 @@ function onKeydown(e) {
 
     <svg
       v-if="!editing"
-      class="w-3.5 h-3.5 text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity"
-      fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"
+      class="w-4 h-4 text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity ml-1"
+      fill="none" stroke="currentColor" stroke-width="2.5.5" viewBox="0 0 24 24"
     >
       <path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L6.832 19.82a4.5 4.5 0 01-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 011.13-1.897L16.863 4.487z" />
     </svg>

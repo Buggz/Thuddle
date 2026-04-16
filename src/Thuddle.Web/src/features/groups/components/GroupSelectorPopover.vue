@@ -123,11 +123,11 @@ function onKeydown(e) {
   <div
     ref="rootRef"
     data-testid="group-selector-popover"
-    class="w-72 rounded-xl bg-white shadow-2xl ring-1 ring-black/5 border border-gray-100 overflow-hidden"
+    class="w-72 rounded-2xl bg-white shadow-2xl ring-1 ring-slate-900/5 border border-slate-100 overflow-hidden flex flex-col"
     @click.stop
   >
-    <div class="px-3 pt-3 pb-2">
-      <p class="text-xs font-semibold text-gray-400 uppercase tracking-wide">{{ title }}</p>
+    <div class="px-3 pt-3 pb-2 bg-slate-50/50 border-b border-slate-100">
+      <p class="text-[10px] font-bold text-slate-400 tracking-wider uppercase mb-1">{{ title }}</p>
       <input
         ref="inputRef"
         v-model="query"
@@ -135,33 +135,33 @@ function onKeydown(e) {
         placeholder="Find or create a group…"
         data-testid="group-selector-input"
         autocomplete="off"
-        class="mt-2 w-full rounded-lg border border-gray-200 px-2.5 py-1.5 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+        class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm shadow-sm placeholder:text-slate-400 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all font-medium"
         @keydown="onKeydown"
       />
     </div>
 
     <ul
       data-testid="group-selector-results"
-      class="max-h-64 overflow-auto py-1 border-t border-gray-100"
+      class="max-h-64 overflow-auto py-1.5"
     >
       <li
         v-if="showCreate"
         data-testid="group-selector-create-option"
         role="option"
         :data-active="activeIndex === 0"
-        class="flex items-center gap-2 px-3 py-2 text-sm cursor-pointer transition-colors"
-        :class="activeIndex === 0 ? 'bg-indigo-50 text-indigo-900' : 'text-gray-700 hover:bg-gray-50'"
+        class="flex items-center gap-3 px-3 py-2 text-sm cursor-pointer transition-colors mx-1.5 rounded-lg"
+        :class="activeIndex === 0 ? 'bg-indigo-50 text-indigo-900' : 'text-slate-700 hover:bg-slate-100/80'"
         @mousedown.prevent="create"
         @mouseenter="activeIndex = 0"
       >
-        <span class="shrink-0 flex items-center justify-center w-7 h-7 rounded-full bg-indigo-100 text-indigo-600">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+        <span class="shrink-0 flex items-center justify-center w-8 h-8 rounded-full bg-gradient-to-br from-indigo-100 to-indigo-50 border border-indigo-200/50 shadow-sm text-indigo-600">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
           </svg>
         </span>
-        <span class="flex-1 min-w-0">
-          <span class="block truncate">Create group <strong class="font-semibold">“{{ trimmedQuery }}”</strong></span>
-          <span class="block text-[11px] text-gray-400">Adds {{ userIds.length }} {{ userIds.length === 1 ? 'person' : 'people' }}</span>
+        <span class="flex-1 min-w-0 flex flex-col justify-center">
+          <span class="block truncate">Create group <strong class="font-bold">“{{ trimmedQuery }}”</strong></span>
+          <span class="block text-[11px] font-medium text-slate-400">Adds {{ userIds.length }} {{ userIds.length === 1 ? 'person' : 'people' }}</span>
         </span>
       </li>
 
@@ -172,23 +172,26 @@ function onKeydown(e) {
         :data-group-id="group.id"
         role="option"
         :data-active="activeIndex === (showCreate ? i + 1 : i)"
-        class="flex items-center gap-2 px-3 py-2 text-sm cursor-pointer transition-colors"
-        :class="activeIndex === (showCreate ? i + 1 : i) ? 'bg-indigo-50 text-indigo-900' : 'text-gray-700 hover:bg-gray-50'"
+        class="flex items-center gap-3 px-3 py-2 text-sm cursor-pointer transition-colors mx-1.5 rounded-lg"
+        :class="activeIndex === (showCreate ? i + 1 : i) ? 'bg-slate-100 text-slate-900' : 'text-slate-700 hover:bg-slate-100/80'"
         @mousedown.prevent="pickGroup(group)"
         @mouseenter="activeIndex = (showCreate ? i + 1 : i)"
       >
-        <span class="shrink-0 flex items-center justify-center w-7 h-7 rounded-full bg-gray-100 text-gray-500">
+        <span class="shrink-0 flex items-center justify-center w-8 h-8 rounded-full bg-slate-100 border border-slate-200/50 text-slate-500 shadow-[inset_0_1px_1px_rgba(255,255,255,1)]">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 0 0 2.625.372 9.337 9.337 0 0 0 4.121-.952 4.125 4.125 0 0 0-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 0 1 8.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0 1 11.964-3.07M12 6.375a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0Zm8.25 2.25a2.625 2.625 0 1 1-5.25 0 2.625 2.625 0 0 1 5.25 0Z" />
           </svg>
         </span>
-        <span class="flex-1 min-w-0 truncate">{{ group.name }}</span>
-        <span class="shrink-0 text-[11px] text-gray-400 tabular-nums">{{ group.memberCount }}</span>
+        <span class="flex-1 min-w-0 truncate font-medium">{{ group.name }}</span>
+        <span 
+          class="shrink-0 text-[10px] font-bold text-slate-400 tabular-nums px-1.5 py-0.5 rounded-full"
+          :class="activeIndex === (showCreate ? i + 1 : i) ? 'bg-slate-200/60' : 'bg-slate-100'"
+        >{{ group.memberCount }}</span>
       </li>
 
       <li
         v-if="!showCreate && filteredGroups.length === 0"
-        class="px-3 py-3 text-xs text-gray-400 text-center"
+        class="px-4 py-8 text-xs font-medium text-slate-400 text-center leading-relaxed"
         data-testid="group-selector-empty"
       >
         You don't have any groups yet.<br />
@@ -198,7 +201,7 @@ function onKeydown(e) {
 
     <div
       v-if="busy"
-      class="px-3 py-1.5 text-[11px] text-gray-400 border-t border-gray-100"
+      class="px-4 py-2 text-[11px] font-bold tracking-wide uppercase text-indigo-500 bg-indigo-50/50 border-t border-slate-100"
     >Saving…</div>
   </div>
 </template>
