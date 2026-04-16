@@ -58,10 +58,19 @@ const isValid = computed(() => {
   )
 })
 
+const liveHints = computed(() => {
+  const f = props.modelValue
+  const hints = {}
+  if (f.start && f.end && new Date(f.end) <= new Date(f.start))
+    hints.end = 'End must be after start.'
+  return hints
+})
+
 function inputClass(field) {
+  const err = fieldErrors.value[field] || liveHints.value[field]
   return [
     'w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500',
-    fieldErrors.value[field]
+    err
       ? 'border-red-400 focus:border-red-500 focus:ring-red-500'
       : 'border-gray-300 focus:border-indigo-500'
   ]
@@ -133,6 +142,7 @@ defineExpose({ isValid, fieldErrors })
           :class="inputClass('end')"
         />
         <p v-if="fieldErrors.end" :data-testid="`${testIdPrefix}-end-error`" class="mt-1 text-xs text-red-600">{{ fieldErrors.end }}</p>
+        <p v-else-if="liveHints.end" :data-testid="`${testIdPrefix}-end-hint`" class="mt-1 text-xs text-amber-600">{{ liveHints.end }}</p>
       </div>
     </div>
 
