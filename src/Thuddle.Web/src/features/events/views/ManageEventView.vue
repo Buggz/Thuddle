@@ -6,6 +6,7 @@ import EventForm from '@/features/events/components/EventForm.vue'
 import ImageCropper from '@/features/profile/components/ImageCropper.vue'
 import Spinner from '@/shared/components/Spinner.vue'
 import UserSearchComboBox from '@/shared/components/UserSearchComboBox.vue'
+import GroupSelectorPopover from '@/features/groups/components/GroupSelectorPopover.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -72,6 +73,35 @@ const inviting = shallowRef(false)
 const inviteError = shallowRef(null)
 const inviteSuccess = shallowRef(false)
 
+// Groups integration
+const groupPopoverFor = ref(null) // null | 'all' | userId
+const groupToastMsg = shallowRef(null)
+let groupToastTimer = null
+function showGroupToast(msg) {
+  groupToastMsg.value = msg
+  clearTimeout(groupToastTimer)
+  groupToastTimer = setTimeout(() => { groupToastMsg.value = null }, 3500)
+}
+const attendeeUserIds = computed(() => attendees.value.map(a => a.userId))
+function popoverUserIds() {
+  if (groupPopoverFor.value === 'all') return attendeeUserIds.value
+  if (!groupPopoverFor.value) return []
+  return [groupPopoverFor.value]
+}
+function onGroupAdded({ group, added, skipped, wasCreated }) {
+  const picked = groupPopoverFor.value
+  groupPopoverFor.value = null
+  if (wasCreated) {
+    showGroupToast(`Created “${group.name}” with ${added} ${added === 1 ? 'person' : 'people'}.`)
+  } else if (added === 0) {
+    showGroupToast(picked === 'all' ? `Everyone was already in “${group.name}”.` : `Already in “${group.name}”.`)
+  } else if (skipped > 0) {
+    showGroupToast(`Added ${added} to “${group.name}” (${skipped} already in).`)
+  } else {
+    showGroupToast(`Added ${added} to “${group.name}”.`)
+  }
+}
+
 const excludedInviteEmails = computed(() => {
   const emails = selectedInvitees.value.map(i => i.email.toLowerCase())
   for (const a of attendees.value) emails.push(a.email.toLowerCase())
@@ -80,6 +110,25 @@ const excludedInviteEmails = computed(() => {
 })
 
 function onInviteeSelect(item) {
+  if (item.type === 'group') {
+    // Explode group into individual user chips so the host can see/remove members
+    const existing = new Set(selectedInvitees.value.map(i => i.email.toLowerCase()))
+    const excluded = new Set(excludedInviteEmails.value)
+    for (const m of item.members || []) {
+      const email = (m.email || '').toLowerCase()
+      if (!email) continue
+      if (existing.has(email) || excluded.has(email)) continue
+      selectedInvitees.value.push({
+        type: 'user',
+        id: m.userId,
+        email: m.email,
+        displayName: m.displayName,
+        fromGroup: item.name
+      })
+      existing.add(email)
+    }
+    return
+  }
   const email = item.email.toLowerCase()
   if (selectedInvitees.value.some(i => i.email.toLowerCase() === email)) return
   selectedInvitees.value.push(item)
@@ -477,7 +526,39 @@ onMounted(async () => {
           <div v-else-if="attendeesError" class="text-sm text-red-600">{{ attendeesError }}</div>
           <div v-else-if="attendees.length === 0 && pendingInvitations.length === 0" data-testid="manage-attendees-empty" class="text-sm text-gray-400">No attendees yet.</div>
 
-          <table v-else class="w-full text-sm">
+          <template v-else>
+            <div class="flex items-center justify-between mb-3">
+              <span class="text-xs text-gray-400">{{ attendees.length }} {{ attendees.length === 1 ? 'attendee' : 'attendees' }}</span>
+              <div class="relative" v-if="attendees.length > 0">
+                <button
+                  type="button"
+                  data-testid="manage-save-attendees-as-group-btn"
+                  @click="groupPopoverFor = groupPopoverFor === 'all' ? null : 'all'"
+                  class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-indigo-700 bg-indigo-50 rounded-lg hover:bg-indigo-100 transition"
+                >
+                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 0 0 2.625.372 9.337 9.337 0 0 0 4.121-.952 4.125 4.125 0 0 0-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M12 6.375a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0Zm8.25 2.25a2.625 2.625 0 1 1-5.25 0 2.625 2.625 0 0 1 5.25 0Z" />
+                  </svg>
+                  Save list as group
+                </button>
+                <div v-if="groupPopoverFor === 'all'" class="absolute right-0 mt-1 z-40">
+                  <GroupSelectorPopover
+                    :user-ids="popoverUserIds()"
+                    title="Add everyone to group"
+                    @added="onGroupAdded"
+                    @close="groupPopoverFor = null"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div
+              v-if="groupToastMsg"
+              data-testid="manage-group-toast"
+              class="mb-3 rounded-lg bg-gray-900 text-white text-sm px-3 py-2 inline-block"
+            >{{ groupToastMsg }}</div>
+
+            <table class="w-full text-sm">
             <thead>
               <tr class="text-left text-xs text-gray-500 uppercase tracking-wide border-b border-gray-200">
                 <th class="pb-2 font-medium">Display Name</th>
@@ -485,10 +566,11 @@ onMounted(async () => {
                 <th class="pb-2 font-medium">Email</th>
                 <th class="pb-2 font-medium">Joined</th>
                 <th v-if="hasCost" class="pb-2 font-medium text-center">Paid</th>
+                <th class="pb-2 font-medium w-10"></th>
               </tr>
             </thead>
             <tbody class="divide-y divide-gray-100">
-              <tr v-for="a in attendees" :key="a.userId" data-testid="manage-attendee-row">
+              <tr v-for="a in attendees" :key="a.userId" data-testid="manage-attendee-row" class="group">
                 <td class="py-2.5 font-medium text-gray-900">{{ a.displayName }}</td>
                 <td class="py-2.5">
                   <span v-if="a.fullName" class="text-gray-700">{{ a.fullName }}</span>
@@ -517,6 +599,29 @@ onMounted(async () => {
                     {{ a.hasPaid ? 'Paid' : 'Unpaid' }}
                   </button>
                 </td>
+                <td class="py-2.5 text-right relative">
+                  <button
+                    type="button"
+                    :data-testid="`manage-attendee-add-to-group-btn`"
+                    :data-user-id="a.userId"
+                    @click="groupPopoverFor = groupPopoverFor === a.userId ? null : a.userId"
+                    :title="`Add ${a.displayName} to a contact group`"
+                    class="inline-flex items-center justify-center w-7 h-7 rounded-full text-gray-300 hover:text-indigo-600 hover:bg-indigo-50 opacity-0 group-hover:opacity-100 focus:opacity-100 transition"
+                    :class="{ 'opacity-100 text-indigo-600 bg-indigo-50': groupPopoverFor === a.userId }"
+                  >
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+                    </svg>
+                  </button>
+                  <div v-if="groupPopoverFor === a.userId" class="absolute right-0 mt-1 z-40">
+                    <GroupSelectorPopover
+                      :user-ids="[a.userId]"
+                      :title="`Add ${a.displayName}`"
+                      @added="onGroupAdded"
+                      @close="groupPopoverFor = null"
+                    />
+                  </div>
+                </td>
               </tr>
               <tr v-for="inv in pendingInvitations" :key="'inv-' + inv.email" data-testid="manage-pending-invitation" class="opacity-60">
                 <td class="py-2.5 font-medium text-gray-500 italic">—</td>
@@ -529,9 +634,11 @@ onMounted(async () => {
                   </span>
                 </td>
                 <td v-if="hasCost" class="py-2.5 text-center text-gray-400">—</td>
+                <td></td>
               </tr>
             </tbody>
           </table>
+          </template>
 
           <!-- Invite Users -->
           <div class="border-t border-gray-100 mt-6 pt-6">
@@ -539,7 +646,8 @@ onMounted(async () => {
             <UserSearchComboBox
               :allow-unknown-email="true"
               :exclude-emails="excludedInviteEmails"
-              placeholder="Search by name or email…"
+              :include-groups="true"
+              placeholder="Search people, groups, or type an email…"
               @select="onInviteeSelect"
             />
 
@@ -549,12 +657,14 @@ onMounted(async () => {
                 v-for="invitee in selectedInvitees"
                 :key="invitee.email"
                 data-testid="manage-invite-chip"
+                :data-from-group="invitee.fromGroup || undefined"
                 class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm"
                 :class="invitee.type === 'user'
                   ? 'bg-indigo-50 text-indigo-700'
                   : 'bg-amber-50 text-amber-700'"
               >
                 <span class="truncate max-w-[200px]">{{ invitee.displayName || invitee.email }}</span>
+                <span v-if="invitee.fromGroup" class="text-[10px] uppercase tracking-wide opacity-60">· {{ invitee.fromGroup }}</span>
                 <button
                   type="button"
                   @click="removeSelectedInvitee(invitee)"

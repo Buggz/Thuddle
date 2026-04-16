@@ -17,6 +17,12 @@ export default function initRouter() {
         meta: { requiresAuth: true }
       },
       {
+        path: '/groups',
+        name: 'groups',
+        component: () => import('@/features/groups/views/GroupsView.vue'),
+        meta: { requiresAuth: true }
+      },
+      {
         path: '/events/create',
         name: 'create-event',
         component: () => import('@/features/events/views/CreateEventView.vue'),

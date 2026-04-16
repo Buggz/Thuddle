@@ -13,6 +13,8 @@ public class ThuddleDbContext(DbContextOptions<ThuddleDbContext> options) : DbCo
     public DbSet<DiscussionPost> DiscussionPosts => Set<DiscussionPost>();
     public DbSet<DiscussionComment> DiscussionComments => Set<DiscussionComment>();
     public DbSet<DiscussionReadReceipt> DiscussionReadReceipts => Set<DiscussionReadReceipt>();
+    public DbSet<ContactGroup> ContactGroups => Set<ContactGroup>();
+    public DbSet<ContactGroupMember> ContactGroupMembers => Set<ContactGroupMember>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -114,6 +116,28 @@ public class ThuddleDbContext(DbContextOptions<ThuddleDbContext> options) : DbCo
             entity.HasOne(r => r.Event)
                 .WithMany()
                 .HasForeignKey(r => r.EventId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<ContactGroup>(entity =>
+        {
+            entity.HasIndex(g => new { g.OwnerId, g.Name }).IsUnique();
+            entity.HasOne(g => g.Owner)
+                .WithMany()
+                .HasForeignKey(g => g.OwnerId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<ContactGroupMember>(entity =>
+        {
+            entity.HasIndex(m => new { m.GroupId, m.UserId }).IsUnique();
+            entity.HasOne(m => m.Group)
+                .WithMany()
+                .HasForeignKey(m => m.GroupId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(m => m.User)
+                .WithMany()
+                .HasForeignKey(m => m.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
     }

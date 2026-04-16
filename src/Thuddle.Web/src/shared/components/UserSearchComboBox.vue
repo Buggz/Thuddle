@@ -1,17 +1,25 @@
 <script setup>
-import { shallowRef, ref, computed, watch, nextTick } from 'vue'
+import { shallowRef, ref, computed, watch, nextTick, onMounted } from 'vue'
 import { useApi } from '@/shared/composables/useApi'
+import { useGroupsApi } from '@/features/groups/composables/useGroupsApi'
 import Spinner from './Spinner.vue'
 
 const props = defineProps({
   placeholder: { type: String, default: 'Search by name or email…' },
   allowUnknownEmail: { type: Boolean, default: false },
-  excludeEmails: { type: Array, default: () => [] }
+  excludeEmails: { type: Array, default: () => [] },
+  /** When true, also suggests contact groups matching the query. */
+  includeGroups: { type: Boolean, default: false }
 })
 
 const emit = defineEmits(['select'])
 
 const { authFetch } = useApi()
+const { groups: contactGroups, load: loadGroups } = useGroupsApi()
+
+onMounted(() => {
+  if (props.includeGroups) loadGroups()
+})
 
 const query = shallowRef('')
 const results = ref([])
@@ -39,9 +47,29 @@ const filteredResults = computed(() => {
   return results.value.filter(r => !excluded.has(r.email.toLowerCase()))
 })
 
+const matchingGroups = computed(() => {
+  if (!props.includeGroups) return []
+  const q = query.value.trim().toLowerCase()
+  if (q.length < 2) return []
+  return (contactGroups.value || [])
+    .filter(g => g.name.toLowerCase().includes(q) && (g.memberCount || 0) > 0)
+    .slice(0, 5)
+})
+
 const totalOptions = computed(() =>
-  filteredResults.value.length + (showUnknownOption.value ? 1 : 0)
+  matchingGroups.value.length + filteredResults.value.length + (showUnknownOption.value ? 1 : 0)
 )
+
+function optionAt(i) {
+  const groupCount = matchingGroups.value.length
+  if (i < groupCount) return { kind: 'group', value: matchingGroups.value[i] }
+  const userIndex = i - groupCount
+  if (userIndex < filteredResults.value.length) {
+    return { kind: 'user', value: filteredResults.value[userIndex] }
+  }
+  if (showUnknownOption.value) return { kind: 'unknown' }
+  return null
+}
 
 watch(query, (val) => {
   if (debounceTimer) clearTimeout(debounceTimer)
@@ -49,7 +77,7 @@ watch(query, (val) => {
 
   if (!val || val.trim().length < 2) {
     results.value = []
-    open.value = false
+    open.value = matchingGroups.value.length > 0
     return
   }
 
@@ -73,6 +101,11 @@ async function searchUsers(q) {
 
 function selectUser(user) {
   emit('select', { type: 'user', ...user })
+  reset()
+}
+
+function selectGroup(group) {
+  emit('select', { type: 'group', id: group.id, name: group.name, members: group.members || [] })
   reset()
 }
 
@@ -102,11 +135,11 @@ function onKeydown(e) {
     scrollActiveIntoView()
   } else if (e.key === 'Enter') {
     e.preventDefault()
-    if (activeIndex.value >= 0 && activeIndex.value < filteredResults.value.length) {
-      selectUser(filteredResults.value[activeIndex.value])
-    } else if (activeIndex.value === filteredResults.value.length && showUnknownOption.value) {
-      selectUnknownEmail()
-    }
+    const opt = optionAt(activeIndex.value)
+    if (!opt) return
+    if (opt.kind === 'group') selectGroup(opt.value)
+    else if (opt.kind === 'user') selectUser(opt.value)
+    else if (opt.kind === 'unknown') selectUnknownEmail()
   } else if (e.key === 'Escape') {
     open.value = false
     activeIndex.value = -1
@@ -126,7 +159,7 @@ function onBlur() {
 }
 
 function onFocus() {
-  if (query.value.trim().length >= 2 && (filteredResults.value.length || showUnknownOption.value)) {
+  if (query.value.trim().length >= 2 && (matchingGroups.value.length || filteredResults.value.length || showUnknownOption.value)) {
     open.value = true
   }
 }
@@ -166,7 +199,7 @@ function userInitials(user) {
     </div>
 
     <ul
-      v-if="open && (filteredResults.length || showUnknownOption || loading)"
+      v-if="open && (matchingGroups.length || filteredResults.length || showUnknownOption || loading)"
       ref="listRef"
       id="user-search-listbox"
       role="listbox"
@@ -174,17 +207,42 @@ function userInitials(user) {
       class="absolute z-50 mt-1 w-full max-h-60 overflow-auto rounded-lg border border-gray-200 bg-white shadow-lg"
     >
       <li
-        v-for="(user, i) in filteredResults"
-        :key="user.id"
-        :id="`user-option-${i}`"
+        v-for="(group, gi) in matchingGroups"
+        :key="`group-${group.id}`"
+        :id="`user-option-${gi}`"
         role="option"
-        :aria-selected="activeIndex === i"
-        :data-active="activeIndex === i"
+        :aria-selected="activeIndex === gi"
+        :data-active="activeIndex === gi"
+        data-testid="user-search-group-result"
+        :data-group-id="group.id"
+        class="flex items-center gap-3 px-3 py-2 cursor-pointer text-sm transition-colors"
+        :class="activeIndex === gi ? 'bg-indigo-50 text-indigo-900' : 'text-gray-700 hover:bg-gray-50'"
+        @mousedown.prevent="selectGroup(group)"
+        @mouseenter="activeIndex = gi"
+      >
+        <span class="shrink-0 flex items-center justify-center w-8 h-8 rounded-full bg-indigo-100 text-indigo-600">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 0 0 2.625.372 9.337 9.337 0 0 0 4.121-.952 4.125 4.125 0 0 0-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 0 1 8.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0 1 11.964-3.07M12 6.375a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0Zm8.25 2.25a2.625 2.625 0 1 1-5.25 0 2.625 2.625 0 0 1 5.25 0Z" />
+          </svg>
+        </span>
+        <span class="flex-1 min-w-0">
+          <span class="block truncate font-medium">{{ group.name }}</span>
+          <span class="block truncate text-xs text-gray-400">Group · {{ group.memberCount }} {{ group.memberCount === 1 ? 'person' : 'people' }}</span>
+        </span>
+      </li>
+
+      <li
+        v-for="(user, ui) in filteredResults"
+        :key="user.id"
+        :id="`user-option-${matchingGroups.length + ui}`"
+        role="option"
+        :aria-selected="activeIndex === matchingGroups.length + ui"
+        :data-active="activeIndex === matchingGroups.length + ui"
         data-testid="user-search-result"
         class="flex items-center gap-3 px-3 py-2 cursor-pointer text-sm transition-colors"
-        :class="activeIndex === i ? 'bg-indigo-50 text-indigo-900' : 'text-gray-700 hover:bg-gray-50'"
+        :class="activeIndex === matchingGroups.length + ui ? 'bg-indigo-50 text-indigo-900' : 'text-gray-700 hover:bg-gray-50'"
         @mousedown.prevent="selectUser(user)"
-        @mouseenter="activeIndex = i"
+        @mouseenter="activeIndex = matchingGroups.length + ui"
       >
         <span class="shrink-0 flex items-center justify-center w-8 h-8 rounded-full bg-gray-200 text-xs font-semibold text-gray-600">
           {{ userInitials(user) }}
@@ -197,15 +255,15 @@ function userInitials(user) {
 
       <li
         v-if="showUnknownOption"
-        :id="`user-option-${filteredResults.length}`"
+        :id="`user-option-${matchingGroups.length + filteredResults.length}`"
         role="option"
-        :aria-selected="activeIndex === filteredResults.length"
-        :data-active="activeIndex === filteredResults.length"
+        :aria-selected="activeIndex === matchingGroups.length + filteredResults.length"
+        :data-active="activeIndex === matchingGroups.length + filteredResults.length"
         data-testid="user-search-invite-option"
         class="flex items-center gap-3 px-3 py-2 cursor-pointer text-sm transition-colors border-t border-gray-100"
-        :class="activeIndex === filteredResults.length ? 'bg-indigo-50 text-indigo-900' : 'text-gray-700 hover:bg-gray-50'"
+        :class="activeIndex === matchingGroups.length + filteredResults.length ? 'bg-indigo-50 text-indigo-900' : 'text-gray-700 hover:bg-gray-50'"
         @mousedown.prevent="selectUnknownEmail()"
-        @mouseenter="activeIndex = filteredResults.length"
+        @mouseenter="activeIndex = matchingGroups.length + filteredResults.length"
       >
         <span class="shrink-0 flex items-center justify-center w-8 h-8 rounded-full bg-amber-100 text-amber-600">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
@@ -218,11 +276,11 @@ function userInitials(user) {
         </span>
       </li>
 
-      <li v-if="loading && filteredResults.length === 0 && !showUnknownOption" class="px-3 py-3 text-sm text-gray-400 text-center">
+      <li v-if="loading && filteredResults.length === 0 && matchingGroups.length === 0 && !showUnknownOption" class="px-3 py-3 text-sm text-gray-400 text-center">
         Searching…
       </li>
 
-      <li v-if="!loading && filteredResults.length === 0 && !showUnknownOption && query.trim().length >= 2" class="px-3 py-3 text-sm text-gray-400 text-center" data-testid="user-search-no-results">
+      <li v-if="!loading && filteredResults.length === 0 && matchingGroups.length === 0 && !showUnknownOption && query.trim().length >= 2" class="px-3 py-3 text-sm text-gray-400 text-center" data-testid="user-search-no-results">
         No users found
       </li>
     </ul>
