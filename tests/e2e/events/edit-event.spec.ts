@@ -1,5 +1,5 @@
 import { test, expect } from '../helpers/fixtures'
-import { STORAGE_STATE, uid, futureDates, contextAs } from '../helpers/auth'
+import { STORAGE_STATE, uid, futureDates, pastDates, contextAs } from '../helpers/auth'
 
 /**
  * Admin creates a public open event and returns its manage URL + id.
@@ -235,6 +235,39 @@ test.describe('Edit event details', () => {
   })
 
   test.describe('negative', () => {
+    test('save button is disabled when end is before start', async ({ browser, baseURL, createdEvents }) => {
+      const { eventId, manageUrl } = await createEvent(browser, baseURL!)
+      createdEvents.push(eventId)
+
+      const { context, page } = await contextAs(browser, 'admin')
+      await goToManageAbout(page, manageUrl)
+
+      const dates = futureDates(5)
+      // Set end before start
+      await page.getByTestId('manage-start-input').fill(dates.end)
+      await page.getByTestId('manage-end-input').fill(dates.start)
+
+      await expect(page.getByTestId('manage-save-btn')).toBeDisabled()
+
+      await context.close()
+    })
+
+    test('save button is disabled when start is in the past', async ({ browser, baseURL, createdEvents }) => {
+      const { eventId, manageUrl } = await createEvent(browser, baseURL!)
+      createdEvents.push(eventId)
+
+      const { context, page } = await contextAs(browser, 'admin')
+      await goToManageAbout(page, manageUrl)
+
+      const past = pastDates(3)
+      await page.getByTestId('manage-start-input').fill(past.start)
+      await page.getByTestId('manage-end-input').fill(past.end)
+
+      await expect(page.getByTestId('manage-save-btn')).toBeDisabled()
+
+      await context.close()
+    })
+
     test('non-owner cannot access manage page', async ({ browser, baseURL, createdEvents }) => {
       const { eventId, manageUrl } = await createEvent(browser, baseURL!)
       createdEvents.push(eventId)

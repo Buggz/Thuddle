@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using FluentValidation;
 using Microsoft.EntityFrameworkCore;
 using Thuddle.Api.Data;
 using Thuddle.Api.Services;
@@ -77,6 +78,13 @@ public static class EventEndpoints
         return user.FindFirstValue("sub")
             ?? user.FindFirstValue("sid")
             ?? user.FindFirstValue("email");
+    }
+
+    private static IResult? ValidationError(FluentValidation.Results.ValidationResult result)
+    {
+        if (result.IsValid) return null;
+        var error = result.Errors[0].ErrorMessage;
+        return Results.BadRequest(new { error });
     }
 
     private static async Task<IResult> DeleteEvent(
@@ -333,6 +341,7 @@ public static class EventEndpoints
     private static async Task<IResult> CreateEvent(
         ClaimsPrincipal user,
         CreateEventRequest request,
+        IValidator<CreateEventRequest> validator,
         ThuddleDbContext db,
         CancellationToken ct)
     {
@@ -342,14 +351,8 @@ public static class EventEndpoints
         var dbUser = await db.Users.FirstOrDefaultAsync(u => u.KeycloakId == keycloakId, ct);
         if (dbUser is null) return Results.Unauthorized();
 
-        if (string.IsNullOrWhiteSpace(request.Title))
-            return Results.BadRequest(new { error = "Title is required." });
-
-        if (request.End <= request.Start)
-            return Results.BadRequest(new { error = "End must be after Start." });
-
-        if (request.Capacity is < 1)
-            return Results.BadRequest(new { error = "Capacity must be at least 1." });
+        if (ValidationError(await validator.ValidateAsync(request, ct)) is { } validationError)
+            return validationError;
 
         // Unlisted events must be invite-only
         var joinMode = request.Visibility == EventVisibility.Unlisted
@@ -361,7 +364,7 @@ public static class EventEndpoints
             Id = Guid.NewGuid(),
             OwnerId = dbUser.Id,
             Title = request.Title.Trim(),
-            Location = request.Location?.Trim() ?? "",
+            Location = request.Location.Trim(),
             Description = request.Description,
             Start = request.Start,
             End = request.End,
@@ -394,6 +397,7 @@ public static class EventEndpoints
     private static async Task<IResult> InviteUsers(
         Guid eventId,
         InviteUsersRequest request,
+        IValidator<InviteUsersRequest> validator,
         ClaimsPrincipal user,
         ThuddleDbContext db,
         SmtpEmailSender emailSender,
@@ -413,8 +417,8 @@ public static class EventEndpoints
         if (!await IsEventAdmin(db, eventId, dbUser.Id, ct))
             return Results.Forbid();
 
-        if (request.Emails is not { Count: > 0 })
-            return Results.BadRequest(new { error = "At least one email is required." });
+        if (ValidationError(await validator.ValidateAsync(request, ct)) is { } validationError)
+            return validationError;
 
         var existingEmails = await db.EventInvitations
             .Where(i => i.EventId == eventId)
@@ -522,6 +526,7 @@ public static class EventEndpoints
     private static async Task<IResult> UpdateEvent(
         Guid eventId,
         UpdateEventRequest request,
+        IValidator<UpdateEventRequest> validator,
         ClaimsPrincipal user,
         ThuddleDbContext db,
         CancellationToken ct)
@@ -538,14 +543,8 @@ public static class EventEndpoints
         var evt = await db.Events.FirstOrDefaultAsync(e => e.Id == eventId, ct);
         if (evt is null) return Results.NotFound(new { error = "Event not found." });
 
-        if (string.IsNullOrWhiteSpace(request.Title))
-            return Results.BadRequest(new { error = "Title is required." });
-
-        if (request.End <= request.Start)
-            return Results.BadRequest(new { error = "End must be after Start." });
-
-        if (request.Capacity is < 1)
-            return Results.BadRequest(new { error = "Capacity must be at least 1." });
+        if (ValidationError(await validator.ValidateAsync(request, ct)) is { } validationError)
+            return validationError;
 
         // Unlisted events must be invite-only
         var joinMode = request.Visibility == EventVisibility.Unlisted
@@ -553,7 +552,7 @@ public static class EventEndpoints
             : request.JoinMode;
 
         evt.Title = request.Title.Trim();
-        evt.Location = request.Location?.Trim() ?? "";
+        evt.Location = request.Location.Trim();
         evt.Description = request.Description;
         evt.Start = request.Start;
         evt.End = request.End;
@@ -875,7 +874,7 @@ public static class EventEndpoints
 
 public record CreateEventRequest(
     string Title,
-    string? Location,
+    string Location,
     string? Description,
     DateTime Start,
     DateTime End,
@@ -888,7 +887,7 @@ public record InviteUsersRequest(List<string> Emails);
 
 public record UpdateEventRequest(
     string Title,
-    string? Location,
+    string Location,
     string? Description,
     DateTime Start,
     DateTime End,

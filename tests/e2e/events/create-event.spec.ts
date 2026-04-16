@@ -1,5 +1,5 @@
 import { test, expect } from '../helpers/fixtures'
-import { STORAGE_STATE, uid, futureDates } from '../helpers/auth'
+import { STORAGE_STATE, uid, futureDates, pastDates } from '../helpers/auth'
 
 test.describe('Create event', () => {
   test.describe('positive', () => {
@@ -109,6 +109,19 @@ test.describe('Create event', () => {
       const dates = futureDates(1, 18)
       await page.getByTestId('event-start-input').fill(dates.end)
       await page.getByTestId('event-end-input').fill(dates.start)
+
+      await expect(page.getByTestId('event-submit-btn')).toBeDisabled()
+    })
+
+    test('submit button is disabled when start is in the past', async ({ page, baseURL }) => {
+      await page.goto(baseURL!)
+      await page.getByTestId('event-create-btn').waitFor({ state: 'visible', timeout: 20000 })
+      await page.getByTestId('event-create-btn').click()
+
+      await page.getByTestId('event-title-input').fill('Past Event')
+      const past = pastDates(3)
+      await page.getByTestId('event-start-input').fill(past.start)
+      await page.getByTestId('event-end-input').fill(past.end)
 
       await expect(page.getByTestId('event-submit-btn')).toBeDisabled()
     })

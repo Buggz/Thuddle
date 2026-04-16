@@ -33,6 +33,16 @@ export function futureDates(daysFromNow: number, hour = 10): { start: string; en
   return { start: formatLocal(start), end: formatLocal(end) }
 }
 
+/** Return start/end date strings in the past. */
+export function pastDates(daysAgo: number, hour = 10): { start: string; end: string } {
+  const start = new Date()
+  start.setDate(start.getDate() - daysAgo)
+  start.setHours(hour, 0, 0, 0)
+  const end = new Date(start)
+  end.setHours(hour + 2, 0, 0, 0)
+  return { start: formatLocal(start), end: formatLocal(end) }
+}
+
 // --- Browser context helpers ---
 
 /** Create a browser context pre-authenticated as the given user. */
