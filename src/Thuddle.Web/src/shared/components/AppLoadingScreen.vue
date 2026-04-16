@@ -18,7 +18,7 @@ import FunnyLoader from '@/shared/components/FunnyLoader.vue'
       <PhaseSpinner size="lg" />
 
       <!-- Funny messages -->
-      <FunnyLoader title="Getting things ready" :delay="2500" />
+      <FunnyLoader title="Getting things ready" :delay="2500" :show-spinner="false" />
     </div>
   </div>
 </template>
