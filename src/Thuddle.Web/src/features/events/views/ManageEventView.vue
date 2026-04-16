@@ -6,10 +6,13 @@ import EventForm from '@/features/events/components/EventForm.vue'
 import ImageCropper from '@/features/profile/components/ImageCropper.vue'
 import Spinner from '@/shared/components/Spinner.vue'
 import UserSearchComboBox from '@/shared/components/UserSearchComboBox.vue'
+import GroupSelectorPopover from '@/features/groups/components/GroupSelectorPopover.vue'
+import { usePermissionsStore } from '@/features/auth/stores/permissions'
 
 const route = useRoute()
 const router = useRouter()
 const { authFetch } = useApi()
+const permissionsStore = usePermissionsStore()
 
 const eventId = route.params.id
 const activeTab = shallowRef('about')
@@ -72,6 +75,35 @@ const inviting = shallowRef(false)
 const inviteError = shallowRef(null)
 const inviteSuccess = shallowRef(false)
 
+// Groups integration
+const groupPopoverFor = ref(null) // null | 'all' | userId
+const groupToastMsg = shallowRef(null)
+let groupToastTimer = null
+function showGroupToast(msg) {
+  groupToastMsg.value = msg
+  clearTimeout(groupToastTimer)
+  groupToastTimer = setTimeout(() => { groupToastMsg.value = null }, 3500)
+}
+const attendeeUserIds = computed(() => attendees.value.map(a => a.userId))
+function popoverUserIds() {
+  if (groupPopoverFor.value === 'all') return attendeeUserIds.value
+  if (!groupPopoverFor.value) return []
+  return [groupPopoverFor.value]
+}
+function onGroupAdded({ group, added, skipped, wasCreated }) {
+  const picked = groupPopoverFor.value
+  groupPopoverFor.value = null
+  if (wasCreated) {
+    showGroupToast(`Created “${group.name}” with ${added} ${added === 1 ? 'person' : 'people'}.`)
+  } else if (added === 0) {
+    showGroupToast(picked === 'all' ? `Everyone was already in “${group.name}”.` : `Already in “${group.name}”.`)
+  } else if (skipped > 0) {
+    showGroupToast(`Added ${added} to “${group.name}” (${skipped} already in).`)
+  } else {
+    showGroupToast(`Added ${added} to “${group.name}”.`)
+  }
+}
+
 const excludedInviteEmails = computed(() => {
   const emails = selectedInvitees.value.map(i => i.email.toLowerCase())
   for (const a of attendees.value) emails.push(a.email.toLowerCase())
@@ -80,6 +112,25 @@ const excludedInviteEmails = computed(() => {
 })
 
 function onInviteeSelect(item) {
+  if (item.type === 'group') {
+    // Explode group into individual user chips so the host can see/remove members
+    const existing = new Set(selectedInvitees.value.map(i => i.email.toLowerCase()))
+    const excluded = new Set(excludedInviteEmails.value)
+    for (const m of item.members || []) {
+      const email = (m.email || '').toLowerCase()
+      if (!email) continue
+      if (existing.has(email) || excluded.has(email)) continue
+      selectedInvitees.value.push({
+        type: 'user',
+        id: m.userId,
+        email: m.email,
+        displayName: m.displayName,
+        fromGroup: item.name
+      })
+      existing.add(email)
+    }
+    return
+  }
   const email = item.email.toLowerCase()
   if (selectedInvitees.value.some(i => i.email.toLowerCase() === email)) return
   selectedInvitees.value.push(item)
@@ -473,36 +524,81 @@ onMounted(async () => {
 
         <!-- Tab: Attendees -->
         <div v-if="activeTab === 'attendees'" class="p-6">
-          <div v-if="loadingAttendees" class="text-sm text-gray-400">Loading attendees...</div>
-          <div v-else-if="attendeesError" class="text-sm text-red-600">{{ attendeesError }}</div>
-          <div v-else-if="attendees.length === 0 && pendingInvitations.length === 0" data-testid="manage-attendees-empty" class="text-sm text-gray-400">No attendees yet.</div>
+          <div v-if="loadingAttendees" class="text-xs font-bold tracking-wider uppercase text-slate-400 flex items-center justify-center py-12">Loading attendees...</div>
+          <div v-else-if="attendeesError" class="text-sm font-medium text-red-600 bg-red-50 p-4 rounded-xl border border-red-100">{{ attendeesError }}</div>
+          
+          <div v-else-if="attendees.length === 0 && pendingInvitations.length === 0" data-testid="manage-attendees-empty" class="text-center py-16 px-6 border border-dashed border-slate-200 rounded-2xl bg-slate-50/50">
+             <div class="mx-auto w-16 h-16 rounded-full bg-slate-100 border border-slate-200/60 shadow-sm flex items-center justify-center mb-4">
+                <svg class="w-8 h-8 text-slate-300" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 0 0 2.625.372 9.337 9.337 0 0 0 4.121-.952 4.125 4.125 0 0 0-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M12 6.375a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0Zm8.25 2.25a2.625 2.625 0 1 1-5.25 0 2.625 2.625 0 0 1 5.25 0Z" /></svg>
+             </div>
+             <h3 class="text-sm font-bold text-slate-900 mb-1">No attendees yet</h3>
+             <p class="text-xs text-slate-500 max-w-[200px] mx-auto leading-relaxed">When people join your event or are invited, they'll appear here.</p>
+          </div>
 
-          <table v-else class="w-full text-sm">
-            <thead>
-              <tr class="text-left text-xs text-gray-500 uppercase tracking-wide border-b border-gray-200">
-                <th class="pb-2 font-medium">Display Name</th>
-                <th class="pb-2 font-medium">Full Name</th>
-                <th class="pb-2 font-medium">Email</th>
-                <th class="pb-2 font-medium">Joined</th>
-                <th v-if="hasCost" class="pb-2 font-medium text-center">Paid</th>
+          <template v-else>
+            <div class="flex items-center justify-between mb-4">
+              <span class="text-[11px] font-bold tracking-wider uppercase text-slate-400">{{ attendees.length }} {{ attendees.length === 1 ? 'attendee' : 'attendees' }}</span>
+              <div class="relative" v-if="attendees.length > 0 && permissionsStore.hasPermission('groups:manage')">
+                <button
+                  type="button"
+                  data-testid="manage-save-attendees-as-group-btn"
+                  @click="groupPopoverFor = groupPopoverFor === 'all' ? null : 'all'"
+                  class="inline-flex items-center gap-2 px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider text-indigo-600 bg-indigo-50/80 border border-indigo-100/50 rounded-lg shrink-0 shadow-[0_1px_2px_rgba(0,0,0,0.02)] transition-colors hover:bg-indigo-100/80 focus:ring-2 focus:ring-indigo-500 focus:ring-offset-1"
+                >
+                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 0 0 2.625.372 9.337 9.337 0 0 0 4.121-.952 4.125 4.125 0 0 0-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M12 6.375a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0Zm8.25 2.25a2.625 2.625 0 1 1-5.25 0 2.625 2.625 0 0 1 5.25 0Z" />
+                  </svg>
+                  Save list as group
+                </button>
+                <div v-if="groupPopoverFor === 'all'" class="absolute right-0 mt-1.5 z-40">
+                  <GroupSelectorPopover
+                    v-if="permissionsStore.hasPermission('groups:manage')"
+                    :user-ids="popoverUserIds()"
+                    title="Add everyone to group"
+                    @added="onGroupAdded"
+                    @close="groupPopoverFor = null"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div
+              v-if="groupToastMsg"
+              data-testid="manage-group-toast"
+              class="mb-4 rounded-xl bg-slate-800 text-white text-[13px] font-medium px-4 py-2.5 shadow-lg shadow-slate-900/20 inline-flex items-center gap-2"
+            >
+              <svg class="w-4 h-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+              {{ groupToastMsg }}
+            </div>
+
+            <div class="rounded-xl border border-slate-200 overflow-hidden shadow-sm">
+            <table class="w-full text-sm">
+            <thead class="bg-slate-50/50">
+              <tr class="text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">
+                <th class="px-4 py-3">Display Name</th>
+                <th class="px-4 py-3">Full Name</th>
+                <th class="px-4 py-3">Email</th>
+                <th class="px-4 py-3">Joined</th>
+                <th v-if="hasCost" class="px-4 py-3 text-center">Paid</th>
+                <th v-if="permissionsStore.hasPermission('groups:manage')" class="px-4 py-3 w-12"></th>
               </tr>
             </thead>
-            <tbody class="divide-y divide-gray-100">
-              <tr v-for="a in attendees" :key="a.userId" data-testid="manage-attendee-row">
-                <td class="py-2.5 font-medium text-gray-900">{{ a.displayName }}</td>
-                <td class="py-2.5">
-                  <span v-if="a.fullName" class="text-gray-700">{{ a.fullName }}</span>
-                  <span v-else class="text-gray-400 italic cursor-default select-none" title="Will be updated next time the user logs in">(Not available)</span>
+            <tbody class="divide-y divide-slate-100 bg-white">
+              <tr v-for="a in attendees" :key="a.userId" data-testid="manage-attendee-row" class="group/row hover:bg-slate-50/50 transition-colors">
+                <td class="px-4 py-3 font-semibold text-slate-900">{{ a.displayName }}</td>
+                <td class="px-4 py-3">
+                  <span v-if="a.fullName" class="text-slate-700">{{ a.fullName }}</span>
+                  <span v-else class="text-slate-400 text-xs italic cursor-default select-none" title="Will be updated next time the user logs in">(Not available)</span>
                 </td>
-                <td class="py-2.5 text-gray-500">{{ a.email }}</td>
-                <td class="py-2.5 text-gray-500">
+                <td class="px-4 py-3 text-slate-500 text-xs">{{ a.email }}</td>
+                <td class="px-4 py-3 text-slate-500 text-xs font-medium">
                   {{ new Date(a.joinedAt).toLocaleDateString() }}
                 </td>
-                <td v-if="hasCost" class="py-2.5 text-center">
+                <td v-if="hasCost" class="px-4 py-3 text-center">
                   <button
                     @click="togglePaid(a)"
                     data-testid="manage-payment-toggle-btn"
-                    class="inline-flex items-center justify-center gap-1.5 w-[88px] px-3 py-1.5 text-xs font-semibold rounded-lg ring-1 ring-inset shadow-sm transition-all focus:outline-none focus:ring-2 focus:ring-offset-1 active:scale-95"
+                    class="inline-flex items-center justify-center gap-1.5 w-[88px] px-3 py-1 text-xs font-bold rounded-lg ring-1 ring-inset shadow-sm transition-all focus:outline-none focus:ring-2 focus:ring-offset-1 active:scale-95"
                     :class="a.hasPaid
                       ? 'bg-emerald-50 text-emerald-700 ring-emerald-600/30 hover:bg-emerald-100 focus:ring-emerald-600'
                       : 'bg-amber-50 text-amber-700 ring-amber-600/30 hover:bg-amber-100 focus:ring-amber-500'"
@@ -517,21 +613,48 @@ onMounted(async () => {
                     {{ a.hasPaid ? 'Paid' : 'Unpaid' }}
                   </button>
                 </td>
+                <td v-if="permissionsStore.hasPermission('groups:manage')" class="px-4 py-3 text-right relative">
+                  <button
+                    type="button"
+                    :data-testid="`manage-attendee-add-to-group-btn`"
+                    :data-user-id="a.userId"
+                    @click="groupPopoverFor = groupPopoverFor === a.userId ? null : a.userId"
+                    :title="`Add ${a.displayName} to a contact group`"
+                    class="inline-flex items-center justify-center w-8 h-8 rounded-full text-slate-300 hover:text-indigo-600 hover:bg-indigo-50 hover:shadow-sm opacity-0 group-hover/row:opacity-100 focus:opacity-100 transition-all"
+                    :class="{ 'opacity-100 text-indigo-600 bg-indigo-50 shadow-sm': groupPopoverFor === a.userId }"
+                  >
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+                    </svg>
+                  </button>
+                  <div v-if="groupPopoverFor === a.userId" class="absolute right-6 mt-1 z-40">
+                    <GroupSelectorPopover
+                      v-if="permissionsStore.hasPermission('groups:manage')"
+                      :user-ids="[a.userId]"
+                      :title="`Add ${a.displayName}`"
+                      @added="onGroupAdded"
+                      @close="groupPopoverFor = null"
+                    />
+                  </div>
+                </td>
               </tr>
-              <tr v-for="inv in pendingInvitations" :key="'inv-' + inv.email" data-testid="manage-pending-invitation" class="opacity-60">
-                <td class="py-2.5 font-medium text-gray-500 italic">—</td>
-                <td class="py-2.5 text-gray-400">—</td>
-                <td class="py-2.5 text-gray-500">{{ inv.email }}</td>
-                <td class="py-2.5">
-                  <span class="inline-flex items-center gap-1 text-xs font-medium text-amber-600">
-                    <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" /></svg>
+              <tr v-for="inv in pendingInvitations" :key="'inv-' + inv.email" data-testid="manage-pending-invitation" class="bg-slate-50/30">
+                <td class="px-4 py-3 font-medium text-slate-400 italic text-xs">—</td>
+                <td class="px-4 py-3 text-slate-300 text-xs">—</td>
+                <td class="px-4 py-3 text-slate-500 text-xs opacity-70">{{ inv.email }}</td>
+                <td class="px-4 py-3">
+                  <span class="inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-amber-600 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-100/50">
+                    <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" /></svg>
                     Invited
                   </span>
                 </td>
-                <td v-if="hasCost" class="py-2.5 text-center text-gray-400">—</td>
+                <td v-if="hasCost" class="px-4 py-3 text-center text-slate-300 text-xs">—</td>
+                <td class="px-4 py-3"></td>
               </tr>
             </tbody>
           </table>
+          </div>
+          </template>
 
           <!-- Invite Users -->
           <div class="border-t border-gray-100 mt-6 pt-6">
@@ -539,7 +662,8 @@ onMounted(async () => {
             <UserSearchComboBox
               :allow-unknown-email="true"
               :exclude-emails="excludedInviteEmails"
-              placeholder="Search by name or email…"
+              :include-groups="permissionsStore.hasPermission('groups:manage')"
+              placeholder="Search people, groups, or type an email…"
               @select="onInviteeSelect"
             />
 
@@ -549,12 +673,14 @@ onMounted(async () => {
                 v-for="invitee in selectedInvitees"
                 :key="invitee.email"
                 data-testid="manage-invite-chip"
+                :data-from-group="invitee.fromGroup || undefined"
                 class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm"
                 :class="invitee.type === 'user'
                   ? 'bg-indigo-50 text-indigo-700'
                   : 'bg-amber-50 text-amber-700'"
               >
                 <span class="truncate max-w-[200px]">{{ invitee.displayName || invitee.email }}</span>
+                <span v-if="invitee.fromGroup" class="text-[10px] uppercase tracking-wide opacity-60">· {{ invitee.fromGroup }}</span>
                 <button
                   type="button"
                   @click="removeSelectedInvitee(invitee)"

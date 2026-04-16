@@ -396,30 +396,39 @@ watch(() => auth.isAuthenticated, (authenticated, wasAuthenticated) => {
 
         <!-- Tab: Attendees -->
         <div v-if="activeTab === 'attendees'" class="px-6 py-5">
-          <div v-if="participantsLoading" class="text-center py-8 text-gray-400 text-sm">Loading attendees...</div>
-          <div v-else-if="participants.length === 0" data-testid="participants-empty" class="text-center py-8">
-            <p class="text-gray-400 text-sm">No attendees yet.</p>
+          <div v-if="participantsLoading" class="text-[11px] font-bold tracking-wider uppercase text-slate-400 flex items-center justify-center py-12">Loading attendees...</div>
+          
+          <div v-else-if="participants.length === 0" data-testid="participants-empty" class="text-center py-16 px-6 border border-dashed border-slate-200 rounded-2xl bg-slate-50/50 my-2">
+             <div class="mx-auto w-16 h-16 rounded-full bg-slate-100 border border-slate-200/60 shadow-sm flex items-center justify-center mb-4">
+                <svg class="w-8 h-8 text-slate-300" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 0 0 2.625.372 9.337 9.337 0 0 0 4.121-.952 4.125 4.125 0 0 0-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M12 6.375a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0Zm8.25 2.25a2.625 2.625 0 1 1-5.25 0 2.625 2.625 0 0 1 5.25 0Z" /></svg>
+             </div>
+             <h3 class="text-sm font-bold text-slate-900 mb-1">No attendees yet</h3>
+             <p class="text-xs text-slate-500 max-w-[200px] mx-auto leading-relaxed">Be the first to join this event!</p>
           </div>
-          <ul v-else data-testid="participants-list" class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+
+          <ul v-else data-testid="participants-list" class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-2">
             <li
               v-for="p in participants"
               :key="p.keycloakId"
               data-testid="participant-item"
-              class="flex items-center gap-3 rounded-lg border border-gray-100 px-3 py-2.5"
+              class="flex items-center gap-3 rounded-xl border border-slate-200/60 bg-white px-4 py-3 shadow-sm hover:shadow-md hover:border-slate-300 transition-all cursor-default"
             >
               <img
                 v-if="p.hasProfilePicture"
                 :src="profilePictureUrl(p.keycloakId)"
                 :alt="p.displayName"
-                class="w-9 h-9 rounded-full object-cover bg-gray-100"
+                class="w-10 h-10 rounded-full object-cover shadow-sm border border-slate-200/50"
               />
               <span
                 v-else
-                class="w-9 h-9 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center text-sm font-semibold"
+                class="w-10 h-10 rounded-full bg-gradient-to-br from-slate-100 to-slate-50 border border-slate-200/50 shadow-[inset_0_1px_1px_rgba(255,255,255,1)] text-slate-500 flex items-center justify-center text-[13px] font-bold"
               >
                 {{ p.displayName.charAt(0).toUpperCase() }}
               </span>
-              <span class="text-sm font-medium text-gray-700 truncate">{{ p.displayName }}</span>
+              <div class="flex-1 min-w-0">
+                <span class="block text-[13px] font-bold text-slate-900 truncate tracking-tight">{{ p.displayName }}</span>
+                <span class="block text-[11px] font-medium text-slate-500 uppercase tracking-wider mt-0.5">Attendee</span>
+              </div>
             </li>
           </ul>
         </div>

@@ -198,5 +198,37 @@ public class MigrationWorker(
         {
             logger.LogInformation("Admin {Email} already has events:write permission.", adminEmail);
         }
+
+        var hasGroupsPermission = await dbContext.UserPermissions
+            .AnyAsync(p => p.UserId == user.Id && p.Permission == "groups:manage", ct);
+
+        if (!hasGroupsPermission)
+        {
+            dbContext.UserPermissions.Add(new UserPermission
+            {
+                Id = Guid.NewGuid(),
+                UserId = user.Id,
+                Permission = "groups:manage",
+                GrantedAt = DateTime.UtcNow
+            });
+            await dbContext.SaveChangesAsync(ct);
+            logger.LogInformation("Granted groups:manage permission to {Email}.", adminEmail);
+        }
+
+        var hasAdminPermission = await dbContext.UserPermissions
+            .AnyAsync(p => p.UserId == user.Id && p.Permission == "admin:access", ct);
+
+        if (!hasAdminPermission)
+        {
+            dbContext.UserPermissions.Add(new UserPermission
+            {
+                Id = Guid.NewGuid(),
+                UserId = user.Id,
+                Permission = "admin:access",
+                GrantedAt = DateTime.UtcNow
+            });
+            await dbContext.SaveChangesAsync(ct);
+            logger.LogInformation("Granted admin:access permission to {Email}.", adminEmail);
+        }
     }
 }

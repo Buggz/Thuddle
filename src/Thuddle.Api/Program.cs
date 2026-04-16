@@ -47,7 +47,11 @@ builder.Services.AddAuthorizationBuilder()
         .RequireAuthenticatedUser()
         .Build())
     .AddPolicy("events:write", policy =>
-        policy.Requirements.Add(new PermissionRequirement("events:write")));
+        policy.Requirements.Add(new PermissionRequirement("events:write")))
+    .AddPolicy("groups:manage", policy =>
+        policy.Requirements.Add(new PermissionRequirement("groups:manage")))
+    .AddPolicy("admin:access", policy =>
+        policy.Requirements.Add(new PermissionRequirement("admin:access")));
 
 builder.Services.AddScoped<IAuthorizationHandler, PermissionHandler>();
 
@@ -89,6 +93,8 @@ app.MapDefaultEndpoints();
 app.MapProfileEndpoints();
 app.MapEventEndpoints();
 app.MapDiscussionEndpoints();
+app.MapContactGroupEndpoints();
+app.MapAdminEndpoints();
 
 app.MapGet("/api/hello", () => Results.Ok(new { message = "Hello from Thuddle API!" }));
 

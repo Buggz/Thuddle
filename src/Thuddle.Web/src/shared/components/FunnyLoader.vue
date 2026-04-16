@@ -4,6 +4,7 @@ import { shallowRef, onMounted, onUnmounted } from 'vue'
 const props = defineProps({
   title: { type: String, default: 'Loading...' },
   delay: { type: Number, default: 2500 },
+  showSpinner: { type: Boolean, default: true },
 })
 
 const messages = [
@@ -71,8 +72,41 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="flex flex-col items-center gap-2">
-    <p class="text-gray-600 font-semibold text-lg">{{ title }}</p>
-    <p class="text-gray-500 text-base transition-opacity duration-300">{{ currentMessage }}...</p>
+  <div class="flex flex-col items-center justify-center w-full">
+    <div v-if="showSpinner" class="relative flex items-center justify-center w-14 h-14 mb-6 bg-gradient-to-br from-slate-50 to-slate-100 rounded-2xl border border-slate-200/60 shadow-sm">
+      <svg class="w-6 h-6 text-indigo-500 animate-[spin_1.5s_linear_infinite] opacity-80" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+        <path d="M12 3v3m6.364-.364l-2.121 2.121M21 12h-3m.364 6.364l-2.121-2.121M12 21v-3m-6.364.364l2.121-2.121M3 12h3m-.364-6.364l2.121 2.121" />
+      </svg>
+    </div>
+    <div class="text-center space-y-1.5 flex flex-col items-center">
+      <h3 class="text-[14px] font-bold text-slate-800 tracking-tight">{{ title }}</h3>
+      <div class="h-6 flex items-center justify-center overflow-hidden">
+        <Transition name="fade" mode="out-in">
+          <p :key="currentMessage" class="text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center">
+            {{ currentMessage }}
+            <span class="flex w-3 ml-0.5 text-slate-300">
+              <span class="animate-[bounce_1.4s_infinite_0ms]">.</span>
+              <span class="animate-[bounce_1.4s_infinite_200ms]">.</span>
+              <span class="animate-[bounce_1.4s_infinite_400ms]">.</span>
+            </span>
+          </p>
+        </Transition>
+      </div>
+    </div>
   </div>
 </template>
+
+<style scoped>
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+.fade-enter-from {
+  opacity: 0;
+  transform: translateY(4px);
+}
+.fade-leave-to {
+  opacity: 0;
+  transform: translateY(-4px);
+}
+</style>
