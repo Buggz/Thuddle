@@ -315,62 +315,57 @@ watch(() => auth.isAuthenticated, (authenticated, wasAuthenticated) => {
         </div>
 
         <!-- Navigation Tabs -->
-        <!-- Tabs -->
-        <div class="border-t border-gray-100">
-          <nav class="flex px-6" aria-label="Tabs">
+        <div class="px-6 py-4 border-t border-gray-100 bg-gray-50/30">
+          <nav class="flex flex-wrap gap-2 p-1.5 bg-gray-100/80 border border-gray-200/60 rounded-2xl w-fit" aria-label="Tabs">
             <button
               @click="selectTab('about')"
-              class="px-4 py-3 text-sm font-medium border-b-2 transition-colors"
+              class="px-5 py-2.5 text-sm font-bold rounded-xl transition-all duration-200 ease-out"
               :class="activeTab === 'about'
-                ? 'border-indigo-600 text-indigo-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
+                ? 'bg-white text-indigo-700 shadow-sm ring-1 ring-gray-200/50'
+                : 'text-gray-500 hover:text-gray-800 hover:bg-gray-200/50'"
             >
               About this event
             </button>
+            
             <button
               data-testid="event-tab-discussion"
               @click="selectTab('discussion')"
-              class="flex items-center px-4 py-3 text-sm font-medium border-b-2 transition-colors relative"
+              class="flex items-center px-5 py-2.5 text-sm font-bold rounded-xl transition-all duration-200 ease-out relative"
               :class="activeTab === 'discussion'
-                ? 'border-indigo-600 text-indigo-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
+                ? 'bg-white text-indigo-700 shadow-sm ring-1 ring-gray-200/50'
+                : 'text-gray-500 hover:text-gray-800 hover:bg-gray-200/50'"
             >
               Discussion
               
-              <div v-if="event.postCount" class="ml-2 relative flex items-center gap-1.5 rounded-md px-2.5 py-0.5 transition-colors"
-                   :class="(event.hasUnreadDiscussion && activeTab !== 'discussion') ? 'bg-indigo-50 text-indigo-700 border border-indigo-200 shadow-sm' : 'bg-gray-50 text-gray-600 border border-gray-200/60'">
-                <div class="relative">
-                  <svg class="w-3.5 h-3.5" :class="(event.hasUnreadDiscussion && activeTab !== 'discussion') ? 'text-indigo-600' : 'opacity-70'" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 20.25c4.97 0 9-3.694 9-8.25s-4.03-8.25-9-8.25S3 7.444 3 12c0 2.104.859 4.023 2.273 5.48.432.447.74 1.04.586 1.641a4.483 4.483 0 0 1-.923 1.785A5.969 5.969 0 0 0 6 21c1.282 0 2.47-.402 3.445-1.087.81.22 1.668.337 2.555.337Z" />
-                  </svg>
-                  <!-- Notification dot specifically on the icon -->
-                  <span v-if="event.hasUnreadDiscussion && activeTab !== 'discussion'" data-testid="discussion-unread-indicator" class="absolute -top-1 -right-1.5 flex h-2 w-2">
+              <div v-if="event.postCount" class="ml-2.5 flex items-center transition-colors">
+                <div class="relative flex items-center justify-center px-2 py-0.5 rounded-md border text-xs font-semibold shadow-sm"
+                     :class="(event.hasUnreadDiscussion && activeTab !== 'discussion') || activeTab === 'discussion' ? 'bg-indigo-50 text-indigo-700 border-indigo-100' : 'bg-white text-gray-500 border-gray-200/60'">
+                  <span v-if="event.hasUnreadDiscussion && activeTab !== 'discussion'" class="absolute -top-1 -right-1 flex h-2.5 w-2.5">
                     <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
-                    <span class="relative inline-flex rounded-full h-2 w-2 bg-rose-500 ring-2 ring-indigo-50"></span>
+                    <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-rose-500 ring-2 ring-white"></span>
                   </span>
+                  {{ event.postCount }}
                 </div>
-                <span class="text-xs" :class="{'font-bold': (event.hasUnreadDiscussion && activeTab !== 'discussion')}">{{ event.postCount }}</span>
               </div>
 
-              <span v-if="event.pendingPostCount" class="ml-2 inline-flex items-center bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded border border-amber-200 text-[10px] uppercase font-bold tracking-wider">
+              <span v-if="event.pendingPostCount" class="ml-2 inline-flex items-center bg-amber-50 text-amber-700 px-2 py-0.5 rounded-md border border-amber-200/60 text-[10px] uppercase font-bold tracking-wider shadow-sm">
                 {{ event.pendingPostCount }} pending
               </span>
             </button>
+
             <button
               data-testid="event-tab-attendees"
               @click="selectTab('attendees')"
-              class="flex items-center px-4 py-3 text-sm font-medium border-b-2 transition-colors relative"
+              class="flex items-center px-5 py-2.5 text-sm font-bold rounded-xl transition-all duration-200 ease-out relative"
               :class="activeTab === 'attendees'
-                ? 'border-indigo-600 text-indigo-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
+                ? 'bg-white text-indigo-700 shadow-sm ring-1 ring-gray-200/50'
+                : 'text-gray-500 hover:text-gray-800 hover:bg-gray-200/50'"
             >
               Attendees
-              <span class="ml-2 inline-flex items-center rounded-md border border-gray-200/60 bg-gray-50 px-2 py-0.5 text-xs font-medium text-gray-600">
-                <svg class="w-3.5 h-3.5 mr-1 opacity-70" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 0 0 2.625.372 9.337 9.337 0 0 0 4.121-.952 4.125 4.125 0 0 0-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 0 1 8.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0 1 11.964-3.07M12 6.375a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0Zm8.25 2.25a2.625 2.625 0 1 1-5.25 0 2.625 2.625 0 0 1 5.25 0Z" />
-                </svg>
-                {{ event.participantCount }}
-              </span>
+              <div class="ml-2.5 flex items-center justify-center px-2 py-0.5 rounded-md border text-xs font-semibold shadow-sm transition-colors"
+                   :class="activeTab === 'attendees' ? 'bg-indigo-50 text-indigo-700 border-indigo-100' : 'bg-white text-gray-500 border-gray-200/60'">
+                {{ event.participantCount || 0 }}
+              </div>
             </button>
           </nav>
         </div>
