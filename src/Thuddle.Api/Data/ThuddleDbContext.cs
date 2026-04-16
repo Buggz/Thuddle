@@ -12,10 +12,13 @@ public class ThuddleDbContext(DbContextOptions<ThuddleDbContext> options) : DbCo
     public DbSet<EventCoAdmin> EventCoAdmins => Set<EventCoAdmin>();
     public DbSet<DiscussionPost> DiscussionPosts => Set<DiscussionPost>();
     public DbSet<DiscussionComment> DiscussionComments => Set<DiscussionComment>();
+    public DbSet<DiscussionReadReceipt> DiscussionReadReceipts => Set<DiscussionReadReceipt>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
+
+        modelBuilder.HasPostgresExtension("pg_trgm");
 
         modelBuilder.Entity<User>(entity =>
         {
@@ -98,6 +101,19 @@ public class ThuddleDbContext(DbContextOptions<ThuddleDbContext> options) : DbCo
             entity.HasOne(c => c.Author)
                 .WithMany()
                 .HasForeignKey(c => c.AuthorId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<DiscussionReadReceipt>(entity =>
+        {
+            entity.HasIndex(r => new { r.UserId, r.EventId }).IsUnique();
+            entity.HasOne(r => r.User)
+                .WithMany()
+                .HasForeignKey(r => r.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(r => r.Event)
+                .WithMany()
+                .HasForeignKey(r => r.EventId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
     }

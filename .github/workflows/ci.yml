@@ -58,6 +58,60 @@ jobs:
           npm ci
           npm run build
 
+  e2e:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install Aspire workload
+        run: dotnet workload install aspire
+
+      - name: Install frontend dependencies
+        working-directory: src/Thuddle.Web
+        run: npm ci
+
+      - name: Install Playwright browsers
+        working-directory: tests/e2e
+        run: |
+          npm ci
+          npx playwright install chromium --with-deps
+
+      - name: Start Aspire app
+        run: |
+          dotnet run --project src/Thuddle.AppHost -- --NoVolumes true &
+          echo "Waiting for web app to be ready..."
+          timeout 120 bash -c 'until curl -sf http://localhost:50279 > /dev/null 2>&1; do sleep 2; done'
+          echo "App is ready"
+
+      - name: Run Playwright tests
+        working-directory: tests/e2e
+        run: npx playwright test --reporter=html
+
+      - name: Upload test results
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: tests/e2e/playwright-report/
+          retention-days: 14
+
+      - name: Upload test traces
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-traces
+          path: tests/e2e/test-results/
+          retention-days: 7
+
   docker:
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest

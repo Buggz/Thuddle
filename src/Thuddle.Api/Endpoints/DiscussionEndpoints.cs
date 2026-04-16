@@ -58,6 +58,35 @@ public static class DiscussionEndpoints
             : null;
 
         var isAdmin = dbUser is not null && await IsEventAdmin(db, eventId, dbUser.Id, ct);
+        var isMember = dbUser is not null && await IsMember(db, eventId, dbUser.Id, ct);
+
+        // Get the user's last read timestamp before updating it
+        DateTime? lastReadAt = null;
+        if (dbUser is not null)
+        {
+            var receipt = await db.DiscussionReadReceipts
+                .FirstOrDefaultAsync(r => r.UserId == dbUser.Id && r.EventId == eventId, ct);
+
+            lastReadAt = receipt?.LastReadAt;
+
+            // Upsert the read receipt
+            if (receipt is not null)
+            {
+                receipt.LastReadAt = DateTime.UtcNow;
+                db.DiscussionReadReceipts.Update(receipt);
+            }
+            else
+            {
+                db.DiscussionReadReceipts.Add(new DiscussionReadReceipt
+                {
+                    Id = Guid.NewGuid(),
+                    UserId = dbUser.Id,
+                    EventId = eventId,
+                    LastReadAt = DateTime.UtcNow
+                });
+            }
+            await db.SaveChangesAsync(ct);
+        }
 
         var query = db.DiscussionPosts
             .AsNoTracking()
@@ -84,6 +113,9 @@ public static class DiscussionEndpoints
                 AuthorKeycloakId = p.Author.KeycloakId,
                 HasProfilePicture = p.Author.ScaledPicturePath != null,
                 CommentCount = db.DiscussionComments.Count(c => c.PostId == p.Id),
+                LatestCommentAt = db.DiscussionComments
+                    .Where(c => c.PostId == p.Id)
+                    .Max(c => (DateTime?)c.CreatedAt),
                 IsOwnPost = dbUser != null && p.AuthorId == dbUser.Id
             })
             .ToListAsync(ct);
@@ -91,7 +123,9 @@ public static class DiscussionEndpoints
         return Results.Ok(new
         {
             posts,
+            lastReadAt,
             isAdmin,
+            isMember,
             settings = new
             {
                 memberPostPolicy = (int)evt.MemberPostPolicy,
@@ -156,6 +190,25 @@ public static class DiscussionEndpoints
         };
 
         db.DiscussionPosts.Add(post);
+
+        // Mark the author as having read up to this point so their own post doesn't show as unread
+        var receipt = await db.DiscussionReadReceipts
+            .FirstOrDefaultAsync(r => r.EventId == eventId && r.UserId == dbUser.Id, ct);
+        if (receipt is not null)
+        {
+            receipt.LastReadAt = post.CreatedAt;
+            db.DiscussionReadReceipts.Update(receipt);
+        }
+        else
+        {
+            db.DiscussionReadReceipts.Add(new DiscussionReadReceipt
+            {
+                EventId = eventId,
+                UserId = dbUser.Id,
+                LastReadAt = post.CreatedAt
+            });
+        }
+
         await db.SaveChangesAsync(ct);
 
         // Send email if requested and user is admin
@@ -395,6 +448,25 @@ public static class DiscussionEndpoints
         };
 
         db.DiscussionComments.Add(comment);
+
+        // Mark the author as having read up to this point so their own comment doesn't show as unread
+        var receipt = await db.DiscussionReadReceipts
+            .FirstOrDefaultAsync(r => r.EventId == eventId && r.UserId == dbUser.Id, ct);
+        if (receipt is not null)
+        {
+            receipt.LastReadAt = comment.CreatedAt;
+            db.DiscussionReadReceipts.Update(receipt);
+        }
+        else
+        {
+            db.DiscussionReadReceipts.Add(new DiscussionReadReceipt
+            {
+                EventId = eventId,
+                UserId = dbUser.Id,
+                LastReadAt = comment.CreatedAt
+            });
+        }
+
         await db.SaveChangesAsync(ct);
 
         return Results.Created($"/api/events/{eventId}/discussion/{postId}/comments/{comment.Id}", new

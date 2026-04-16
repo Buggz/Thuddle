@@ -2,6 +2,13 @@
     "chat.tools.terminal.autoApprove": {
         "dotnet build": true,
         "npm run build": true,
-        "az": true
+        "az": true,
+        "/^aspire start$/": {
+            "approve": true,
+            "matchCommandLine": true
+        },
+        "aspire": true,
+        "ConvertFrom-Json": true,
+        "npx playwright": true
     }
 }

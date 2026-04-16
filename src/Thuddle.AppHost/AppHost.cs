@@ -1,16 +1,20 @@
 var builder = DistributedApplication.CreateBuilder(args);
 
+var useVolumes = builder.Configuration["NoVolumes"] is not "true";
+
 // PostgreSQL: one server, two databases
-var postgres = builder.AddPostgres("postgres")
-    .WithDataVolume()
-    .WithPgAdmin();
+var postgresBuilder = builder.AddPostgres("postgres");
+if (useVolumes) postgresBuilder.WithDataVolume();
+var postgres = postgresBuilder.WithPgAdmin();
 
 var keycloakDb = postgres.AddDatabase("keycloakdb");
 var thuddleDb = postgres.AddDatabase("thuddledb");
 
 // Keycloak: using PostgreSQL as backing store, importing the Thuddle realm
-var keycloak = builder.AddKeycloakContainer("keycloak")
-    .WithDataVolume()
+var keycloakBuilder = builder.AddKeycloakContainer("keycloak");
+if (useVolumes) keycloakBuilder.WithDataVolume();
+var keycloak = keycloakBuilder
+    .WithEndpoint("http", e => e.Port = 8080)
     .WithImport("./KeycloakConfiguration/Thuddle-realm.dev.json")
     .WithEnvironment("KC_DB", "postgres")
     .WithEnvironment(context =>
@@ -43,6 +47,7 @@ var api = builder.AddProject<Projects.Thuddle_Api>("api")
     .WaitFor(keycloak)
     .WaitFor(storage)
     .WaitForCompletion(migrations)
+    .WithEndpoint("http", e => e.Port = 5208)
     .WithExternalHttpEndpoints();
 
 // Vue.js frontend
@@ -51,6 +56,7 @@ builder.AddViteApp("web", "../Thuddle.Web")
     .WithReference(api)
     .WaitFor(api)
     .WaitFor(keycloak)
+    .WithEndpoint("http", e => e.Port = 50279)
     .WithExternalHttpEndpoints()
     .WithEnvironment("VITE_KEYCLOAK_URL", keycloak.GetEndpoint("http"))
     .WithEnvironment("VITE_KEYCLOAK_REALM", "Thuddle")

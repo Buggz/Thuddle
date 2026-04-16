@@ -20,6 +20,7 @@ namespace Thuddle.Api.Migrations
                 .HasAnnotation("ProductVersion", "10.0.5")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
+            NpgsqlModelBuilderExtensions.HasPostgresExtension(modelBuilder, "pg_trgm");
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
             modelBuilder.Entity("Thuddle.Api.Data.DiscussionComment", b =>
@@ -82,6 +83,31 @@ namespace Thuddle.Api.Migrations
                     b.HasIndex("EventId", "CreatedAt");
 
                     b.ToTable("DiscussionPosts");
+                });
+
+            modelBuilder.Entity("Thuddle.Api.Data.DiscussionReadReceipt", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("EventId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("LastReadAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EventId");
+
+                    b.HasIndex("UserId", "EventId")
+                        .IsUnique();
+
+                    b.ToTable("DiscussionReadReceipts");
                 });
 
             modelBuilder.Entity("Thuddle.Api.Data.Event", b =>
@@ -330,6 +356,25 @@ namespace Thuddle.Api.Migrations
                     b.Navigation("Author");
 
                     b.Navigation("Event");
+                });
+
+            modelBuilder.Entity("Thuddle.Api.Data.DiscussionReadReceipt", b =>
+                {
+                    b.HasOne("Thuddle.Api.Data.Event", "Event")
+                        .WithMany()
+                        .HasForeignKey("EventId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Thuddle.Api.Data.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Event");
+
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("Thuddle.Api.Data.Event", b =>

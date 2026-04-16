@@ -82,7 +82,7 @@ if (-not $SkipBuild) {
         $latestTag = "$ContainerRegistry/$($img.Name):latest"
         Write-Host "`nBuilding $fullTag ..." -ForegroundColor Yellow
 
-        docker build -t $fullTag -t $latestTag -f (Join-Path $repoRoot $img.Dockerfile) $repoRoot
+        docker build --no-cache -t $fullTag -t $latestTag -f (Join-Path $repoRoot $img.Dockerfile) $repoRoot
         if ($LASTEXITCODE -ne 0) { Write-Error "Docker build failed for $($img.Name)"; exit 1 }
 
         Write-Host "Pushing $fullTag ..." -ForegroundColor Yellow

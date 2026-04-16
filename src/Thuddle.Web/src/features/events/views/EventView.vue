@@ -69,6 +69,9 @@ async function loadParticipants() {
 
 function selectTab(tab) {
   activeTab.value = tab
+  if (tab === 'discussion' && event.value) {
+    event.value.hasUnreadDiscussion = false
+  }
   if (tab === 'attendees' && !participantsLoaded.value) {
     loadParticipants()
   }
@@ -107,6 +110,25 @@ function formatDate(iso) {
   })
 }
 
+function formatCost(cost) {
+  if (cost === 0 || cost === null || cost === undefined) return 'Free'
+  return new Intl.NumberFormat(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 }).format(cost)
+}
+
+function eventImageGradient(id) {
+  if (!id) return 'from-indigo-400 to-purple-500'
+  const gradients = [
+    'from-indigo-400 to-purple-500',
+    'from-emerald-400 to-teal-500',
+    'from-orange-400 to-rose-500',
+    'from-sky-400 to-blue-500',
+    'from-fuchsia-400 to-pink-500',
+    'from-amber-400 to-orange-500',
+  ]
+  const sum = id.split('').reduce((a, b) => a + b.charCodeAt(0), 0)
+  return gradients[sum % gradients.length]
+}
+
 onMounted(loadEvent)
 
 // Re-fetch event data when auth state changes so admin/join status updates
@@ -137,174 +159,229 @@ watch(() => auth.isAuthenticated, (authenticated, wasAuthenticated) => {
     </div>
 
     <template v-else-if="event">
-      <div class="bg-white shadow rounded-xl overflow-hidden">
-        <!-- Header -->
-        <div class="px-6 pt-6 pb-4 border-b border-gray-100">
-          <h1 class="text-2xl font-bold text-gray-900">{{ event.title }}</h1>
-          <p class="mt-1 text-sm text-gray-500">Hosted by {{ event.ownerName }}</p>
+      <div data-testid="event-detail" class="bg-white shadow rounded-xl overflow-hidden">
+        <!-- Hero Header -->
+        <div class="relative w-full h-56 sm:h-72">
+          <img
+            v-if="event.picturePath"
+            :src="event.picturePath"
+            :alt="event.title"
+            class="absolute inset-0 w-full h-full object-cover"
+          />
+          <div
+            v-else
+            class="absolute inset-0 bg-linear-to-br opacity-90"
+            :class="eventImageGradient(event.id)"
+          >
+            <div class="absolute inset-0 flex items-center justify-center">
+              <svg class="w-16 h-16 text-white/30" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" />
+              </svg>
+            </div>
+          </div>
+          <div class="absolute inset-0 bg-gradient-to-t from-gray-900/80 via-gray-900/30 to-transparent"></div>
+          
+          <div class="absolute bottom-0 w-full px-6 pb-6">
+            <div class="flex items-center gap-2 mb-3">
+              <span class="inline-flex items-center gap-1.5 rounded-md bg-white/20 backdrop-blur-md px-2.5 py-1 text-[11px] font-bold uppercase tracking-widest text-white border border-white/30"
+                    :class="event.joinMode === 0 ? 'bg-sky-500/30 border-sky-400/50' : 'bg-rose-500/30 border-rose-400/50'">
+                <svg v-if="event.joinMode !== 0" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z" />
+                </svg>
+                {{ event.joinMode === 0 ? 'Public' : 'Invite Only' }}
+              </span>
+              <span v-if="event.visibility === 1" class="inline-flex items-center gap-1.5 rounded-md bg-white/20 backdrop-blur-md px-2.5 py-1 text-[11px] font-bold uppercase tracking-widest text-white border border-white/30">
+                <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M3.98 8.223A10.477 10.477 0 001.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.45 10.45 0 0112 4.5c4.756 0 8.773 3.162 10.065 7.498a10.523 10.523 0 01-4.293 5.774M6.228 6.228L3 3m3.228 3.228l3.65 3.65m7.894 7.894L21 21m-3.228-3.228l-3.65-3.65m0 0a3 3 0 10-4.243-4.243m4.242 4.242L9.88 9.88" />
+                </svg>
+                Unlisted
+              </span>
+            </div>
+            <h1 data-testid="event-title" class="text-3xl sm:text-4xl font-extrabold text-white">{{ event.title }}</h1>
+            <p class="mt-2 text-sm font-medium text-white/80">Hosted by <span class="text-white">{{ event.ownerName }}</span></p>
+          </div>
+          
+          <div v-if="event.hasJoined" data-testid="event-joined-badge" class="absolute top-4 right-4 flex items-center gap-1 rounded-full bg-emerald-500 px-3 py-1.5 text-xs font-bold text-white shadow-lg uppercase tracking-wide">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+            </svg>
+            Attending
+          </div>
         </div>
 
-        <!-- Body -->
-        <div class="px-6 py-5 space-y-5">
-          <!-- Location -->
-          <div v-if="event.location">
-            <h2 class="text-sm font-medium text-gray-500 uppercase tracking-wide mb-1">Location</h2>
-            <p class="text-gray-700 whitespace-pre-line">{{ event.location }}</p>
-          </div>
-
-          <!-- Details grid -->
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <!-- Details grid (Re-styled) -->
+        <div class="px-6 py-6 border-b border-gray-100 bg-gray-50/50">
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            
             <!-- Date & Time -->
-            <div class="flex items-start gap-3">
-              <div class="flex-shrink-0 mt-0.5 rounded-lg bg-indigo-50 p-2">
-                <svg class="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <div class="flex items-start gap-4 rounded-xl bg-white p-4 shadow-sm ring-1 ring-gray-100">
+              <div class="flex-shrink-0 mt-0.5 rounded-lg bg-indigo-50 p-2.5 text-indigo-600 ring-1 ring-indigo-100">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" />
                 </svg>
               </div>
-              <div>
-                <p class="text-sm font-medium text-gray-900">{{ formatDate(event.start) }}</p>
+              <div class="min-w-0 flex-1">
+                <p class="text-[13px] font-bold text-gray-500 uppercase tracking-widest mb-1">When</p>
+                <p class="text-sm font-bold text-gray-900 leading-snug">{{ formatDate(event.start) }}</p>
                 <p class="text-sm text-gray-500">to {{ formatDate(event.end) }}</p>
               </div>
             </div>
 
+            <!-- Location -->
+            <div class="flex items-start gap-4 rounded-xl bg-white p-4 shadow-sm ring-1 ring-gray-100">
+              <div class="flex-shrink-0 mt-0.5 rounded-lg bg-rose-50 p-2.5 text-rose-600 ring-1 ring-rose-100">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z" />
+                </svg>
+              </div>
+              <div class="min-w-0 flex-1">
+                <p class="text-[13px] font-bold text-gray-500 uppercase tracking-widest mb-1">Where</p>
+                <p class="text-sm font-bold text-gray-900 leading-snug whitespace-pre-line">{{ event.location || 'Location TBD' }}</p>
+              </div>
+            </div>
+
             <!-- Cost -->
-            <div class="flex items-start gap-3">
-              <div class="flex-shrink-0 mt-0.5 rounded-lg bg-green-50 p-2">
-                <svg class="w-5 h-5 text-green-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v12m-3-2.818.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z" />
+            <div class="flex items-start gap-4 rounded-xl bg-white p-4 shadow-sm ring-1 ring-gray-100">
+              <div class="flex-shrink-0 mt-0.5 rounded-lg bg-emerald-50 p-2.5 text-emerald-600 ring-1 ring-emerald-100">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 6v.75m0 3v.75m0 3v.75m0 3V18m-9-5.25h5.25M7.5 15h3M3.375 5.25c-.621 0-1.125.504-1.125 1.125v3.026a2.999 2.999 0 0 1 0 5.198v3.026c0 .621.504 1.125 1.125 1.125h17.25c.621 0 1.125-.504 1.125-1.125v-3.026a2.999 2.999 0 0 1 0-5.198V6.375c0-.621-.504-1.125-1.125-1.125H3.375Z" />
                 </svg>
               </div>
               <div>
-                <p class="text-sm font-medium text-gray-900">
-                  {{ event.cost ? event.cost.toFixed(2) : 'Free' }}
+                <p class="text-[13px] font-bold text-gray-500 uppercase tracking-widest mb-1">Price</p>
+                <p class="text-sm font-bold text-gray-900 leading-snug">
+                  {{ formatCost(event.cost) }}
                 </p>
                 <p class="text-sm text-gray-500">{{ event.cost ? 'Per person' : 'No cost to attend' }}</p>
               </div>
             </div>
 
-            <!-- Capacity / Participants -->
-            <div class="flex items-start gap-3">
-              <div class="flex-shrink-0 mt-0.5 rounded-lg bg-blue-50 p-2">
-                <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 0 0 2.625.372 9.337 9.337 0 0 0 4.121-.952 4.125 4.125 0 0 0-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 0 1 8.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0 1 11.964-3.07M12 6.375a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0zm8.25 2.25a2.625 2.625 0 1 1-5.25 0 2.625 2.625 0 0 1 5.25 0z" />
-                </svg>
+            <!-- Join Mode -->
+              <div v-if="event.joinMode === 1" class="flex items-start gap-4 rounded-xl bg-white p-4 shadow-sm ring-1 ring-gray-100">
+                <div class="flex-shrink-0 mt-0.5 rounded-lg bg-amber-50 p-2.5 text-amber-600 ring-1 ring-amber-100">
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z" />
+                  </svg>
+                </div>
+                <div class="min-w-0">
+                  <p class="text-[13px] font-bold text-gray-500 uppercase tracking-widest mb-1">Access</p>
+                  <p class="text-sm font-bold text-gray-900 leading-snug whitespace-nowrap">Invite Only</p>
+                  <p class="text-sm text-gray-500">Requires an invitation</p>
+                </div>
               </div>
-              <div>
-                <p class="text-sm font-medium text-gray-900">{{ event.participantCount }} joined</p>
-                <p class="text-sm text-gray-500">
-                  {{ event.capacity ? `${event.capacity} spots total` : 'Unlimited spots' }}
-                </p>
-              </div>
-            </div>
-
-            <!-- Join Mode & Visibility -->
-            <div class="flex items-start gap-3">
-              <div class="flex-shrink-0 mt-0.5 rounded-lg bg-yellow-50 p-2">
-                <svg class="w-5 h-5 text-yellow-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 0 1 3.598 6 11.99 11.99 0 0 0 3 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" />
-                </svg>
-              </div>
-              <div>
-                <p class="text-sm font-medium text-gray-900">
-                  {{ event.joinMode === 0 ? 'Open to all' : 'Invite only' }}
-                </p>
-                <p class="text-sm text-gray-500">
-                  {{ event.visibility === 0 ? 'Public event' : 'Unlisted event' }}
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <!-- Join / Status -->
-          <div class="flex items-center gap-3 pt-2">
-            <RouterLink
-              v-if="event.isAdmin"
-              :to="{ name: 'manage-event', params: { id: event.id } }"
-              class="px-5 py-2.5 text-sm font-semibold rounded-lg bg-gray-800 text-white hover:bg-gray-900 transition-colors"
-            >
-              Manage Event
-            </RouterLink>
-            <button
-              v-if="!auth.isAuthenticated"
-              disabled
-              class="px-5 py-2.5 text-sm font-semibold rounded-lg bg-gray-300 text-gray-500 cursor-not-allowed"
-              title="Sign in to join this event"
-            >
-              Join this event
-            </button>
-            <button
-              v-else-if="event.canJoin"
-              :disabled="joining"
-              @click="joinEvent"
-              class="px-5 py-2.5 text-sm font-semibold rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              {{ joining ? 'Joining…' : 'Join this event' }}
-            </button>
-            <span
-              v-else-if="event.hasJoined"
-              class="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-green-700 bg-green-100 rounded-lg"
-            >
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-              </svg>
-              You've joined
-            </span>
-            <span
-              v-else-if="event.joinMode === 1"
-              class="text-sm text-gray-500"
-            >
-              This event is invite only
-            </span>
-            <div v-if="error" class="ml-auto text-sm text-red-600">{{ error }}</div>
           </div>
         </div>
 
-        <!-- Tabs -->
-        <div class="border-t border-gray-100">
-          <nav class="flex px-6" aria-label="Tabs">
+        <!-- Action Bar -->
+        <div class="border-b border-gray-100 bg-white px-6 py-5 flex flex-col sm:flex-row gap-4 justify-between items-center z-10 relative">
+          <div class="flex flex-col sm:flex-row items-center w-full sm:w-auto gap-3">
+            <template v-if="!event.hasJoined">
+              <button
+                v-if="auth.isAuthenticated && (event.canJoin || event.hasInvitation)"
+                data-testid="event-join-btn"
+                @click="joinEvent"
+                class="w-full sm:w-auto justify-center inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-8 py-3 text-sm font-bold text-white shadow-md hover:bg-indigo-500 hover:shadow-lg hover:-translate-y-0.5 transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+              >
+                Join Event
+              </button>
+              <button
+                v-else-if="!auth.isAuthenticated && event.joinMode !== 1"
+                data-testid="event-join-btn-disabled"
+                disabled
+                class="w-full sm:w-auto justify-center inline-flex items-center gap-2 rounded-xl bg-indigo-300 px-8 py-3 text-sm font-bold text-white cursor-not-allowed"
+              >
+                Join Event
+              </button>
+              <div v-else-if="!event.hasInvitation && event.joinMode === 1" data-testid="event-invite-only-msg" class="text-sm font-medium text-gray-500 bg-gray-50 rounded-lg px-4 py-2 border border-gray-200">
+                This event is invite only.
+              </div>
+            </template>
+            <template v-else>
+              <button
+                v-if="!event.isAdmin"
+                data-testid="event-leave-btn"
+                @click="confirmLeave"
+                class="w-full sm:w-auto justify-center rounded-xl bg-white px-6 py-3 text-sm font-bold text-gray-700 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 hover:text-gray-900 transition-all"
+              >
+                Leave Event
+              </button>
+            </template>
+          </div>
+          <div class="flex items-center justify-end w-full sm:w-auto">
+            <RouterLink
+              v-if="event.isAdmin"
+              :to="{ name: 'manage-event', params: { id: event.id } }"
+              class="w-full sm:w-auto flex justify-center items-center gap-2 rounded-xl bg-white px-6 py-3 text-sm font-bold text-gray-700 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 hover:text-gray-900 transition-all"
+            >
+              <svg class="w-4 h-4 opacity-70" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L6.832 19.82a4.5 4.5 0 0 1-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 0 1 1.13-1.897L16.863 4.487Zm0 0L19.5 7.125" />
+              </svg>
+              Manage Event
+            </RouterLink>
+          </div>
+        </div>
+
+        <!-- Navigation Tabs -->
+        <div class="px-6 py-4 border-t border-gray-100 bg-gray-50/30">
+          <nav class="flex flex-wrap gap-2 p-1.5 bg-gray-100/80 border border-gray-200/60 rounded-2xl w-fit" aria-label="Tabs">
             <button
               @click="selectTab('about')"
-              class="px-4 py-3 text-sm font-medium border-b-2 transition-colors"
+              class="px-5 py-2.5 text-sm font-bold rounded-xl transition-all duration-200 ease-out"
               :class="activeTab === 'about'
-                ? 'border-indigo-600 text-indigo-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
+                ? 'bg-white text-indigo-700 shadow-sm ring-1 ring-gray-200/50'
+                : 'text-gray-500 hover:text-gray-800 hover:bg-gray-200/50'"
             >
               About this event
             </button>
+            
             <button
+              data-testid="event-tab-discussion"
               @click="selectTab('discussion')"
-              class="px-4 py-3 text-sm font-medium border-b-2 transition-colors"
+              class="flex items-center px-5 py-2.5 text-sm font-bold rounded-xl transition-all duration-200 ease-out relative"
               :class="activeTab === 'discussion'
-                ? 'border-indigo-600 text-indigo-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
+                ? 'bg-white text-indigo-700 shadow-sm ring-1 ring-gray-200/50'
+                : 'text-gray-500 hover:text-gray-800 hover:bg-gray-200/50'"
             >
               Discussion
-              <span v-if="event.postCount" class="ml-1.5 inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600">
-                {{ event.postCount }}
-              </span>
-              <span v-if="event.pendingPostCount" class="ml-1 inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
-                ({{ event.pendingPostCount }})
+              
+              <div v-if="event.postCount" class="ml-2.5 flex items-center transition-colors">
+                <div class="relative flex items-center justify-center px-2 py-0.5 rounded-md border text-xs font-semibold shadow-sm"
+                     :class="(event.hasUnreadDiscussion && activeTab !== 'discussion') || activeTab === 'discussion' ? 'bg-indigo-50 text-indigo-700 border-indigo-100' : 'bg-white text-gray-500 border-gray-200/60'">
+                  <span v-if="event.hasUnreadDiscussion && activeTab !== 'discussion'" data-testid="discussion-unread-indicator" class="absolute -top-1 -right-1 flex h-2.5 w-2.5">
+                    <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                    <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-rose-500 ring-2 ring-white"></span>
+                  </span>
+                  {{ event.postCount }}
+                </div>
+              </div>
+
+              <span v-if="event.pendingPostCount" class="ml-2 inline-flex items-center bg-amber-50 text-amber-700 px-2 py-0.5 rounded-md border border-amber-200/60 text-[10px] uppercase font-bold tracking-wider shadow-sm">
+                {{ event.pendingPostCount }} pending
               </span>
             </button>
+
             <button
+              data-testid="event-tab-attendees"
               @click="selectTab('attendees')"
-              class="px-4 py-3 text-sm font-medium border-b-2 transition-colors"
+              class="flex items-center px-5 py-2.5 text-sm font-bold rounded-xl transition-all duration-200 ease-out relative"
               :class="activeTab === 'attendees'
-                ? 'border-indigo-600 text-indigo-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
+                ? 'bg-white text-indigo-700 shadow-sm ring-1 ring-gray-200/50'
+                : 'text-gray-500 hover:text-gray-800 hover:bg-gray-200/50'"
             >
               Attendees
-              <span class="ml-1.5 inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600">
-                {{ event.participantCount }}
-              </span>
+              <div class="ml-2.5 flex items-center justify-center px-2 py-0.5 rounded-md border text-xs font-semibold shadow-sm transition-colors"
+                   :class="activeTab === 'attendees' ? 'bg-indigo-50 text-indigo-700 border-indigo-100' : 'bg-white text-gray-500 border-gray-200/60'">
+                {{ event.participantCount || 0 }}
+              </div>
             </button>
           </nav>
         </div>
 
         <!-- Tab: About -->
         <div v-if="activeTab === 'about'" class="px-6 py-5">
-          <div v-if="event.description" class="prose prose-sm max-w-none text-gray-700" v-html="event.description" />
-          <p v-else class="text-sm text-gray-400">No description provided.</p>
+          <div v-if="event.description" data-testid="event-description" class="prose prose-sm max-w-none text-gray-700" v-html="event.description" />
+          <p v-else data-testid="event-description-empty" class="text-sm text-gray-400">No description provided.</p>
         </div>
 
         <!-- Tab: Discussion -->
@@ -315,13 +392,14 @@ watch(() => auth.isAuthenticated, (authenticated, wasAuthenticated) => {
         <!-- Tab: Attendees -->
         <div v-if="activeTab === 'attendees'" class="px-6 py-5">
           <div v-if="participantsLoading" class="text-center py-8 text-gray-400 text-sm">Loading attendees...</div>
-          <div v-else-if="participants.length === 0" class="text-center py-8">
+          <div v-else-if="participants.length === 0" data-testid="participants-empty" class="text-center py-8">
             <p class="text-gray-400 text-sm">No attendees yet.</p>
           </div>
-          <ul v-else class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <ul v-else data-testid="participants-list" class="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <li
               v-for="p in participants"
               :key="p.keycloakId"
+              data-testid="participant-item"
               class="flex items-center gap-3 rounded-lg border border-gray-100 px-3 py-2.5"
             >
               <img

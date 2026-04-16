@@ -4,6 +4,7 @@ import { useApi } from '@/shared/composables/useApi'
 import { useAuthStore } from '@/features/auth/stores/auth'
 import { apiUrl } from '@/api'
 import RichTextEditor from '@/shared/components/RichTextEditor.vue'
+import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
 
 const props = defineProps({
   eventId: { type: String, required: true },
@@ -15,6 +16,8 @@ const auth = useAuthStore()
 
 const posts = ref([])
 const settings = ref(null)
+const isMember = shallowRef(false)
+const lastReadAt = ref(null)
 const loading = shallowRef(true)
 const error = shallowRef(null)
 
@@ -23,6 +26,22 @@ const showNewPost = shallowRef(false)
 const newPostContent = ref('')
 const sendEmail = shallowRef(false)
 const posting = shallowRef(false)
+
+// Delete confirmation
+const deleteDialog = ref({ open: false, title: '', message: '', onConfirm: null })
+
+function showDeleteConfirm(title, message, onConfirm) {
+  deleteDialog.value = { open: true, title, message, onConfirm }
+}
+
+function closeDeleteDialog() {
+  deleteDialog.value = { open: false, title: '', message: '', onConfirm: null }
+}
+
+function confirmDelete() {
+  deleteDialog.value.onConfirm?.()
+  closeDeleteDialog()
+}
 
 // Comments state per post
 const expandedComments = ref(new Set())
@@ -48,6 +67,8 @@ async function loadPosts() {
     const data = await res.json()
     posts.value = data.posts
     settings.value = data.settings
+    isMember.value = data.isMember ?? false
+    lastReadAt.value = data.lastReadAt
   } catch (err) {
     error.value = err.message || 'Failed to load discussion.'
   } finally {
@@ -94,14 +115,26 @@ async function toggleApproval(post) {
   }
 }
 
-async function deletePost(post) {
-  if (!confirm('Delete this post? This will also delete all comments.')) return
-  try {
-    await authFetch(`/api/events/${props.eventId}/discussion/${post.id}`, { method: 'DELETE' })
-    posts.value = posts.value.filter(p => p.id !== post.id)
-  } catch (err) {
-    error.value = err.message || 'Failed to delete post.'
-  }
+function deletePost(post) {
+  const preview = stripHtml(post.content).slice(0, 80)
+  showDeleteConfirm(
+    'Delete post',
+    `This will permanently delete the post by ${post.authorName}${preview ? ' (\u201C' + preview + (post.content.length > 80 ? '\u2026' : '') + '\u201D)' : ''} and all its comments.`,
+    async () => {
+      try {
+        await authFetch(`/api/events/${props.eventId}/discussion/${post.id}`, { method: 'DELETE' })
+        posts.value = posts.value.filter(p => p.id !== post.id)
+      } catch (err) {
+        error.value = err.message || 'Failed to delete post.'
+      }
+    }
+  )
+}
+
+function stripHtml(html) {
+  const div = document.createElement('div')
+  div.innerHTML = html
+  return div.textContent || ''
 }
 
 async function toggleComments(post) {
@@ -167,15 +200,22 @@ async function addComment(postId) {
   }
 }
 
-async function deleteComment(postId, commentId) {
-  try {
-    await authFetch(`/api/events/${props.eventId}/discussion/${postId}/comments/${commentId}`, { method: 'DELETE' })
-    commentsMap.value[postId] = commentsMap.value[postId].filter(c => c.id !== commentId)
-    const post = posts.value.find(p => p.id === postId)
-    if (post) post.commentCount--
-  } catch (err) {
-    error.value = err.message || 'Failed to delete comment.'
-  }
+function deleteComment(postId, comment) {
+  const preview = comment.content.slice(0, 80)
+  showDeleteConfirm(
+    'Delete comment',
+    `This will permanently delete the comment by ${comment.authorName}${preview ? ' (\u201C' + preview + (comment.content.length > 80 ? '\u2026' : '') + '\u201D)' : ''}.`,
+    async () => {
+      try {
+        await authFetch(`/api/events/${props.eventId}/discussion/${postId}/comments/${comment.id}`, { method: 'DELETE' })
+        commentsMap.value[postId] = commentsMap.value[postId].filter(c => c.id !== comment.id)
+        const post = posts.value.find(p => p.id === postId)
+        if (post) post.commentCount--
+      } catch (err) {
+        error.value = err.message || 'Failed to delete comment.'
+      }
+    }
+  )
 }
 
 function profilePictureUrl(keycloakId) {
@@ -212,9 +252,19 @@ function canPost() {
   if (!auth.isAuthenticated) return false
   if (props.isAdmin) return true
   if (!settings.value) return false
-  // If non-member posts are allowed, or we can't tell membership, allow posting
-  // (the server will enforce membership rules)
-  return true
+  if (isMember.value) return true
+  return settings.value.allowNonMemberPosts
+}
+
+function postDeniedReason() {
+  if (!auth.isAuthenticated) return 'Sign in to write a post.'
+  if (!isMember.value && !settings.value?.allowNonMemberPosts) return 'Only attendees can post in this discussion. Join the event to participate.'
+  return null
+}
+
+function hasNewComments(post) {
+  if (!lastReadAt.value || !post.latestCommentAt) return false
+  return new Date(post.latestCommentAt) > new Date(lastReadAt.value)
 }
 
 onMounted(loadPosts)
@@ -222,6 +272,16 @@ onMounted(loadPosts)
 
 <template>
   <div>
+    <ConfirmDialog
+      :open="deleteDialog.open"
+      :title="deleteDialog.title"
+      :message="deleteDialog.message"
+      confirm-label="Delete"
+      variant="danger"
+      @confirm="confirmDelete"
+      @cancel="closeDeleteDialog"
+    />
+
     <div v-if="error" class="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700 mb-4">
       {{ error }}
     </div>
@@ -233,6 +293,7 @@ onMounted(loadPosts)
       <div v-if="canPost()" class="mb-6">
         <button
           v-if="!showNewPost"
+          data-testid="discussion-new-post-btn"
           @click="showNewPost = true"
           class="w-full rounded-lg border-2 border-dashed border-gray-300 py-3 text-sm text-gray-500 hover:border-indigo-400 hover:text-indigo-600 transition-colors"
         >
@@ -249,11 +310,11 @@ onMounted(loadPosts)
             </label>
             <span v-else />
             <div class="flex items-center gap-2">
-              <button @click="showNewPost = false; newPostContent = ''"
+              <button data-testid="discussion-cancel-post-btn" @click="showNewPost = false; newPostContent = ''"
                 class="px-3 py-1.5 text-sm text-gray-500 hover:text-gray-700">
                 Cancel
               </button>
-              <button @click="createPost" :disabled="posting || !newPostContent.trim()"
+              <button data-testid="discussion-submit-post-btn" @click="createPost" :disabled="posting || !newPostContent.trim()"
                 class="px-4 py-1.5 text-sm font-semibold rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 transition-colors">
                 {{ posting ? 'Posting…' : 'Post' }}
               </button>
@@ -261,9 +322,12 @@ onMounted(loadPosts)
           </div>
         </div>
       </div>
+      <div v-else-if="postDeniedReason()" data-testid="discussion-denied-msg" class="mb-6 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-500">
+        {{ postDeniedReason() }}
+      </div>
 
       <!-- Posts list -->
-      <div v-if="posts.length === 0" class="text-center py-8">
+      <div v-if="posts.length === 0" data-testid="discussion-empty" class="text-center py-8">
         <p class="text-gray-400 text-sm">No posts yet.{{ canPost() ? ' Be the first to start the discussion!' : '' }}</p>
       </div>
 
@@ -271,6 +335,7 @@ onMounted(loadPosts)
         <div
           v-for="post in posts"
           :key="post.id"
+          data-testid="discussion-post"
           class="rounded-lg border bg-white"
           :class="post.isApproved ? 'border-gray-200' : 'border-amber-300 bg-amber-50'"
         >
@@ -293,18 +358,18 @@ onMounted(loadPosts)
               <p class="text-xs text-gray-400">{{ formatRelative(post.createdAt) }}</p>
             </div>
             <div class="flex items-center gap-2">
-              <span v-if="!post.isApproved"
+              <span v-if="!post.isApproved" data-testid="discussion-pending-badge"
                 class="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
                 Pending
               </span>
-              <button v-if="isAdmin && !post.isOwnPost" @click="toggleApproval(post)"
+              <button v-if="isAdmin && !post.isOwnPost" data-testid="discussion-approve-btn" @click="toggleApproval(post)"
                 class="text-xs font-medium px-2 py-1 rounded transition-colors"
                 :class="post.isApproved
                   ? 'text-amber-600 hover:bg-amber-50'
                   : 'text-green-600 hover:bg-green-50'">
                 {{ post.isApproved ? 'Unapprove' : 'Approve' }}
               </button>
-              <button v-if="isAdmin || post.isOwnPost" @click="deletePost(post)"
+              <button v-if="isAdmin || post.isOwnPost" data-testid="discussion-delete-post-btn" @click="deletePost(post)"
                 class="text-xs text-red-500 hover:text-red-700 font-medium px-2 py-1 rounded hover:bg-red-50 transition-colors">
                 Delete
               </button>
@@ -312,22 +377,32 @@ onMounted(loadPosts)
           </div>
 
           <!-- Post content -->
-          <div class="px-4 pb-3 prose prose-sm max-w-none text-gray-700" v-html="post.content" />
+          <div data-testid="discussion-post-content" class="px-4 pb-3 prose prose-sm max-w-none text-gray-700" v-html="post.content" />
 
           <!-- Comments toggle -->
-          <div class="border-t border-gray-100 px-4 py-2">
+          <div class="border-t border-gray-100 px-4 py-3">
             <button
+              data-testid="discussion-toggle-comments-btn"
               @click="toggleComments(post)"
-              class="text-sm text-gray-500 hover:text-indigo-600 transition-colors flex items-center gap-1"
+              class="group flex items-center transition-colors"
             >
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M8.625 12a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0zm4.125 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0zm4.125 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0z" />
-                <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 12.76c0 1.6 1.123 2.994 2.707 3.227 1.068.157 2.148.279 3.238.364.466.037.893.281 1.153.671L12 21l2.652-3.978c.26-.39.687-.634 1.153-.671 1.09-.085 2.17-.207 3.238-.364 1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0 0 12 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018z" />
-              </svg>
-              {{ post.commentCount }} {{ post.commentCount === 1 ? 'comment' : 'comments' }}
-              <svg class="w-3 h-3 transition-transform" :class="{ 'rotate-180': expandedComments.has(post.id) }" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
-              </svg>
+              <div class="relative flex items-center gap-1.5 rounded-md px-2.5 py-1 transition-colors"
+                   :class="hasNewComments(post) ? 'bg-indigo-50 text-indigo-700 border border-indigo-200 shadow-sm' : 'bg-gray-50 text-gray-600 border border-gray-200/60 group-hover:bg-gray-100'">
+                <div class="relative">
+                  <svg class="w-4 h-4" :class="hasNewComments(post) ? 'text-indigo-600' : 'opacity-70'" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 20.25c4.97 0 9-3.694 9-8.25s-4.03-8.25-9-8.25S3 7.444 3 12c0 2.104.859 4.023 2.273 5.48.432.447.74 1.04.586 1.641a4.483 4.483 0 0 1-.923 1.785A5.969 5.969 0 0 0 6 21c1.282 0 2.47-.402 3.445-1.087.81.22 1.668.337 2.555.337Z" />
+                  </svg>
+                  <!-- Notification dot specifically on the icon -->
+                  <span v-if="hasNewComments(post)" data-testid="discussion-new-comments-indicator" class="absolute -top-1 -right-1.5 flex h-2 w-2">
+                    <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                    <span class="relative inline-flex rounded-full h-2 w-2 bg-rose-500 ring-2 ring-indigo-50"></span>
+                  </span>
+                </div>
+                <span class="text-xs" :class="{'font-bold': hasNewComments(post)}">{{ post.commentCount }} {{ post.commentCount === 1 ? 'comment' : 'comments' }}</span>
+                <svg class="w-3.5 h-3.5 ml-0.5 transition-transform opacity-70" :class="{ 'rotate-180': expandedComments.has(post.id) }" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+                </svg>
+              </div>
             </button>
 
             <!-- Comments section -->
@@ -356,7 +431,8 @@ onMounted(loadPosts)
                     <div class="flex items-baseline gap-2">
                       <span class="text-xs font-medium text-gray-900">{{ comment.authorName }}</span>
                       <span class="text-[10px] text-gray-400">{{ formatRelative(comment.createdAt) }}</span>
-                      <button v-if="isAdmin" @click="deleteComment(post.id, comment.id)"
+                      <button v-if="isAdmin" @click="deleteComment(post.id, comment)"
+                        data-testid="discussion-delete-comment-btn"
                         class="text-[10px] text-red-400 hover:text-red-600 ml-auto">
                         Delete
                       </button>
@@ -368,6 +444,7 @@ onMounted(loadPosts)
                 <!-- Add comment -->
                 <div v-if="auth.isAuthenticated" class="flex gap-2 pt-1">
                   <input
+                    data-testid="discussion-comment-input"
                     v-model="newCommentText[post.id]"
                     @keyup.enter="addComment(post.id)"
                     type="text"
@@ -375,6 +452,7 @@ onMounted(loadPosts)
                     class="flex-1 rounded-lg border border-gray-200 px-3 py-1.5 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                   />
                   <button
+                    data-testid="discussion-comment-reply-btn"
                     @click="addComment(post.id)"
                     :disabled="commentPosting.has(post.id) || !(newCommentText[post.id] || '').trim()"
                     class="px-3 py-1.5 text-sm font-medium rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 transition-colors"

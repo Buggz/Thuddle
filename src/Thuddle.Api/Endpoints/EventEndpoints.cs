@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using FluentValidation;
 using Microsoft.EntityFrameworkCore;
 using Thuddle.Api.Data;
 using Thuddle.Api.Services;
@@ -13,6 +14,7 @@ public static class EventEndpoints
         app.MapGet("/api/events/{eventId:guid}", GetEvent).AllowAnonymous();
         app.MapPost("/api/events", CreateEvent).RequireAuthorization("events:write");
         app.MapPut("/api/events/{eventId:guid}", UpdateEvent).RequireAuthorization();
+        app.MapDelete("/api/events/{eventId:guid}", DeleteEvent).RequireAuthorization();
         app.MapPost("/api/events/{eventId:guid}/invitations", InviteUsers).RequireAuthorization();
         app.MapPost("/api/events/{eventId:guid}/join", JoinEvent).RequireAuthorization();
         app.MapPost("/api/events/{eventId:guid}/co-admins", AddCoAdmin).RequireAuthorization();
@@ -21,8 +23,10 @@ public static class EventEndpoints
         app.MapGet("/api/events/{eventId:guid}/participants", GetParticipants).AllowAnonymous();
         app.MapPut("/api/events/{eventId:guid}/attendees/{userId:guid}/payment", UpdatePayment).RequireAuthorization();
         app.MapPost("/api/events/{eventId:guid}/images", UploadEventImage).RequireAuthorization().DisableAntiforgery();
+        app.MapPost("/api/events/{eventId:guid}/picture", UploadEventPicture).RequireAuthorization().DisableAntiforgery();
 
         app.MapGet("/api/users/exists", UserExistsByEmail).RequireAuthorization();
+        app.MapGet("/api/users/search", SearchUsers).RequireAuthorization();
     }
 
     // GET /api/users/exists?email=...
@@ -35,11 +39,74 @@ public static class EventEndpoints
         return Results.Ok(new { exists });
     }
 
+    // GET /api/users/search?q=...
+    private static async Task<IResult> SearchUsers(
+        string q,
+        ClaimsPrincipal user,
+        ThuddleDbContext db,
+        CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(q) || q.Length < 2)
+            return Results.Ok(Array.Empty<object>());
+
+        var keycloakId = GetKeycloakId(user);
+        var pattern = $"%{q}%";
+
+        var results = await db.Users
+            .AsNoTracking()
+            .Where(u => u.KeycloakId != keycloakId
+                && (EF.Functions.ILike(u.Email, pattern)
+                    || (u.DisplayName != null && EF.Functions.ILike(u.DisplayName, pattern))
+                    || (u.FullName != null && EF.Functions.ILike(u.FullName, pattern))))
+            .OrderByDescending(u => EF.Functions.TrigramsSimilarity(u.Email, q))
+            .Take(10)
+            .Select(u => new
+            {
+                u.Id,
+                u.Email,
+                u.DisplayName,
+                u.FullName,
+                HasProfilePicture = u.ScaledPicturePath != null
+            })
+            .ToListAsync(ct);
+
+        return Results.Ok(results);
+    }
+
     private static string? GetKeycloakId(ClaimsPrincipal user)
     {
         return user.FindFirstValue("sub")
             ?? user.FindFirstValue("sid")
             ?? user.FindFirstValue("email");
+    }
+
+    private static IResult? ValidationError(FluentValidation.Results.ValidationResult result)
+    {
+        if (result.IsValid) return null;
+        var error = result.Errors[0].ErrorMessage;
+        return Results.BadRequest(new { error });
+    }
+
+    private static async Task<IResult> DeleteEvent(
+        Guid eventId,
+        ClaimsPrincipal user,
+        ThuddleDbContext db,
+        CancellationToken ct)
+    {
+        var keycloakId = GetKeycloakId(user);
+        if (keycloakId is null) return Results.Unauthorized();
+
+        var dbUser = await db.Users.FirstOrDefaultAsync(u => u.KeycloakId == keycloakId, ct);
+        if (dbUser is null) return Results.Unauthorized();
+
+        var evt = await db.Events.FirstOrDefaultAsync(e => e.Id == eventId, ct);
+        if (evt is null) return Results.NotFound();
+        if (evt.OwnerId != dbUser.Id) return Results.Forbid();
+
+        db.Events.Remove(evt);
+        await db.SaveChangesAsync(ct);
+
+        return Results.NoContent();
     }
 
     private static async Task<bool> IsEventAdmin(ThuddleDbContext db, Guid eventId, Guid userId, CancellationToken ct)
@@ -101,30 +168,58 @@ public static class EventEndpoints
                 e.Capacity,
                 e.Cost,
                 ParticipantCount = db.EventParticipants.Count(ep => ep.EventId == e.Id),
+                PostCount = db.DiscussionPosts.Count(dp => dp.EventId == e.Id && dp.IsApproved),
+                LatestPostAt = db.DiscussionPosts
+                    .Where(dp => dp.EventId == e.Id && dp.IsApproved)
+                    .Max(dp => (DateTime?)dp.CreatedAt),
+                LatestCommentAt = db.DiscussionComments
+                    .Where(dc => dc.Post.EventId == e.Id && dc.Post.IsApproved)
+                    .Max(dc => (DateTime?)dc.CreatedAt),
+                LastReadAt = !isAnonymous
+                    ? db.DiscussionReadReceipts
+                        .Where(r => r.UserId == userId && r.EventId == e.Id)
+                        .Select(r => (DateTime?)r.LastReadAt)
+                        .FirstOrDefault()
+                    : null,
                 HasJoined = !isAnonymous && db.EventParticipants.Any(ep => ep.EventId == e.Id && ep.UserId == userId),
-                HasInvitation = !isAnonymous && db.EventInvitations.Any(i => i.EventId == e.Id && i.Email.ToLower() == userEmail)
+                HasInvitation = !isAnonymous && db.EventInvitations.Any(i => i.EventId == e.Id && i.Email.ToLower() == userEmail),
+                IsAdmin = !isAnonymous && (e.OwnerId == userId || db.EventCoAdmins.Any(ca => ca.EventId == e.Id && ca.UserId == userId)),
+                PendingPostCount = !isAnonymous && (e.OwnerId == userId || db.EventCoAdmins.Any(ca => ca.EventId == e.Id && ca.UserId == userId))
+                    ? db.DiscussionPosts.Count(dp => dp.EventId == e.Id && !dp.IsApproved)
+                    : 0
             })
             .ToListAsync(ct);
 
-        var result = events.Select(e => new
+        var result = events.Select(e =>
         {
-            e.Id,
-            e.Title,
-            e.Location,
-            e.Description,
-            e.PicturePath,
-            e.Start,
-            e.End,
-            e.OwnerId,
-            e.Visibility,
-            e.JoinMode,
-            e.Capacity,
-            e.Cost,
-            e.ParticipantCount,
-            e.HasJoined,
-            e.HasInvitation,
-            CanJoin = !e.HasJoined && !isAnonymous
-                && (e.JoinMode == JoinMode.Open || e.HasInvitation)
+            var latestActivity = new[] { e.LatestPostAt, e.LatestCommentAt }
+                .Where(d => d.HasValue).Max();
+
+            return new
+            {
+                e.Id,
+                e.Title,
+                e.Location,
+                e.Description,
+                e.PicturePath,
+                e.Start,
+                e.End,
+                e.OwnerId,
+                e.Visibility,
+                e.JoinMode,
+                e.Capacity,
+                e.Cost,
+                e.ParticipantCount,
+                e.PostCount,
+                HasUnreadDiscussion = !isAnonymous && e.PostCount > 0
+                    && (e.LastReadAt is null || latestActivity > e.LastReadAt),
+                e.HasJoined,
+                e.HasInvitation,
+                CanJoin = !e.HasJoined && !isAnonymous
+                    && (e.JoinMode == JoinMode.Open || e.HasInvitation),
+                e.IsAdmin,
+                e.PendingPostCount
+            };
         });
 
         return Results.Ok(new
@@ -192,6 +287,25 @@ public static class EventEndpoints
         var participantCount = await db.EventParticipants.CountAsync(p => p.EventId == eventId, ct);
         var postCount = await db.DiscussionPosts.CountAsync(p => p.EventId == eventId && p.IsApproved, ct);
 
+        var hasUnreadDiscussion = false;
+        if (dbUser is not null && postCount > 0)
+        {
+            var lastRead = await db.DiscussionReadReceipts
+                .Where(r => r.UserId == dbUser.Id && r.EventId == eventId)
+                .Select(r => (DateTime?)r.LastReadAt)
+                .FirstOrDefaultAsync(ct);
+
+            var latestPost = await db.DiscussionPosts
+                .Where(p => p.EventId == eventId && p.IsApproved)
+                .MaxAsync(p => (DateTime?)p.CreatedAt, ct);
+            var latestComment = await db.DiscussionComments
+                .Where(c => c.Post.EventId == eventId && c.Post.IsApproved)
+                .MaxAsync(c => (DateTime?)c.CreatedAt, ct);
+
+            var latestActivity = new[] { latestPost, latestComment }.Where(d => d.HasValue).Max();
+            hasUnreadDiscussion = lastRead is null || latestActivity > lastRead;
+        }
+
         var isAdmin = dbUser is not null
             && await IsEventAdmin(db, eventId, dbUser.Id, ct);
 
@@ -217,6 +331,7 @@ public static class EventEndpoints
             ParticipantCount = participantCount,
             PostCount = postCount,
             PendingPostCount = pendingPostCount,
+            HasUnreadDiscussion = hasUnreadDiscussion,
             HasJoined = hasJoined,
             CanJoin = canJoin,
             IsAdmin = isAdmin
@@ -226,6 +341,7 @@ public static class EventEndpoints
     private static async Task<IResult> CreateEvent(
         ClaimsPrincipal user,
         CreateEventRequest request,
+        IValidator<CreateEventRequest> validator,
         ThuddleDbContext db,
         CancellationToken ct)
     {
@@ -235,14 +351,8 @@ public static class EventEndpoints
         var dbUser = await db.Users.FirstOrDefaultAsync(u => u.KeycloakId == keycloakId, ct);
         if (dbUser is null) return Results.Unauthorized();
 
-        if (string.IsNullOrWhiteSpace(request.Title))
-            return Results.BadRequest(new { error = "Title is required." });
-
-        if (request.End <= request.Start)
-            return Results.BadRequest(new { error = "End must be after Start." });
-
-        if (request.Capacity is < 1)
-            return Results.BadRequest(new { error = "Capacity must be at least 1." });
+        if (ValidationError(await validator.ValidateAsync(request, ct)) is { } validationError)
+            return validationError;
 
         // Unlisted events must be invite-only
         var joinMode = request.Visibility == EventVisibility.Unlisted
@@ -254,7 +364,7 @@ public static class EventEndpoints
             Id = Guid.NewGuid(),
             OwnerId = dbUser.Id,
             Title = request.Title.Trim(),
-            Location = request.Location?.Trim() ?? "",
+            Location = request.Location.Trim(),
             Description = request.Description,
             Start = request.Start,
             End = request.End,
@@ -287,6 +397,7 @@ public static class EventEndpoints
     private static async Task<IResult> InviteUsers(
         Guid eventId,
         InviteUsersRequest request,
+        IValidator<InviteUsersRequest> validator,
         ClaimsPrincipal user,
         ThuddleDbContext db,
         SmtpEmailSender emailSender,
@@ -306,8 +417,8 @@ public static class EventEndpoints
         if (!await IsEventAdmin(db, eventId, dbUser.Id, ct))
             return Results.Forbid();
 
-        if (request.Emails is not { Count: > 0 })
-            return Results.BadRequest(new { error = "At least one email is required." });
+        if (ValidationError(await validator.ValidateAsync(request, ct)) is { } validationError)
+            return validationError;
 
         var existingEmails = await db.EventInvitations
             .Where(i => i.EventId == eventId)
@@ -415,6 +526,7 @@ public static class EventEndpoints
     private static async Task<IResult> UpdateEvent(
         Guid eventId,
         UpdateEventRequest request,
+        IValidator<UpdateEventRequest> validator,
         ClaimsPrincipal user,
         ThuddleDbContext db,
         CancellationToken ct)
@@ -431,14 +543,8 @@ public static class EventEndpoints
         var evt = await db.Events.FirstOrDefaultAsync(e => e.Id == eventId, ct);
         if (evt is null) return Results.NotFound(new { error = "Event not found." });
 
-        if (string.IsNullOrWhiteSpace(request.Title))
-            return Results.BadRequest(new { error = "Title is required." });
-
-        if (request.End <= request.Start)
-            return Results.BadRequest(new { error = "End must be after Start." });
-
-        if (request.Capacity is < 1)
-            return Results.BadRequest(new { error = "Capacity must be at least 1." });
+        if (ValidationError(await validator.ValidateAsync(request, ct)) is { } validationError)
+            return validationError;
 
         // Unlisted events must be invite-only
         var joinMode = request.Visibility == EventVisibility.Unlisted
@@ -446,7 +552,7 @@ public static class EventEndpoints
             : request.JoinMode;
 
         evt.Title = request.Title.Trim();
-        evt.Location = request.Location?.Trim() ?? "";
+        evt.Location = request.Location.Trim();
         evt.Description = request.Description;
         evt.Start = request.Start;
         evt.End = request.End;
@@ -684,6 +790,55 @@ public static class EventEndpoints
         return Results.Ok(new { userId, hasPaid = request.HasPaid });
     }
 
+    private static async Task<IResult> UploadEventPicture(
+        Guid eventId,
+        HttpRequest request,
+        ClaimsPrincipal user,
+        ThuddleDbContext db,
+        EventImageStorage imageStorage,
+        CancellationToken ct)
+    {
+        var keycloakId = GetKeycloakId(user);
+        if (keycloakId is null) return Results.Unauthorized();
+
+        var dbUser = await db.Users.FirstOrDefaultAsync(u => u.KeycloakId == keycloakId, ct);
+        if (dbUser is null) return Results.Unauthorized();
+
+        if (!await IsEventAdmin(db, eventId, dbUser.Id, ct))
+            return Results.Forbid();
+
+        var form = await request.ReadFormAsync(ct);
+        var file = form.Files.GetFile("picture");
+        if (file is null || file.Length == 0)
+            return Results.BadRequest(new { error = "No picture uploaded." });
+
+        if (file.Length > 10 * 1024 * 1024)
+            return Results.BadRequest(new { error = "File too large. Maximum 10MB." });
+
+        using var ms = new MemoryStream();
+        await file.CopyToAsync(ms, ct);
+        var imageData = ms.ToArray();
+
+        try
+        {
+            var url = await imageStorage.UploadEventPictureAsync(eventId, imageData, ct);
+
+            var evt = await db.Events.FirstOrDefaultAsync(e => e.Id == eventId, ct);
+            if (evt is not null)
+            {
+                evt.PicturePath = url;
+                evt.UpdatedAt = DateTime.UtcNow;
+                await db.SaveChangesAsync(ct);
+            }
+
+            return Results.Ok(new { url });
+        }
+        catch (ArgumentException ex)
+        {
+            return Results.BadRequest(new { error = ex.Message });
+        }
+    }
+
     private static async Task<IResult> UploadEventImage(
         Guid eventId,
         IFormFile file,
@@ -719,7 +874,7 @@ public static class EventEndpoints
 
 public record CreateEventRequest(
     string Title,
-    string? Location,
+    string Location,
     string? Description,
     DateTime Start,
     DateTime End,
@@ -732,7 +887,7 @@ public record InviteUsersRequest(List<string> Emails);
 
 public record UpdateEventRequest(
     string Title,
-    string? Location,
+    string Location,
     string? Description,
     DateTime Start,
     DateTime End,
