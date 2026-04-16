@@ -169,6 +169,7 @@ watch(() => auth.isAuthenticated, (authenticated, wasAuthenticated) => {
             v-if="event.picturePath"
             :src="event.picturePath"
             :alt="event.title"
+            data-testid="event-hero-image"
             class="absolute inset-0 w-full h-full object-cover"
           />
           <div

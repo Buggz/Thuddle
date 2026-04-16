@@ -368,12 +368,12 @@ onMounted(async () => {
           <div class="mb-6">
             <label class="block text-sm font-medium text-gray-700 mb-2">Event image</label>
             <div v-if="eventData?.picturePath" class="mb-3">
-              <img :src="eventData.picturePath" alt="Event image" class="rounded-lg max-h-48 object-cover" />
+              <img :src="eventData.picturePath" alt="Event image" data-testid="manage-event-image" class="rounded-lg max-h-48 object-cover" />
               <div class="flex gap-2 mt-2">
                 <label class="inline-flex items-center px-3 py-1.5 text-xs font-medium text-gray-700 bg-gray-100 rounded-lg cursor-pointer hover:bg-gray-200 transition"
                   :class="{ 'opacity-50 pointer-events-none': uploadingImage }">
                   {{ uploadingImage ? 'Uploading...' : 'Change' }}
-                  <input type="file" accept="image/*" class="hidden" @change="onImageFileChange" :disabled="uploadingImage" />
+                  <input type="file" accept="image/*" class="hidden" data-testid="manage-event-image-input" @change="onImageFileChange" :disabled="uploadingImage" />
                 </label>
               </div>
             </div>
@@ -381,11 +381,11 @@ onMounted(async () => {
               <label class="inline-flex items-center px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg cursor-pointer hover:bg-gray-50 transition"
                 :class="{ 'opacity-50 pointer-events-none': uploadingImage }">
                 {{ uploadingImage ? 'Uploading...' : 'Upload image' }}
-                <input type="file" accept="image/*" class="hidden" @change="onImageFileChange" :disabled="uploadingImage" />
+                <input type="file" accept="image/*" class="hidden" data-testid="manage-event-image-input" @change="onImageFileChange" :disabled="uploadingImage" />
               </label>
               <p class="mt-1.5 text-xs text-gray-400">PNG, JPG up to 10MB. Will be shown on the event card.</p>
             </div>
-            <div v-if="imageError" class="mt-2 text-sm text-red-600">{{ imageError }}</div>
+            <div v-if="imageError" data-testid="manage-event-image-error" class="mt-2 text-sm text-red-600">{{ imageError }}</div>
             <ImageCropper
               v-if="selectedImageFile"
               :image-file="selectedImageFile"
