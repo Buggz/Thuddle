@@ -501,11 +501,18 @@ onMounted(async () => {
                 <td v-if="hasCost" class="py-2.5 text-center">
                   <button
                     @click="togglePaid(a)"
-                    class="inline-flex items-center gap-1 text-xs font-medium rounded-full px-2.5 py-1 transition-colors"
+                    class="inline-flex items-center justify-center gap-1.5 w-[88px] px-3 py-1.5 text-xs font-semibold rounded-lg ring-1 ring-inset shadow-sm transition-all focus:outline-none focus:ring-2 focus:ring-offset-1 active:scale-95"
                     :class="a.hasPaid
-                      ? 'bg-green-100 text-green-700 hover:bg-green-200'
-                      : 'bg-red-100 text-red-700 hover:bg-red-200'"
+                      ? 'bg-emerald-50 text-emerald-700 ring-emerald-600/30 hover:bg-emerald-100 focus:ring-emerald-600'
+                      : 'bg-amber-50 text-amber-700 ring-amber-600/30 hover:bg-amber-100 focus:ring-amber-500'"
+                    :title="a.hasPaid ? 'Click to mark as Unpaid' : 'Click to mark as Paid'"
                   >
+                    <svg v-if="a.hasPaid" class="w-3.5 h-3.5" viewBox="0 0 20 20" fill="currentColor">
+                      <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                    </svg>
+                    <svg v-else class="w-3.5 h-3.5 opacity-70" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
                     {{ a.hasPaid ? 'Paid' : 'Unpaid' }}
                   </button>
                 </td>
