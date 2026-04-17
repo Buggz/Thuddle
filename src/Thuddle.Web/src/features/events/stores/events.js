@@ -25,6 +25,29 @@ export const useEventsStore = defineStore('events', () => {
   const eventError = shallowRef(null)
 
   let realtimeInstalled = false
+  const realtime = useRealtime()
+
+  // Event ids we've asked the hub to subscribe us to, grouped by origin so
+  // we can release them independently (e.g. leaving an event page should not
+  // unsubscribe dashboard cards for the same event).
+  const dashboardSubs = new Set()
+  const detailSubs = new Set()
+
+  function syncSubscriptions(nextIds, tracker) {
+    const next = new Set(nextIds)
+    const toAdd = []
+    const toRemove = []
+    next.forEach((id) => { if (!tracker.has(id)) toAdd.push(id) })
+    tracker.forEach((id) => { if (!next.has(id)) toRemove.push(id) })
+
+    toRemove.forEach((id) => tracker.delete(id))
+    toAdd.forEach((id) => tracker.add(id))
+
+    // Only tell the hub to unsubscribe if no other tracker still needs that id.
+    const unsubscribable = toRemove.filter((id) => !dashboardSubs.has(id) && !detailSubs.has(id))
+    if (unsubscribable.length > 0) realtime.unsubscribeEvents(unsubscribable)
+    if (toAdd.length > 0) realtime.subscribeEvents(toAdd)
+  }
 
   async function fetchJson(path) {
     if (auth.isAuthenticated) {
@@ -49,6 +72,7 @@ export const useEventsStore = defineStore('events', () => {
       items.value = data.items
       totalPages.value = data.totalPages
       installRealtime()
+      syncSubscriptions(items.value.map((e) => e.id), dashboardSubs)
     } catch (err) {
       dashboardError.value = err.message || 'Failed to load events.'
     } finally {
@@ -64,6 +88,7 @@ export const useEventsStore = defineStore('events', () => {
       const data = await fetchJson(`/api/events/${id}`)
       byId.value[id] = data
       installRealtime()
+      syncSubscriptions([id, ...detailSubs].filter((x, i, arr) => arr.indexOf(x) === i), detailSubs)
       return data
     } catch (err) {
       eventError.value = err.message || 'Failed to load event.'
@@ -73,12 +98,26 @@ export const useEventsStore = defineStore('events', () => {
     }
   }
 
+  /**
+   * Call when leaving an event detail view to release its subscription if no
+   * dashboard card still needs it.
+   */
+  function releaseEvent(id) {
+    if (!id || !detailSubs.has(id)) return
+    syncSubscriptions(Array.from(detailSubs).filter((x) => x !== id), detailSubs)
+  }
+
+  /** Release all dashboard-origin subscriptions (e.g. when leaving the dashboard). */
+  function releaseDashboard() {
+    if (dashboardSubs.size === 0) return
+    syncSubscriptions([], dashboardSubs)
+  }
+
   // ── Realtime integration ────────────────────────────────────────────────
 
   function installRealtime() {
     if (realtimeInstalled) return
     realtimeInstalled = true
-    const realtime = useRealtime()
     realtime.ensureStarted().catch(() => { /* best-effort; store still works via REST */ })
     realtime.on(RealtimeEvents.EventCreated, handleEventCreated)
     realtime.on(RealtimeEvents.EventUpdated, handleEventUpdated)
@@ -222,6 +261,8 @@ export const useEventsStore = defineStore('events', () => {
     // actions
     loadDashboard,
     loadEvent,
+    releaseEvent,
+    releaseDashboard,
     joinEvent,
     markDiscussionRead
   }

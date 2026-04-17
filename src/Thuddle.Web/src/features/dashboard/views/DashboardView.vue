@@ -1,5 +1,5 @@
 <script setup>
-import { shallowRef, onMounted, computed } from 'vue'
+import { shallowRef, onMounted, onBeforeUnmount, computed } from 'vue'
 import { storeToRefs } from 'pinia'
 import { RouterLink } from 'vue-router'
 import { useAuthStore } from '@/features/auth/stores/auth'
@@ -104,6 +104,10 @@ function eventImageGradient(index) {
 
 onMounted(() => {
   loadEvents()
+})
+
+onBeforeUnmount(() => {
+  eventsStore.releaseDashboard()
 })
 </script>
 

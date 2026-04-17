@@ -1,5 +1,5 @@
 <script setup>
-import { shallowRef, ref, computed, onMounted, watch } from 'vue'
+import { shallowRef, ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRoute, useRouter, RouterLink } from 'vue-router'
 import { useApi } from '@/shared/composables/useApi'
 import { useAuthStore } from '@/features/auth/stores/auth'
@@ -121,6 +121,10 @@ function eventImageGradient(id) {
 }
 
 onMounted(loadEvent)
+
+onBeforeUnmount(() => {
+  eventsStore.releaseEvent(route.params.id)
+})
 
 // Re-fetch event data when auth state changes so admin/join status updates
 watch(() => auth.isAuthenticated, (authenticated, wasAuthenticated) => {

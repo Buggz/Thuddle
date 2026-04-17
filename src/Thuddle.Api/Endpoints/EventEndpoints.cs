@@ -384,7 +384,7 @@ public static class EventEndpoints
         db.Events.Add(evt);
         await db.SaveChangesAsync(ct);
 
-        await realtime.EventCreatedAsync(evt.Id, ct);
+        await realtime.EventCreatedAsync(evt.Id, evt.Visibility, ct);
 
         return Results.Created($"/api/events/{evt.Id}", new
         {
