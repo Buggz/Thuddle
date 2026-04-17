@@ -88,6 +88,17 @@ resource postgresFirewall 'Microsoft.DBforPostgreSQL/flexibleServers/firewallRul
   }
 }
 
+// Allow-list extensions on the server so `CREATE EXTENSION` succeeds from
+// EF Core migrations. pg_trgm is used for fuzzy user search.
+resource postgresExtensionsConfig 'Microsoft.DBforPostgreSQL/flexibleServers/configurations@2024-08-01' = {
+  name: 'azure.extensions'
+  parent: postgresServer
+  properties: {
+    value: 'PG_TRGM'
+    source: 'user-override'
+  }
+}
+
 resource thuddleDb 'Microsoft.DBforPostgreSQL/flexibleServers/databases@2024-08-01' = {
   name: 'thuddledb'
   parent: postgresServer
@@ -289,7 +300,6 @@ resource apiApp 'Microsoft.App/containerApps@2024-03-01' = {
       scale: {
         minReplicas: 1
         maxReplicas: 1
-        ]
       }
     }
   }
