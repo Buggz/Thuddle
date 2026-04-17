@@ -25,6 +25,9 @@ export const useEventsStore = defineStore('events', () => {
   const eventError = shallowRef(null)
 
   let realtimeInstalled = false
+  // True while a dashboard view is mounted (loadDashboard called, releaseDashboard not yet).
+  // Used so realtime EventCreated/InvitationSent still refresh the list when it's empty.
+  let dashboardActive = false
   const realtime = useRealtime()
 
   // Event ids we've asked the hub to subscribe us to, grouped by origin so
@@ -63,6 +66,7 @@ export const useEventsStore = defineStore('events', () => {
   }
 
   async function loadDashboard({ page: targetPage = page.value, pageSize: size = pageSize.value } = {}) {
+    dashboardActive = true
     loadingDashboard.value = true
     dashboardError.value = null
     page.value = targetPage
@@ -109,6 +113,7 @@ export const useEventsStore = defineStore('events', () => {
 
   /** Release all dashboard-origin subscriptions (e.g. when leaving the dashboard). */
   function releaseDashboard() {
+    dashboardActive = false
     if (dashboardSubs.size === 0) return
     syncSubscriptions([], dashboardSubs)
   }
@@ -126,7 +131,7 @@ export const useEventsStore = defineStore('events', () => {
     realtime.on(RealtimeEvents.DiscussionActivity, handleDiscussionActivity)
     realtime.on(RealtimeEvents.InvitationSent, handleInvitationSent)
     realtime.onResync(() => {
-      if (items.value.length > 0) loadDashboard({ page: page.value })
+      if (dashboardActive) loadDashboard({ page: page.value })
       Object.keys(byId.value).forEach((id) => refreshEventInPlace(id))
     })
   }
@@ -168,8 +173,9 @@ export const useEventsStore = defineStore('events', () => {
   }
 
   function handleEventCreated() {
-    // A new event may or may not match our visibility filter; safest to reload.
-    if (items.value.length > 0 || loadingDashboard.value) {
+    // A new event may or may not match our visibility filter; safest to reload
+    // whenever a dashboard view is currently mounted (even if it's empty).
+    if (dashboardActive) {
       loadDashboard({ page: page.value })
     }
   }
@@ -207,7 +213,7 @@ export const useEventsStore = defineStore('events', () => {
 
   function handleInvitationSent() {
     // A new invitation may have added an event to our visible set.
-    if (items.value.length > 0 || loadingDashboard.value) {
+    if (dashboardActive) {
       loadDashboard({ page: page.value })
     }
   }
@@ -216,13 +222,17 @@ export const useEventsStore = defineStore('events', () => {
 
   async function joinEvent(eventId) {
     await authFetch(`/api/events/${eventId}/join`, { method: 'POST' })
+    // Do NOT bump participantCount optimistically. The server broadcasts an
+    // authoritative ParticipantChanged over SignalR, and that frame can arrive
+    // *during* the await above. If we then do `count + 1` after the await, we
+    // double-count (authoritative 1 + optimistic 1 = 2). `hasJoined`/`canJoin`
+    // are viewer-scoped and aren't broadcast, so those we still update locally.
     const detail = byId.value[eventId]
     if (detail) {
       byId.value[eventId] = {
         ...detail,
         hasJoined: true,
-        canJoin: false,
-        participantCount: (detail.participantCount ?? 0) + 1
+        canJoin: false
       }
     }
     const idx = items.value.findIndex((e) => e.id === eventId)
@@ -231,8 +241,7 @@ export const useEventsStore = defineStore('events', () => {
       items.value.splice(idx, 1, {
         ...current,
         hasJoined: true,
-        canJoin: false,
-        participantCount: (current.participantCount ?? 0) + 1
+        canJoin: false
       })
     }
   }

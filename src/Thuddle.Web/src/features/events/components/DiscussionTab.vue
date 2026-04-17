@@ -191,9 +191,9 @@ async function addComment(postId) {
     if (!commentsMap.value[postId]) commentsMap.value[postId] = []
     commentsMap.value[postId].push(comment)
     newCommentText.value[postId] = ''
-    // Update comment count on the post
-    const post = posts.value.find(p => p.id === postId)
-    if (post) post.commentCount++
+    // Post.commentCount is NOT bumped optimistically — the server broadcasts
+    // an authoritative CommentCountChanged frame that we apply absolutely.
+    // Applying a +1 here would race with that frame and double-count.
   } catch (err) {
     error.value = err.message || 'Failed to add comment.'
   } finally {
@@ -211,8 +211,8 @@ function deleteComment(postId, comment) {
       try {
         await authFetch(`/api/events/${props.eventId}/discussion/${postId}/comments/${comment.id}`, { method: 'DELETE' })
         commentsMap.value[postId] = commentsMap.value[postId].filter(c => c.id !== comment.id)
-        const post = posts.value.find(p => p.id === postId)
-        if (post) post.commentCount--
+        // Post.commentCount is NOT decremented optimistically — server
+        // broadcasts an authoritative CommentCountChanged we apply absolutely.
       } catch (err) {
         error.value = err.message || 'Failed to delete comment.'
       }
@@ -276,14 +276,30 @@ function handleDiscussionActivity({ eventId }) {
   expandedComments.value.forEach((postId) => loadComments(postId))
 }
 
+/**
+ * Apply an authoritative comment-count update for a single post. The payload
+ * is absolute ({ commentCount, latestCommentAt }) so we replace fields rather
+ * than adding deltas — that avoids any race with in-flight optimistic
+ * mutations on the client.
+ */
+function handleCommentCountChanged({ eventId, postId, commentCount, latestCommentAt }) {
+  if (eventId !== props.eventId) return
+  const post = posts.value.find(p => p.id === postId)
+  if (!post) return
+  post.commentCount = commentCount
+  post.latestCommentAt = latestCommentAt
+}
+
 onMounted(() => {
   loadPosts()
   realtime.ensureStarted().catch(() => { /* best-effort */ })
   realtime.on(RealtimeEvents.DiscussionActivity, handleDiscussionActivity)
+  realtime.on(RealtimeEvents.CommentCountChanged, handleCommentCountChanged)
 })
 
 onBeforeUnmount(() => {
   realtime.off(RealtimeEvents.DiscussionActivity, handleDiscussionActivity)
+  realtime.off(RealtimeEvents.CommentCountChanged, handleCommentCountChanged)
 })
 </script>
 

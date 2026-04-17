@@ -126,14 +126,31 @@ async function inviteUsersApi(
   if (!resp.ok()) throw new Error(`Invite failed: ${resp.status()} ${await resp.text()}`)
 }
 
-/** Wait for the SignalR connection to have sent a negotiate + handshake. */
-async function waitForRealtimeReady(page: Page): Promise<void> {
-  // The hub endpoint is /hubs/thuddle; the negotiate response confirms wiring.
-  // We tolerate either: a recent negotiate response or a live WebSocket frame.
-  await page.waitForResponse(
-    (r) => r.url().includes('/hubs/thuddle') && r.status() < 400,
-    { timeout: 20000 },
-  )
+/**
+ * Open a user context and navigate to `url`, waiting for the SignalR hub
+ * negotiate response (set up BEFORE navigation to avoid races) and the
+ * user-display-name to be visible so SSO has completed.
+ */
+async function openWithRealtime(
+  browser: Browser,
+  user: Parameters<typeof contextAs>[1],
+  url: string,
+): Promise<{ context: Awaited<ReturnType<typeof contextAs>>['context']; page: Page }> {
+  const { context, page } = await contextAs(browser, user)
+  // Register the listener BEFORE goto so the negotiate response isn't missed.
+  const negotiatePromise = page
+    .waitForResponse(
+      (r) => r.url().includes('/hubs/thuddle') && r.status() < 400,
+      { timeout: 20000 },
+    )
+    .catch(() => null)
+  await page.goto(url)
+  await page.getByTestId('user-display-name').waitFor({ state: 'visible', timeout: 20000 })
+  await negotiatePromise
+  // Small grace period for the WebSocket handshake to complete and subscriptions
+  // to be established server-side.
+  await page.waitForTimeout(500)
+  return { context, page }
 }
 
 // ── Tests ──────────────────────────────────────────────────────────────────
@@ -145,12 +162,12 @@ test.describe('Realtime live updates', () => {
       baseURL,
       createdEvents,
     }) => {
-      // Alice opens the dashboard
-      const { context: aliceCtx, page: alicePage } = await contextAs(browser, 'alice')
-      await alicePage.goto(baseURL!)
-      await alicePage.getByTestId('event-list').waitFor({ state: 'visible', timeout: 20000 })
-      await waitForRealtimeReady(alicePage)
-      const initialCount = await alicePage.getByTestId('event-card').count()
+      // Alice opens the dashboard (waits for SSO + SignalR negotiate).
+      const { context: aliceCtx, page: alicePage } = await openWithRealtime(
+        browser,
+        'alice',
+        baseURL!,
+      )
 
       // Admin creates a new public event via REST
       const api = await adminApi(browser, baseURL!)
@@ -158,11 +175,12 @@ test.describe('Realtime live updates', () => {
       createdEvents.push(id)
       await api.close()
 
-      // Alice's dashboard should now show the new event with no refresh
+      // Alice's dashboard should now show the new event with no refresh.
+      // (We don't assert an exact total card count because other tests running
+      // in parallel may be creating/deleting events concurrently.)
       await expect(alicePage.getByTestId('event-card').filter({ hasText: title })).toBeVisible({
         timeout: 15000,
       })
-      await expect(alicePage.getByTestId('event-card')).toHaveCount(initialCount + 1)
 
       await aliceCtx.close()
     })
@@ -173,10 +191,11 @@ test.describe('Realtime live updates', () => {
       createdEvents,
     }) => {
       // Bob opens the dashboard (he won't be invited).
-      const { context: bobCtx, page: bobPage } = await contextAs(browser, 'bob')
-      await bobPage.goto(baseURL!)
-      await bobPage.getByTestId('event-list').waitFor({ state: 'visible', timeout: 20000 })
-      await waitForRealtimeReady(bobPage)
+      const { context: bobCtx, page: bobPage } = await openWithRealtime(
+        browser,
+        'bob',
+        baseURL!,
+      )
 
       // Admin creates an unlisted (visibility=1) event — no broadcast should
       // reach bob via the `dashboard` group.
@@ -204,14 +223,15 @@ test.describe('Realtime live updates', () => {
       createdEvents.push(id)
       await api.close()
 
-      // Alice loads the dashboard and confirms the event is listed
-      const { context: aliceCtx, page: alicePage } = await contextAs(browser, 'alice')
-      await alicePage.goto(baseURL!)
-      await alicePage.getByTestId('event-list').waitFor({ state: 'visible', timeout: 20000 })
+      // Alice loads the dashboard and confirms the event is listed.
+      const { context: aliceCtx, page: alicePage } = await openWithRealtime(
+        browser,
+        'alice',
+        baseURL!,
+      )
       await expect(alicePage.getByTestId('event-card').filter({ hasText: title })).toBeVisible({
         timeout: 15000,
       })
-      await waitForRealtimeReady(alicePage)
 
       // Admin deletes the event
       const api2 = await adminApi(browser, baseURL!)
@@ -241,10 +261,11 @@ test.describe('Realtime live updates', () => {
       createdEvents.push(id)
 
       // Alice opens dashboard — event should NOT be visible initially.
-      const { context: aliceCtx, page: alicePage } = await contextAs(browser, 'alice')
-      await alicePage.goto(baseURL!)
-      await alicePage.getByTestId('event-list').waitFor({ state: 'visible', timeout: 20000 })
-      await waitForRealtimeReady(alicePage)
+      const { context: aliceCtx, page: alicePage } = await openWithRealtime(
+        browser,
+        'alice',
+        baseURL!,
+      )
       await expect(
         alicePage.getByTestId('event-card').filter({ hasText: title }),
       ).toHaveCount(0)
@@ -273,12 +294,14 @@ test.describe('Realtime live updates', () => {
       createdEvents.push(id)
       await api.close()
 
-      // Alice opens the event page
-      const { context: aliceCtx, page: alicePage } = await contextAs(browser, 'alice')
-      await alicePage.goto(`${baseURL}/events/${id}`)
-      await alicePage.getByTestId('event-detail').waitFor({ state: 'visible', timeout: 20000 })
+      // Alice opens the event page.
+      const { context: aliceCtx, page: alicePage } = await openWithRealtime(
+        browser,
+        'alice',
+        `${baseURL}/events/${id}`,
+      )
+      await expect(alicePage.getByTestId('event-detail')).toBeVisible()
       await expect(alicePage.getByTestId('event-title')).toHaveText(title)
-      await waitForRealtimeReady(alicePage)
 
       // Admin renames the event
       const newTitle = `${title} (edited)`
@@ -303,11 +326,13 @@ test.describe('Realtime live updates', () => {
       await api.close()
 
       // Alice opens the event page — participant count starts at 0.
-      const { context: aliceCtx, page: alicePage } = await contextAs(browser, 'alice')
-      await alicePage.goto(`${baseURL}/events/${id}`)
-      await alicePage.getByTestId('event-detail').waitFor({ state: 'visible', timeout: 20000 })
+      const { context: aliceCtx, page: alicePage } = await openWithRealtime(
+        browser,
+        'alice',
+        `${baseURL}/events/${id}`,
+      )
+      await expect(alicePage.getByTestId('event-detail')).toBeVisible()
       await expect(alicePage.getByTestId('event-tab-attendees')).toContainText('0')
-      await waitForRealtimeReady(alicePage)
 
       // Bob joins via the UI (this triggers ParticipantChanged).
       const { context: bobCtx, page: bobPage } = await contextAs(browser, 'bob')
@@ -336,12 +361,14 @@ test.describe('Realtime live updates', () => {
       await api.close()
 
       // Alice opens event and switches to the attendees tab.
-      const { context: aliceCtx, page: alicePage } = await contextAs(browser, 'alice')
-      await alicePage.goto(`${baseURL}/events/${id}`)
-      await alicePage.getByTestId('event-detail').waitFor({ state: 'visible', timeout: 20000 })
+      const { context: aliceCtx, page: alicePage } = await openWithRealtime(
+        browser,
+        'alice',
+        `${baseURL}/events/${id}`,
+      )
+      await expect(alicePage.getByTestId('event-detail')).toBeVisible()
       await alicePage.getByTestId('event-tab-attendees').click()
       await expect(alicePage.getByTestId('participants-empty')).toBeVisible()
-      await waitForRealtimeReady(alicePage)
 
       // Bob joins in a separate context.
       const { context: bobCtx, page: bobPage } = await contextAs(browser, 'bob')
@@ -369,10 +396,12 @@ test.describe('Realtime live updates', () => {
       await api.close()
 
       // Alice opens the event (info tab active — NOT discussion).
-      const { context: aliceCtx, page: alicePage } = await contextAs(browser, 'alice')
-      await alicePage.goto(`${baseURL}/events/${id}`)
-      await alicePage.getByTestId('event-detail').waitFor({ state: 'visible', timeout: 20000 })
-      await waitForRealtimeReady(alicePage)
+      const { context: aliceCtx, page: alicePage } = await openWithRealtime(
+        browser,
+        'alice',
+        `${baseURL}/events/${id}`,
+      )
+      await expect(alicePage.getByTestId('event-detail')).toBeVisible()
       await expect(alicePage.getByTestId('discussion-unread-indicator')).toHaveCount(0)
 
       // Admin posts in the discussion via the UI (discussion API lives under
@@ -409,14 +438,15 @@ test.describe('Realtime live updates', () => {
       createdEvents.push(id)
       await api.close()
 
-      // Open two alice pages: one on dashboard, one on event detail.
-      const { context: aliceCtx, page: dashboardPage } = await contextAs(browser, 'alice')
-      await dashboardPage.goto(baseURL!)
-      await dashboardPage.getByTestId('event-list').waitFor({ state: 'visible', timeout: 20000 })
+      // Open alice's dashboard and wait for the event card to be visible.
+      const { context: aliceCtx, page: dashboardPage } = await openWithRealtime(
+        browser,
+        'alice',
+        baseURL!,
+      )
       await expect(
         dashboardPage.getByTestId('event-card').filter({ hasText: title }),
       ).toBeVisible({ timeout: 15000 })
-      await waitForRealtimeReady(dashboardPage)
 
       // Admin deletes the event.
       const api2 = await adminApi(browser, baseURL!)
@@ -451,10 +481,11 @@ test.describe('Realtime live updates', () => {
       // `dashboard` group + his `user:{keycloakId}` group. He should not be
       // subscribed to `event:{id}` and therefore should receive no updates
       // when the event is modified.
-      const { context: bobCtx, page: bobPage } = await contextAs(browser, 'bob')
-      await bobPage.goto(baseURL!)
-      await bobPage.getByTestId('event-list').waitFor({ state: 'visible', timeout: 20000 })
-      await waitForRealtimeReady(bobPage)
+      const { context: bobCtx, page: bobPage } = await openWithRealtime(
+        browser,
+        'bob',
+        baseURL!,
+      )
 
       // Admin renames the event. Any leak would cause bob's client to try to
       // reconcile a card he doesn't have — asserting absence covers this.

@@ -17,6 +17,13 @@ public interface IRealtimeNotifier
     Task EventDeletedAsync(Guid eventId, CancellationToken ct = default);
     Task ParticipantChangedAsync(Guid eventId, int participantCount, CancellationToken ct = default);
     Task DiscussionActivityAsync(Guid eventId, CancellationToken ct = default);
+    /// <summary>
+    /// Broadcasts an authoritative comment count + latest activity timestamp
+    /// for a single post. Clients replace local state with these values — they
+    /// must NEVER be applied as deltas to avoid double-counting races with
+    /// optimistic client updates.
+    /// </summary>
+    Task CommentCountChangedAsync(Guid eventId, Guid postId, int commentCount, DateTime? latestCommentAt, CancellationToken ct = default);
     Task InvitationSentAsync(string userKeycloakId, Guid eventId, CancellationToken ct = default);
 }
 
@@ -47,6 +54,10 @@ public sealed class RealtimeNotifier(IHubContext<ThuddleHub> hub) : IRealtimeNot
     public Task DiscussionActivityAsync(Guid eventId, CancellationToken ct = default) =>
         hub.Clients.Group(ThuddleHub.EventGroup(eventId))
             .SendAsync(RealtimeEvents.DiscussionActivity, new { eventId }, ct);
+
+    public Task CommentCountChangedAsync(Guid eventId, Guid postId, int commentCount, DateTime? latestCommentAt, CancellationToken ct = default) =>
+        hub.Clients.Group(ThuddleHub.EventGroup(eventId))
+            .SendAsync(RealtimeEvents.CommentCountChanged, new { eventId, postId, commentCount, latestCommentAt }, ct);
 
     public Task InvitationSentAsync(string userKeycloakId, Guid eventId, CancellationToken ct = default) =>
         hub.Clients.Group(ThuddleHub.UserGroup(userKeycloakId))

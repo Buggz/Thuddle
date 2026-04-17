@@ -9,6 +9,7 @@ export const RealtimeEvents = Object.freeze({
   EventDeleted: 'EventDeleted',
   ParticipantChanged: 'ParticipantChanged',
   DiscussionActivity: 'DiscussionActivity',
+  CommentCountChanged: 'CommentCountChanged',
   InvitationSent: 'InvitationSent'
 })
 

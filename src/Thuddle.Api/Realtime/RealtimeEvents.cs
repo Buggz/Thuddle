@@ -10,5 +10,6 @@ public static class RealtimeEvents
     public const string EventDeleted = "EventDeleted";
     public const string ParticipantChanged = "ParticipantChanged";
     public const string DiscussionActivity = "DiscussionActivity";
+    public const string CommentCountChanged = "CommentCountChanged";
     public const string InvitationSent = "InvitationSent";
 }

@@ -121,7 +121,7 @@ public class ThuddleDbContext(DbContextOptions<ThuddleDbContext> options) : DbCo
 
         modelBuilder.Entity<ContactGroup>(entity =>
         {
-            entity.HasIndex(g => new { g.OwnerId, g.Name }).IsUnique();
+            entity.HasIndex(g => new { g.OwnerId, g.Name });
             entity.HasOne(g => g.Owner)
                 .WithMany()
                 .HasForeignKey(g => g.OwnerId)

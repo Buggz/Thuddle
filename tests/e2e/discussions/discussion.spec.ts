@@ -1,5 +1,5 @@
 import { test, expect } from '../helpers/fixtures'
-import { STORAGE_STATE, uid, futureDates, contextAs } from '../helpers/auth'
+import { STORAGE_STATE, uid, futureDates, contextAs, expectJson } from '../helpers/auth'
 
 /** Helper: admin creates a public open event and returns the event URL + id. */
 async function createEvent(
@@ -24,7 +24,7 @@ async function createEvent(
   )
   await page.getByTestId('event-submit-btn').click()
   const response = await responsePromise
-  const body = await response.json()
+  const body = await expectJson<{ id: string }>(response)
 
   await context.close()
   return { eventUrl: `${baseURL}/events/${body.id}`, eventId: body.id }

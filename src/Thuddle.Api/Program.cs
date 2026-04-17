@@ -92,9 +92,27 @@ builder.Services.AddCors(options =>
 
 builder.Services.AddOpenApi();
 
+// Return structured ProblemDetails JSON for all error responses (including
+// unhandled exceptions) instead of the default HTML developer exception page.
+// This keeps API clients — including E2E tests — able to parse failures as
+// JSON and surface the real server error in assertion messages.
+builder.Services.AddProblemDetails(options =>
+{
+    options.CustomizeProblemDetails = ctx =>
+    {
+        ctx.ProblemDetails.Extensions["traceId"] = ctx.HttpContext.TraceIdentifier;
+    };
+});
+
 builder.Services.AddValidatorsFromAssemblyContaining<Program>();
 
 var app = builder.Build();
+
+// UseExceptionHandler must come before endpoints so unhandled exceptions in
+// endpoint code return ProblemDetails JSON. In Development we still log the
+// full exception to the console for debuggability.
+app.UseExceptionHandler();
+app.UseStatusCodePages();
 
 if (app.Environment.IsDevelopment())
 {

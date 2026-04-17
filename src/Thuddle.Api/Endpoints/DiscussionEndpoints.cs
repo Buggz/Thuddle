@@ -480,6 +480,15 @@ public static class DiscussionEndpoints
 
         await db.SaveChangesAsync(ct);
 
+        // Broadcast authoritative comment count + latest timestamp so clients
+        // can replace state without refetching or doing additive arithmetic.
+        var commentCount = await db.DiscussionComments.CountAsync(c => c.PostId == postId, ct);
+        var latestCommentAt = await db.DiscussionComments
+            .Where(c => c.PostId == postId)
+            .MaxAsync(c => (DateTime?)c.CreatedAt, ct);
+        await realtime.CommentCountChangedAsync(eventId, postId, commentCount, latestCommentAt, ct);
+        // Also fire DiscussionActivity so dashboard/event header refreshes
+        // unread markers and totals for other viewers.
         await realtime.DiscussionActivityAsync(eventId, ct);
 
         return Results.Created($"/api/events/{eventId}/discussion/{postId}/comments/{comment.Id}", new
@@ -500,6 +509,7 @@ public static class DiscussionEndpoints
         Guid commentId,
         ClaimsPrincipal user,
         ThuddleDbContext db,
+        IRealtimeNotifier realtime,
         CancellationToken ct)
     {
         var keycloakId = GetKeycloakId(user);
@@ -518,6 +528,13 @@ public static class DiscussionEndpoints
 
         db.DiscussionComments.Remove(comment);
         await db.SaveChangesAsync(ct);
+
+        var commentCount = await db.DiscussionComments.CountAsync(c => c.PostId == postId, ct);
+        var latestCommentAt = await db.DiscussionComments
+            .Where(c => c.PostId == postId)
+            .MaxAsync(c => (DateTime?)c.CreatedAt, ct);
+        await realtime.CommentCountChangedAsync(eventId, postId, commentCount, latestCommentAt, ct);
+        await realtime.DiscussionActivityAsync(eventId, ct);
 
         return Results.Ok(new { deleted = true });
     }
