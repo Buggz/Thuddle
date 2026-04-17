@@ -2,6 +2,7 @@ using System.Security.Claims;
 using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
 using Thuddle.Api.Data;
+using Thuddle.Api.Realtime;
 using Thuddle.Api.Services;
 
 namespace Thuddle.Api.Endpoints;
@@ -143,6 +144,7 @@ public static class DiscussionEndpoints
         ClaimsPrincipal user,
         ThuddleDbContext db,
         IServiceProvider serviceProvider,
+        IRealtimeNotifier realtime,
         CancellationToken ct)
     {
         var keycloakId = GetKeycloakId(user);
@@ -210,6 +212,9 @@ public static class DiscussionEndpoints
         }
 
         await db.SaveChangesAsync(ct);
+
+        if (isApproved)
+            await realtime.DiscussionActivityAsync(eventId, ct);
 
         // Send email if requested and user is admin
         if (request.SendEmail && isAdmin)
@@ -329,6 +334,7 @@ public static class DiscussionEndpoints
         ApprovePostRequest request,
         ClaimsPrincipal user,
         ThuddleDbContext db,
+        IRealtimeNotifier realtime,
         CancellationToken ct)
     {
         var keycloakId = GetKeycloakId(user);
@@ -343,10 +349,14 @@ public static class DiscussionEndpoints
         var post = await db.DiscussionPosts.FirstOrDefaultAsync(p => p.Id == postId && p.EventId == eventId, ct);
         if (post is null) return Results.NotFound(new { error = "Post not found." });
 
+        var wasApproved = post.IsApproved;
         post.IsApproved = request.Approved;
         post.UpdatedAt = DateTime.UtcNow;
         db.DiscussionPosts.Update(post);
         await db.SaveChangesAsync(ct);
+
+        if (!wasApproved && post.IsApproved)
+            await realtime.DiscussionActivityAsync(eventId, ct);
 
         return Results.Ok(new { post.Id, post.IsApproved });
     }
@@ -414,6 +424,7 @@ public static class DiscussionEndpoints
         CreateCommentRequest request,
         ClaimsPrincipal user,
         ThuddleDbContext db,
+        IRealtimeNotifier realtime,
         CancellationToken ct)
     {
         var keycloakId = GetKeycloakId(user);
@@ -468,6 +479,8 @@ public static class DiscussionEndpoints
         }
 
         await db.SaveChangesAsync(ct);
+
+        await realtime.DiscussionActivityAsync(eventId, ct);
 
         return Results.Created($"/api/events/{eventId}/discussion/{postId}/comments/{comment.Id}", new
         {

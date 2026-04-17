@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Authorization;
 using Thuddle.Api.Authorization;
 using Thuddle.Api.Data;
 using Thuddle.Api.Endpoints;
+using Thuddle.Api.Realtime;
 using Thuddle.Api.Services;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -38,6 +39,18 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                     .CreateLogger("JwtBearer");
                 logger.LogError(context.Exception, "JWT authentication failed. Authority: {Authority}", authority);
                 return Task.CompletedTask;
+            },
+            OnMessageReceived = context =>
+            {
+                // SignalR WebSockets cannot send custom headers, so the access
+                // token is passed as a query-string parameter on the hub path.
+                var accessToken = context.Request.Query["access_token"];
+                var path = context.HttpContext.Request.Path;
+                if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/hubs"))
+                {
+                    context.Token = accessToken;
+                }
+                return Task.CompletedTask;
             }
         };
     });
@@ -62,6 +75,9 @@ builder.Services.AddMemoryCache();
 builder.Services.AddSingleton<SmtpEmailSender>();
 builder.Services.AddSingleton(provider =>
     new RazorTemplateService(Path.Combine(AppContext.BaseDirectory, "EmailTemplates")));
+
+builder.Services.AddSignalR();
+builder.Services.AddSingleton<IRealtimeNotifier, RealtimeNotifier>();
 
 // CORS for local development
 builder.Services.AddCors(options =>
@@ -95,6 +111,7 @@ app.MapEventEndpoints();
 app.MapDiscussionEndpoints();
 app.MapContactGroupEndpoints();
 app.MapAdminEndpoints();
+app.MapHub<ThuddleHub>("/hubs/thuddle");
 
 app.MapGet("/api/hello", () => Results.Ok(new { message = "Hello from Thuddle API!" }));
 

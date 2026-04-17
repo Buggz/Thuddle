@@ -1,21 +1,24 @@
 <script setup>
-import { shallowRef, ref, onMounted, computed } from 'vue'
+import { shallowRef, onMounted, computed } from 'vue'
+import { storeToRefs } from 'pinia'
 import { RouterLink } from 'vue-router'
-import { useApi } from '@/shared/composables/useApi'
 import { useAuthStore } from '@/features/auth/stores/auth'
 import { usePermissionsStore } from '@/features/auth/stores/permissions'
-import { apiUrl } from '@/api'
+import { useEventsStore } from '@/features/events/stores/events'
 import FunnyLoader from '@/shared/components/FunnyLoader.vue'
 
-const { authFetch } = useApi()
 const auth = useAuthStore()
 const perms = usePermissionsStore()
+const eventsStore = useEventsStore()
 
-const events = ref([])
-const loading = shallowRef(true)
-const error = shallowRef(null)
-const page = shallowRef(1)
-const totalPages = shallowRef(1)
+const {
+  items: events,
+  page,
+  totalPages,
+  loadingDashboard: loading,
+  dashboardError: error
+} = storeToRefs(eventsStore)
+
 const hintDismissed = shallowRef(localStorage.getItem('thuddle:profile-hint-dismissed') === 'true')
 
 const showProfileHint = computed(() =>
@@ -40,41 +43,18 @@ const hasPrev = computed(() => page.value > 1)
 const hasNext = computed(() => page.value < totalPages.value)
 
 async function loadEvents() {
-  loading.value = true
-  error.value = null
-  try {
-    const url = apiUrl(`/api/events?page=${page.value}&pageSize=12`)
-    let res
-    if (auth.isAuthenticated) {
-      res = await authFetch(`/api/events?page=${page.value}&pageSize=12`)
-    } else {
-      res = await fetch(url)
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}))
-        throw new Error(data.error || `HTTP ${res.status}`)
-      }
-    }
-    const data = await res.json()
-    events.value = data.items
-    totalPages.value = data.totalPages
-  } catch (err) {
-    error.value = err.message || 'Failed to load events.'
-  } finally {
-    loading.value = false
-  }
+  await eventsStore.loadDashboard({ page: page.value })
 }
 
 function prevPage() {
   if (hasPrev.value) {
-    page.value--
-    loadEvents()
+    eventsStore.loadDashboard({ page: page.value - 1 })
   }
 }
 
 function nextPage() {
   if (hasNext.value) {
-    page.value++
-    loadEvents()
+    eventsStore.loadDashboard({ page: page.value + 1 })
   }
 }
 

@@ -1,7 +1,8 @@
 <script setup>
-import { ref, shallowRef, onMounted } from 'vue'
+import { ref, shallowRef, onMounted, onBeforeUnmount } from 'vue'
 import { useApi } from '@/shared/composables/useApi'
 import { useAuthStore } from '@/features/auth/stores/auth'
+import { useRealtime, RealtimeEvents } from '@/shared/composables/useRealtime'
 import { apiUrl } from '@/api'
 import RichTextEditor from '@/shared/components/RichTextEditor.vue'
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
@@ -13,6 +14,7 @@ const props = defineProps({
 
 const { authFetch } = useApi()
 const auth = useAuthStore()
+const realtime = useRealtime()
 
 const posts = ref([])
 const settings = ref(null)
@@ -267,7 +269,22 @@ function hasNewComments(post) {
   return new Date(post.latestCommentAt) > new Date(lastReadAt.value)
 }
 
-onMounted(loadPosts)
+function handleDiscussionActivity({ eventId }) {
+  if (eventId !== props.eventId) return
+  loadPosts()
+  // Refresh any comments the user currently has open
+  expandedComments.value.forEach((postId) => loadComments(postId))
+}
+
+onMounted(() => {
+  loadPosts()
+  realtime.ensureStarted().catch(() => { /* best-effort */ })
+  realtime.on(RealtimeEvents.DiscussionActivity, handleDiscussionActivity)
+})
+
+onBeforeUnmount(() => {
+  realtime.off(RealtimeEvents.DiscussionActivity, handleDiscussionActivity)
+})
 </script>
 
 <template>
