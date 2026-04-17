@@ -15,6 +15,7 @@
 
 .PARAMETER ContainerRegistry
     The container registry prefix (e.g. "ghcr.io/myuser").
+    Falls back to the THUDDLE_CONTAINER_REGISTRY environment variable if not specified.
 
 .PARAMETER ResourceGroup
     Resource group name. Defaults to rg-thuddle.
@@ -32,13 +33,12 @@
     ./infra/Deploy-App.ps1 -ImageTag "0.1.3" -ContainerRegistry "ghcr.io/myuser"
 
 .EXAMPLE
-    ./infra/Deploy-App.ps1 -ImageTag "0.1.3" -ContainerRegistry "ghcr.io/myuser" -SkipBuild
+    ./infra/Deploy-App.ps1 -ImageTag "0.1.3" -SkipBuild
 #>
 param(
     [Parameter(Mandatory)]
     [string]$ImageTag,
 
-    [Parameter(Mandatory)]
     [string]$ContainerRegistry,
 
     [string]$ResourceGroup = 'rg-thuddle',
@@ -50,6 +50,14 @@ param(
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
+
+if (-not $ContainerRegistry) {
+    $ContainerRegistry = $env:THUDDLE_CONTAINER_REGISTRY
+}
+if (-not $ContainerRegistry) {
+    Write-Error "ContainerRegistry not specified and THUDDLE_CONTAINER_REGISTRY environment variable is not set."
+    exit 1
+}
 
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 
