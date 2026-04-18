@@ -9,6 +9,7 @@ export const STORAGE_STATE = {
   alice: path.join(__dirname, '../playwright/.auth/alice.json'),
   bob: path.join(__dirname, '../playwright/.auth/bob.json'),
   charlie: path.join(__dirname, '../playwright/.auth/charlie.json'),
+  diana: path.join(__dirname, '../playwright/.auth/diana.json'),
 }
 
 // --- Test-data helpers ---

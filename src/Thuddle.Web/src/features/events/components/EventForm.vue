@@ -30,6 +30,13 @@ const nowLocal = computed(() => {
 /** End picker cannot be earlier than the chosen start. */
 const minEnd = computed(() => props.modelValue.start || nowLocal.value)
 
+/** Start of today — used to validate that start is not in the past. */
+const startOfToday = computed(() => {
+  const d = new Date()
+  d.setHours(0, 0, 0, 0)
+  return d
+})
+
 const fieldErrors = computed(() => {
   if (!props.submitted) return {}
   const f = props.modelValue
@@ -37,7 +44,7 @@ const fieldErrors = computed(() => {
   if (!f.title?.trim()) errs.title = 'Title is required.'
   if (!f.location?.trim()) errs.location = 'Location is required.'
   if (!f.start) errs.start = 'Start date is required.'
-  else if (new Date(f.start) <= new Date()) errs.start = 'Start must be in the future.'
+  else if (new Date(f.start) < startOfToday.value) errs.start = 'Start must be today or later.'
   if (!f.end) errs.end = 'End date is required.'
   else if (f.start && new Date(f.end) <= new Date(f.start)) errs.end = 'End must be after start.'
   if (f.capacity != null && f.capacity !== '' && (!Number.isInteger(Number(f.capacity)) || Number(f.capacity) < 1))
@@ -52,7 +59,7 @@ const isValid = computed(() => {
     f.location?.trim().length > 0 &&
     !!f.start &&
     !!f.end &&
-    new Date(f.start) > new Date() &&
+    new Date(f.start) >= startOfToday.value &&
     new Date(f.end) > new Date(f.start) &&
     (f.capacity == null || f.capacity === '' || (Number.isInteger(Number(f.capacity)) && Number(f.capacity) >= 1))
   )

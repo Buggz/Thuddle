@@ -12,17 +12,15 @@ export default defineConfig({
   workers: process.env.CI ? 2 : 4,
   use: {
     baseURL: process.env.THUDDLE_WEB_URL || 'http://localhost:50279',
-    trace: 'on-first-retry',
+    trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
   },
   projects: [
     // Stage 0: authenticate all users once before tests
     { name: 'setup', testMatch: /auth\.setup\.ts/ },
 
-    // Stage 1: admin tests run first (they mutate global user permissions
-    // which other specs could observe). Since `fullyParallel: false` keeps
-    // same-file tests serial and the admin project is a single file, this
-    // stage runs effectively single-threaded.
+    // Admin tests use a dedicated 5th user (diana) for permission
+    // grant/revoke, so they can run in parallel with everything else.
     {
       name: 'admin',
       testMatch: /admin\/.*\.spec\.ts/,
@@ -30,13 +28,11 @@ export default defineConfig({
       dependencies: ['setup'],
     },
 
-    // Stage 2: everything else runs in parallel across files after admin
-    // completes.
     {
       name: 'chromium',
       testIgnore: /admin\/.*\.spec\.ts/,
       use: { browserName: 'chromium' },
-      dependencies: ['admin'],
+      dependencies: ['setup'],
     },
   ],
 })

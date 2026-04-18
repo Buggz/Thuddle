@@ -123,6 +123,22 @@
           "temporary": false
         }
       ]
+    },
+    {
+      "id": "00000000-0000-0000-0000-000000000006",
+      "username": "diana",
+      "email": "diana@thuddle.dev",
+      "emailVerified": true,
+      "enabled": true,
+      "firstName": "Diana",
+      "lastName": "Prince",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "testpassword",
+          "temporary": false
+        }
+      ]
     }
   ]
 }
