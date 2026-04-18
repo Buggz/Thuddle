@@ -71,6 +71,9 @@ builder.Services.AddScoped<IAuthorizationHandler, PermissionHandler>();
 builder.Services.AddSingleton<ImageScaler>();
 builder.Services.AddSingleton<ProfilePictureStorage>();
 builder.Services.AddSingleton<EventImageStorage>();
+builder.Services.AddSingleton<AuctionImageStorage>();
+builder.Services.AddScoped<NotificationService>();
+builder.Services.AddHostedService<AuctionLifecycleWorker>();
 builder.Services.AddMemoryCache();
 builder.Services.AddSingleton<SmtpEmailSender>();
 builder.Services.AddSingleton(provider =>
@@ -134,6 +137,8 @@ app.MapEventEndpoints();
 app.MapDiscussionEndpoints();
 app.MapContactGroupEndpoints();
 app.MapAdminEndpoints();
+app.MapAuctionEndpoints();
+app.MapNotificationEndpoints();
 app.MapHub<ThuddleHub>("/hubs/thuddle");
 
 app.MapGet("/api/hello", () => Results.Ok(new { message = "Hello from Thuddle API!" }));

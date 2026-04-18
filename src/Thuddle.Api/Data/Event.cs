@@ -22,6 +22,7 @@ public class Event
     public required JoinMode JoinMode { get; set; }
     public int? Capacity { get; set; }
     public decimal? Cost { get; set; }
+    public string Currency { get; set; } = "EUR";
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
 

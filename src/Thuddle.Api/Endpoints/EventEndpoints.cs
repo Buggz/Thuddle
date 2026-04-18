@@ -377,6 +377,7 @@ public static class EventEndpoints
             JoinMode = joinMode,
             Capacity = request.Capacity,
             Cost = request.Cost,
+            Currency = request.Currency,
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow
         };
@@ -397,7 +398,8 @@ public static class EventEndpoints
             evt.Visibility,
             evt.JoinMode,
             evt.Capacity,
-            evt.Cost
+            evt.Cost,
+            evt.Currency
         });
     }
 
@@ -586,6 +588,7 @@ public static class EventEndpoints
         evt.JoinMode = joinMode;
         evt.Capacity = request.Capacity;
         evt.Cost = request.Cost;
+        evt.Currency = request.Currency;
         evt.UpdatedAt = DateTime.UtcNow;
 
         db.Events.Update(evt);
@@ -604,7 +607,8 @@ public static class EventEndpoints
             evt.Visibility,
             evt.JoinMode,
             evt.Capacity,
-            evt.Cost
+            evt.Cost,
+            evt.Currency
         });
     }
 
@@ -921,7 +925,8 @@ public record CreateEventRequest(
     EventVisibility Visibility,
     JoinMode JoinMode,
     int? Capacity,
-    decimal? Cost);
+    decimal? Cost,
+    string Currency = "EUR");
 
 public record InviteUsersRequest(List<string> Emails);
 
@@ -934,7 +939,8 @@ public record UpdateEventRequest(
     EventVisibility Visibility,
     JoinMode JoinMode,
     int? Capacity,
-    decimal? Cost);
+    decimal? Cost,
+    string Currency = "EUR");
 
 public record AddCoAdminRequest(string Email);
 

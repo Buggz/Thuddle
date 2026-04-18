@@ -15,6 +15,12 @@ public class ThuddleDbContext(DbContextOptions<ThuddleDbContext> options) : DbCo
     public DbSet<DiscussionReadReceipt> DiscussionReadReceipts => Set<DiscussionReadReceipt>();
     public DbSet<ContactGroup> ContactGroups => Set<ContactGroup>();
     public DbSet<ContactGroupMember> ContactGroupMembers => Set<ContactGroupMember>();
+    public DbSet<EventAuctionSettings> EventAuctionSettings => Set<EventAuctionSettings>();
+    public DbSet<AuctionItemSubmitter> AuctionItemSubmitters => Set<AuctionItemSubmitter>();
+    public DbSet<AuctionItem> AuctionItems => Set<AuctionItem>();
+    public DbSet<AuctionItemImage> AuctionItemImages => Set<AuctionItemImage>();
+    public DbSet<AuctionBid> AuctionBids => Set<AuctionBid>();
+    public DbSet<Notification> Notifications => Set<Notification>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -138,6 +144,85 @@ public class ThuddleDbContext(DbContextOptions<ThuddleDbContext> options) : DbCo
             entity.HasOne(m => m.User)
                 .WithMany()
                 .HasForeignKey(m => m.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<EventAuctionSettings>(entity =>
+        {
+            entity.HasKey(e => e.EventId);
+            entity.Ignore(e => e.EarliestEndsAt);
+            entity.HasOne(e => e.Event)
+                .WithOne()
+                .HasForeignKey<EventAuctionSettings>(e => e.EventId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<AuctionItemSubmitter>(entity =>
+        {
+            entity.HasIndex(s => new { s.EventId, s.UserId }).IsUnique();
+            entity.HasOne(s => s.Event)
+                .WithMany()
+                .HasForeignKey(s => s.EventId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(s => s.User)
+                .WithMany()
+                .HasForeignKey(s => s.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<AuctionItem>(entity =>
+        {
+            entity.HasIndex(i => new { i.EventId, i.Status });
+            entity.HasOne(i => i.Event)
+                .WithMany()
+                .HasForeignKey(i => i.EventId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(i => i.SubmittedByUser)
+                .WithMany()
+                .HasForeignKey(i => i.SubmittedByUserId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(i => i.CurrentBid)
+                .WithMany()
+                .HasForeignKey(i => i.CurrentBidId)
+                .OnDelete(DeleteBehavior.SetNull);
+            entity.HasOne(i => i.Winner)
+                .WithMany()
+                .HasForeignKey(i => i.WinnerUserId)
+                .OnDelete(DeleteBehavior.SetNull);
+            entity.Property(i => i.RowVersion)
+                .IsRowVersion();
+        });
+
+        modelBuilder.Entity<AuctionItemImage>(entity =>
+        {
+            entity.HasIndex(img => new { img.ItemId, img.SortOrder });
+            entity.HasOne(img => img.Item)
+                .WithMany()
+                .HasForeignKey(img => img.ItemId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<AuctionBid>(entity =>
+        {
+            entity.HasIndex(b => new { b.ItemId, b.Amount }).IsUnique().IsDescending(false, true);
+            entity.HasIndex(b => new { b.BidderUserId, b.CreatedAt }).IsDescending(false, true);
+            entity.HasIndex(b => new { b.ItemId, b.IdempotencyKey }).IsUnique();
+            entity.HasOne(b => b.Item)
+                .WithMany()
+                .HasForeignKey(b => b.ItemId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(b => b.Bidder)
+                .WithMany()
+                .HasForeignKey(b => b.BidderUserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<Notification>(entity =>
+        {
+            entity.HasIndex(n => new { n.RecipientUserId, n.ReadAt, n.CreatedAt }).IsDescending(false, false, true);
+            entity.HasOne(n => n.Recipient)
+                .WithMany()
+                .HasForeignKey(n => n.RecipientUserId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
     }
