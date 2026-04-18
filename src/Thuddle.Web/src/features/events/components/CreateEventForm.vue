@@ -17,7 +17,8 @@ const form = ref({
   visibility: 0,
   joinMode: 0,
   capacity: null,
-  cost: null
+  cost: null,
+  currency: 'EUR'
 })
 
 const submitting = shallowRef(false)
@@ -71,7 +72,8 @@ async function submit() {
       visibility: f.visibility,
       joinMode: f.joinMode,
       capacity: f.capacity || null,
-      cost: f.cost || null
+      cost: f.cost || null,
+      currency: f.currency || 'EUR'
     }
 
     const res = await authFetch('/api/events', {

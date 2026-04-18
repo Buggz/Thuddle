@@ -5,6 +5,7 @@ import { useAuthStore } from '@/features/auth/stores/auth'
 import { useProfileStore } from '@/features/profile/stores/profile'
 import { usePermissionsStore } from '@/features/auth/stores/permissions'
 import { apiUrl } from '@/api'
+import NotificationBell from '@/features/notifications/components/NotificationBell.vue'
 
 const auth = useAuthStore()
 const profile = useProfileStore()
@@ -66,7 +67,9 @@ function closeMenu() {
               <span data-testid="user-display-name" class="hidden sm:block text-sm font-semibold text-gray-700">
                 {{ permissionsStore.displayName || auth.userName }}
               </span>
-              
+
+              <NotificationBell />
+
               <div>
                 <button
                   data-testid="nav-menu-btn"

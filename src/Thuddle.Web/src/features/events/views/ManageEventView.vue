@@ -27,7 +27,8 @@ const form = ref({
   visibility: 0,
   joinMode: 0,
   capacity: null,
-  cost: null
+  cost: null,
+  currency: 'EUR'
 })
 const saving = shallowRef(false)
 const saveError = shallowRef(null)
@@ -220,7 +221,8 @@ async function loadEvent() {
       visibility: data.visibility,
       joinMode: data.joinMode,
       capacity: data.capacity,
-      cost: data.cost
+      cost: data.cost,
+      currency: data.currency || 'EUR'
     }
   } catch (err) {
     error.value = err.message || 'Failed to load event.'
@@ -248,7 +250,8 @@ async function saveEvent() {
         visibility: form.value.visibility,
         joinMode: form.value.joinMode,
         capacity: form.value.capacity || null,
-        cost: form.value.cost || null
+        cost: form.value.cost || null,
+        currency: form.value.currency || 'EUR'
       })
     })
     saveSuccess.value = true

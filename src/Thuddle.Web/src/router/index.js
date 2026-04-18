@@ -41,6 +41,34 @@ export default function initRouter() {
         meta: { requiresAuth: true }
       },
       {
+        path: '/events/:id/auction',
+        name: 'auction',
+        component: () => import('@/features/auctions/views/AuctionView.vue')
+      },
+      {
+        path: '/events/:id/auction/items/new',
+        name: 'auction-submit',
+        component: () => import('@/features/auctions/views/SubmitAuctionItemView.vue'),
+        meta: { requiresAuth: true }
+      },
+      {
+        path: '/events/:id/auction/items/:itemId',
+        name: 'auction-item',
+        component: () => import('@/features/auctions/views/AuctionItemView.vue')
+      },
+      {
+        path: '/events/:id/auction/settings',
+        name: 'auction-settings',
+        component: () => import('@/features/auctions/views/AuctionSettingsView.vue'),
+        meta: { requiresAuth: true }
+      },
+      {
+        path: '/notifications',
+        name: 'notifications',
+        component: () => import('@/features/notifications/views/NotificationsView.vue'),
+        meta: { requiresAuth: true }
+      },
+      {
         path: '/admin',
         name: 'admin',
         component: () => import('@/features/admin/views/AdminView.vue'),
