@@ -1,5 +1,5 @@
 ---
-name: E2E Testing
+name: Columbo
 description: Create and maintain end-to-end tests using Playwright
 model: Claude Opus 4.6 (copilot)
 user-invocable: false

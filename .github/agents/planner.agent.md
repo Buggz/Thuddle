@@ -1,20 +1,20 @@
 ---
-name: Planner
-description: Plan features and delegate implementation to Frontend, Backend, and E2E Testing agents
+name: Gandalf
+description: Plan features and delegate implementation to Poirot (frontend), House (backend), and Columbo (e2e testing)
 model: Claude Opus 4.7 (copilot)
 tools: ['agent', 'read', 'search', 'web']
-agents: ['Frontend', 'Backend', 'E2E Testing']
+agents: ['Poirot', 'House', 'Columbo']
 handoffs:
   - label: Implement Frontend
-    agent: Frontend
+    agent: Poirot
     prompt: Implement the frontend parts of the plan above.
     send: false
   - label: Implement Backend
-    agent: Backend
+    agent: House
     prompt: Implement the backend parts of the plan above.
     send: false
   - label: Write E2E Tests
-    agent: E2E Testing
+    agent: Columbo
     prompt: Create or update e2e tests covering the feature described in the plan above.
     send: false
 ---

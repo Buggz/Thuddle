@@ -1,5 +1,5 @@
 ---
-name: Frontend
+name: Poirot
 description: Implement frontend features in the Vue/TypeScript web app
 model: Gemini 3.1 (copilot)
 user-invocable: false
