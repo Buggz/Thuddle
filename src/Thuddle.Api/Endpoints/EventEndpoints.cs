@@ -757,11 +757,18 @@ public static class EventEndpoints
                 return Results.NotFound(new { error = "Event not found." });
         }
 
+        var coAdminUserIds = (await db.EventCoAdmins
+            .Where(ca => ca.EventId == eventId)
+            .Select(ca => ca.UserId)
+            .ToListAsync(ct))
+            .ToHashSet();
+
         var participantsRaw = await db.EventParticipants
             .Where(p => p.EventId == eventId)
             .OrderBy(p => p.JoinedAt)
             .Select(p => new
             {
+                p.UserId,
                 p.User.KeycloakId,
                 p.User.DisplayName,
                 p.User.FullName,
@@ -774,7 +781,10 @@ public static class EventEndpoints
         {
             p.KeycloakId,
             DisplayName = p.DisplayName ?? p.FullName ?? (p.Email != null ? MaskEmail(p.Email) : "Anonymous Attendee"),
-            p.ProfilePictureUrl
+            p.ProfilePictureUrl,
+            Role = p.UserId == evt.OwnerId ? "owner"
+                 : coAdminUserIds.Contains(p.UserId) ? "co-host"
+                 : "attendee"
         });
 
         return Results.Ok(participants);

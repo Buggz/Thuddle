@@ -21,6 +21,11 @@ param keycloakAdminPassword string
 @description('Custom domain for Keycloak (e.g. auth.thuddle.app). Falls back to auto-generated FQDN if empty.')
 param keycloakCustomDomain string = ''
 
+@description('Allowed origins for CORS (the public web frontend URL).')
+param webAllowedOrigins array = [
+  'https://thuddle.app'
+]
+
 var postgresAdminUser = 'thuddleadmin'
 var suffix = uniqueString(resourceGroup().id)
 
@@ -242,11 +247,6 @@ resource apiApp 'Microsoft.App/containerApps@2024-03-01' = {
         targetPort: 8080
         transport: 'http'
         allowInsecure: false
-        corsPolicy: {
-          allowedOrigins: ['*']
-          allowedMethods: ['*']
-          allowedHeaders: ['*']
-        }
       }
       secrets: [
         {
@@ -274,6 +274,8 @@ resource apiApp 'Microsoft.App/containerApps@2024-03-01' = {
             { name: 'ConnectionStrings__blobs', secretRef: 'storage-connection-string' }
             { name: 'Keycloak__AuthServerUrl', value: 'https://${keycloakCustomDomain != '' ? keycloakCustomDomain : keycloakApp.properties.configuration.ingress.fqdn}' }
             { name: 'Keycloak__Realm', value: 'Thuddle' }
+            // CORS allowed origins — one indexed env var per origin in webAllowedOrigins
+            { name: 'Cors__AllowedOrigins__0', value: webAllowedOrigins[0] }
           ]
           probes: [
             {

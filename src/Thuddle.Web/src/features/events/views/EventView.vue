@@ -426,7 +426,16 @@ watch(() => event.value?.participantCount, (newCount, oldCount) => {
               </span>
               <div class="flex-1 min-w-0">
                 <span class="block text-[13px] font-bold text-slate-900 truncate tracking-tight">{{ p.displayName }}</span>
-                <span class="block text-[11px] font-medium text-slate-500 uppercase tracking-wider mt-0.5">Attendee</span>
+                <span
+                  v-if="p.role === 'owner'"
+                  data-testid="participant-role-owner"
+                  class="inline-flex items-center rounded-full px-1.5 py-0.5 mt-0.5 text-[10px] font-bold uppercase tracking-wider bg-indigo-50 text-indigo-700 border border-indigo-200/60"
+                >Owner</span>
+                <span
+                  v-else-if="p.role === 'co-host'"
+                  data-testid="participant-role-co-host"
+                  class="inline-flex items-center rounded-full px-1.5 py-0.5 mt-0.5 text-[10px] font-bold uppercase tracking-wider bg-slate-100 text-slate-600 border border-slate-200"
+                >Co-host</span>
               </div>
             </li>
           </ul>
