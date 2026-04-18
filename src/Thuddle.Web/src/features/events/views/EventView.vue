@@ -86,10 +86,6 @@ async function joinEvent() {
   }
 }
 
-function profilePictureUrl(keycloakId) {
-  return apiUrl(`/api/profile/picture/${keycloakId}`)
-}
-
 function formatDate(iso) {
   return new Date(iso).toLocaleDateString(undefined, {
     weekday: 'long',
@@ -417,8 +413,8 @@ watch(() => event.value?.participantCount, (newCount, oldCount) => {
               class="flex items-center gap-3 rounded-xl border border-slate-200/60 bg-white px-4 py-3 shadow-sm hover:shadow-md hover:border-slate-300 transition-all cursor-default"
             >
               <img
-                v-if="p.hasProfilePicture"
-                :src="profilePictureUrl(p.keycloakId)"
+                v-if="p.profilePictureUrl"
+                :src="apiUrl(p.profilePictureUrl)"
                 :alt="p.displayName"
                 class="w-10 h-10 rounded-full object-cover shadow-sm border border-slate-200/50"
               />

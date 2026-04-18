@@ -220,10 +220,6 @@ function deleteComment(postId, comment) {
   )
 }
 
-function profilePictureUrl(keycloakId) {
-  return apiUrl(`/api/profile/picture/${keycloakId}`)
-}
-
 function formatRelative(iso) {
   const d = new Date(iso)
   const now = new Date()
@@ -380,8 +376,8 @@ onBeforeUnmount(() => {
           <!-- Post header -->
           <div class="flex items-center gap-3.5 px-5 pt-5 pb-2">
             <img
-              v-if="post.hasProfilePicture"
-              :src="profilePictureUrl(post.authorKeycloakId)"
+              v-if="post.profilePictureUrl"
+              :src="apiUrl(post.profilePictureUrl)"
               :alt="post.authorName"
               class="w-10 h-10 rounded-full object-cover border border-slate-200/50 shadow-sm"
             />
@@ -400,7 +396,7 @@ onBeforeUnmount(() => {
                 class="inline-flex items-center rounded-lg bg-amber-50 border border-amber-200/50 px-2 py-1 text-[10px] uppercase tracking-wider font-bold text-amber-600 shadow-sm">
                 Pending
               </span>
-              <button v-if="isAdmin && !post.isOwnPost" data-testid="discussion-approve-btn" @click="toggleApproval(post)"
+              <button v-if="isAdmin && !post.isOwnPost && settings?.memberPostPolicy === 0" data-testid="discussion-approve-btn" @click="toggleApproval(post)"
                 class="text-[11px] uppercase tracking-wider font-bold px-3 py-1.5 rounded-lg transition-colors"
                 :class="post.isApproved
                   ? 'text-amber-600 hover:bg-amber-50 border border-amber-200/50'
@@ -456,8 +452,8 @@ onBeforeUnmount(() => {
                 >
                   <div class="hidden sm:flex shrink-0">
                     <img
-                      v-if="comment.hasProfilePicture"
-                      :src="profilePictureUrl(comment.authorKeycloakId)"
+                      v-if="comment.profilePictureUrl"
+                      :src="apiUrl(comment.profilePictureUrl)"
                       :alt="comment.authorName"
                       class="w-8 h-8 rounded-full object-cover border border-slate-200/50 shadow-sm mt-0.5"
                     />
@@ -479,8 +475,8 @@ onBeforeUnmount(() => {
                        <!-- Mobile Avatar positioned over the bubble edge -->
                       <div class="absolute -left-2 top-0.5 sm:hidden shrink-0">
                         <img
-                          v-if="comment.hasProfilePicture"
-                          :src="profilePictureUrl(comment.authorKeycloakId)"
+                          v-if="comment.profilePictureUrl"
+                          :src="apiUrl(comment.profilePictureUrl)"
                           :alt="comment.authorName"
                           class="w-7 h-7 rounded-full object-cover border border-slate-200/50 shadow-sm"
                         />

@@ -1,4 +1,4 @@
-import { ref, readonly } from 'vue'
+import { ref, readonly, computed } from 'vue'
 import { defineStore } from 'pinia'
 import { useApi } from '@/shared/composables/useApi'
 
@@ -15,8 +15,10 @@ export const usePermissionsStore = defineStore('permissions', () => {
   const loaded = ref(false)
   const profileComplete = ref(true)
   const hasDisplayName = ref(true)
-  const hasProfilePicture = ref(true)
+  const profilePictureUrl = ref(null)
   const displayName = ref('')
+
+  const hasProfilePicture = computed(() => !!profilePictureUrl.value)
 
   const { authFetch } = useApi()
 
@@ -28,13 +30,13 @@ export const usePermissionsStore = defineStore('permissions', () => {
       permissions.value = data.permissions || []
       displayName.value = data.displayName || ''
       hasDisplayName.value = !!data.displayName
-      hasProfilePicture.value = !!data.hasProfilePicture
+      profilePictureUrl.value = data.profilePictureUrl || null
       profileComplete.value = hasDisplayName.value
     } catch {
       permissions.value = []
       profileComplete.value = true
       hasDisplayName.value = true
-      hasProfilePicture.value = true
+      profilePictureUrl.value = null
     } finally {
       loaded.value = true
     }
@@ -55,8 +57,8 @@ export const usePermissionsStore = defineStore('permissions', () => {
     profileComplete.value = hasDisplayName.value
   }
 
-  function markProfilePictureUploaded() {
-    hasProfilePicture.value = true
+  function markProfilePictureUploaded(url) {
+    profilePictureUrl.value = url
   }
 
   return {
@@ -64,7 +66,8 @@ export const usePermissionsStore = defineStore('permissions', () => {
     loaded: readonly(loaded),
     profileComplete: readonly(profileComplete),
     hasDisplayName: readonly(hasDisplayName),
-    hasProfilePicture: readonly(hasProfilePicture),
+    hasProfilePicture,
+    profilePictureUrl: readonly(profilePictureUrl),
     displayName: readonly(displayName),
     load,
     hasPermission,

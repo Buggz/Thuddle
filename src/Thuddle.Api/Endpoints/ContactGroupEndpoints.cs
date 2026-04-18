@@ -57,7 +57,7 @@ public static class ContactGroupEndpoints
                         m.UserId,
                         m.User.Email,
                         DisplayName = m.User.DisplayName ?? m.User.FullName ?? m.User.Email,
-                        HasProfilePicture = m.User.ScaledPicturePath != null
+                        ProfilePictureUrl = m.User.ScaledPicturePath != null ? $"/api/profile/picture/{m.User.KeycloakId}" : null
                     })
                     .ToList()
             })
@@ -91,7 +91,7 @@ public static class ContactGroupEndpoints
                         m.User.Email,
                         FullName = m.User.FullName,
                         DisplayName = m.User.DisplayName ?? m.User.FullName ?? m.User.Email,
-                        HasProfilePicture = m.User.ScaledPicturePath != null
+                        ProfilePictureUrl = m.User.ScaledPicturePath != null ? $"/api/profile/picture/{m.User.KeycloakId}" : null
                     })
                     .ToList()
             })

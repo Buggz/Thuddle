@@ -112,7 +112,7 @@ public static class DiscussionEndpoints
                 AuthorId = p.AuthorId,
                 AuthorName = p.Author.DisplayName ?? p.Author.Email,
                 AuthorKeycloakId = p.Author.KeycloakId,
-                HasProfilePicture = p.Author.ScaledPicturePath != null,
+                ProfilePictureUrl = p.Author.ScaledPicturePath != null ? $"/api/profile/picture/{p.Author.KeycloakId}" : null,
                 CommentCount = db.DiscussionComments.Count(c => c.PostId == p.Id),
                 LatestCommentAt = db.DiscussionComments
                     .Where(c => c.PostId == p.Id)
@@ -237,7 +237,7 @@ public static class DiscussionEndpoints
             post.CreatedAt,
             AuthorName = dbUser.DisplayName ?? dbUser.Email,
             AuthorKeycloakId = dbUser.KeycloakId,
-            HasProfilePicture = dbUser.ScaledPicturePath != null,
+            ProfilePictureUrl = dbUser.ScaledPicturePath != null ? $"/api/profile/picture/{dbUser.KeycloakId}" : null,
             CommentCount = 0,
             IsOwnPost = true
         });
@@ -367,6 +367,7 @@ public static class DiscussionEndpoints
         Guid postId,
         ClaimsPrincipal user,
         ThuddleDbContext db,
+        IRealtimeNotifier realtime,
         CancellationToken ct)
     {
         var keycloakId = GetKeycloakId(user);
@@ -384,6 +385,8 @@ public static class DiscussionEndpoints
 
         db.DiscussionPosts.Remove(post);
         await db.SaveChangesAsync(ct);
+
+        await realtime.DiscussionActivityAsync(eventId, ct);
 
         return Results.Ok(new { deleted = true });
     }
@@ -410,7 +413,7 @@ public static class DiscussionEndpoints
                 c.CreatedAt,
                 AuthorName = c.Author.DisplayName ?? c.Author.Email,
                 AuthorKeycloakId = c.Author.KeycloakId,
-                HasProfilePicture = c.Author.ScaledPicturePath != null
+                ProfilePictureUrl = c.Author.ScaledPicturePath != null ? $"/api/profile/picture/{c.Author.KeycloakId}" : null
             })
             .ToListAsync(ct);
 
@@ -498,7 +501,7 @@ public static class DiscussionEndpoints
             comment.CreatedAt,
             AuthorName = dbUser.DisplayName ?? dbUser.Email,
             AuthorKeycloakId = dbUser.KeycloakId,
-            HasProfilePicture = dbUser.ScaledPicturePath != null
+            ProfilePictureUrl = dbUser.ScaledPicturePath != null ? $"/api/profile/picture/{dbUser.KeycloakId}" : null
         });
     }
 

@@ -67,7 +67,7 @@ public static class EventEndpoints
                 u.Email,
                 u.DisplayName,
                 u.FullName,
-                HasProfilePicture = u.ScaledPicturePath != null
+                ProfilePictureUrl = u.ScaledPicturePath != null ? $"/api/profile/picture/{u.KeycloakId}" : null
             })
             .ToListAsync(ct);
 
@@ -766,7 +766,7 @@ public static class EventEndpoints
                 p.User.DisplayName,
                 p.User.FullName,
                 p.User.Email,
-                HasProfilePicture = p.User.ScaledPicturePath != null
+                ProfilePictureUrl = p.User.ScaledPicturePath != null ? $"/api/profile/picture/{p.User.KeycloakId}" : null
             })
             .ToListAsync(ct);
 
@@ -774,7 +774,7 @@ public static class EventEndpoints
         {
             p.KeycloakId,
             DisplayName = p.DisplayName ?? p.FullName ?? (p.Email != null ? MaskEmail(p.Email) : "Anonymous Attendee"),
-            p.HasProfilePicture
+            p.ProfilePictureUrl
         });
 
         return Results.Ok(participants);
