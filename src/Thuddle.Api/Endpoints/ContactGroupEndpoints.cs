@@ -57,7 +57,7 @@ public static class ContactGroupEndpoints
                         m.UserId,
                         m.User.Email,
                         DisplayName = m.User.DisplayName ?? m.User.FullName ?? m.User.Email,
-                        HasProfilePicture = m.User.ScaledPicturePath != null
+                        ProfilePictureUrl = m.User.ScaledPicturePath != null ? $"/api/profile/picture/{m.User.KeycloakId}" : null
                     })
                     .ToList()
             })
@@ -91,7 +91,7 @@ public static class ContactGroupEndpoints
                         m.User.Email,
                         FullName = m.User.FullName,
                         DisplayName = m.User.DisplayName ?? m.User.FullName ?? m.User.Email,
-                        HasProfilePicture = m.User.ScaledPicturePath != null
+                        ProfilePictureUrl = m.User.ScaledPicturePath != null ? $"/api/profile/picture/{m.User.KeycloakId}" : null
                     })
                     .ToList()
             })
@@ -117,11 +117,6 @@ public static class ContactGroupEndpoints
             return Results.BadRequest(new { error = "Group name is required." });
         if (name.Length > 80)
             return Results.BadRequest(new { error = "Group name is too long (max 80)." });
-
-        var exists = await db.ContactGroups
-            .AnyAsync(g => g.OwnerId == dbUser.Id && g.Name.ToLower() == name.ToLower(), ct);
-        if (exists)
-            return Results.Conflict(new { error = "A group with that name already exists." });
 
         var group = new ContactGroup
         {
@@ -188,13 +183,6 @@ public static class ContactGroupEndpoints
             return Results.BadRequest(new { error = "Group name is required." });
         if (name.Length > 80)
             return Results.BadRequest(new { error = "Group name is too long (max 80)." });
-
-        var clash = await db.ContactGroups
-            .AnyAsync(g => g.OwnerId == dbUser.Id
-                && g.Id != groupId
-                && g.Name.ToLower() == name.ToLower(), ct);
-        if (clash)
-            return Results.Conflict(new { error = "A group with that name already exists." });
 
         group.Name = name;
         group.UpdatedAt = DateTime.UtcNow;

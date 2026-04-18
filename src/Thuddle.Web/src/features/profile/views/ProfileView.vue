@@ -30,8 +30,8 @@ async function handleSaveDisplayName() {
 
 async function handleUploadPicture(blob) {
   await uploadPicture(blob)
-  if (hasProfilePicture.value) {
-    permissionsStore.markProfilePictureUploaded()
+  if (pictureUrl.value) {
+    permissionsStore.markProfilePictureUploaded(pictureUrl.value)
   }
 }
 

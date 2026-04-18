@@ -1,5 +1,5 @@
 <script setup>
-import { ref, watch } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useAuthStore } from '@/features/auth/stores/auth'
 import { useProfileStore } from '@/features/profile/stores/profile'
@@ -12,7 +12,12 @@ const permissionsStore = usePermissionsStore()
 const menuOpen = ref(false)
 const pictureFailed = ref(false)
 
-watch(() => profile.pictureVersion, () => {
+const navPictureUrl = computed(() => {
+  if (!permissionsStore.profilePictureUrl) return null
+  return apiUrl(`${permissionsStore.profilePictureUrl}?v=${profile.pictureVersion}`)
+})
+
+watch(navPictureUrl, () => {
   pictureFailed.value = false
 })
 
@@ -70,8 +75,8 @@ function closeMenu() {
                   title="Menu"
                 >
                   <img
-                    v-if="auth.keycloakId && !pictureFailed"
-                    :src="apiUrl(`/api/profile/picture/${auth.keycloakId}?v=${profile.pictureVersion}`)"
+                    v-if="navPictureUrl && !pictureFailed"
+                    :src="navPictureUrl"
                     alt=""
                     class="w-8 h-8 rounded-full object-cover ring-2 ring-white shadow-sm"
                     @error="pictureFailed = true"

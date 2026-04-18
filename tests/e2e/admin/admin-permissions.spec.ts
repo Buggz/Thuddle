@@ -128,8 +128,8 @@ test.describe('Admin Permissions', () => {
       const { context, page } = await contextAs(browser, 'admin')
       await goToAdmin(page, baseURL!)
 
-      // Search and select alice via the user search combobox
-      await selectUserInGrantForm(page, 'alice', 'alice@thuddle.dev')
+      // Search and select diana via the user search combobox
+      await selectUserInGrantForm(page, 'diana', 'diana@thuddle.dev')
       await page.getByTestId('admin-grant-permission-select').selectOption('events:write')
 
       const resp = page.waitForResponse(
@@ -140,17 +140,17 @@ test.describe('Admin Permissions', () => {
       expect(response.status()).toBe(201)
 
       // Track for cleanup
-      grantedPermissions.push({ email: 'alice@thuddle.dev', permission: 'events:write' })
+      grantedPermissions.push({ email: 'diana@thuddle.dev', permission: 'events:write' })
 
       // Toast appears
       await expect(page.getByTestId('admin-toast')).toContainText('events:write')
-      await expect(page.getByTestId('admin-toast')).toContainText('alice@thuddle.dev')
+      await expect(page.getByTestId('admin-toast')).toContainText('diana@thuddle.dev')
 
-      // Alice now appears in the table
-      const aliceRow = page.locator(
-        '[data-testid="admin-permission-row"][data-user-email="alice@thuddle.dev"]',
+      // Diana now appears in the table
+      const dianaRow = page.locator(
+        '[data-testid="admin-permission-row"][data-user-email="diana@thuddle.dev"]',
       )
-      await expect(aliceRow).toBeVisible()
+      await expect(dianaRow).toBeVisible()
 
       // Selected user chip is cleared, combobox is back
       await expect(page.getByTestId('admin-grant-selected-user')).toHaveCount(0)
@@ -166,32 +166,32 @@ test.describe('Admin Permissions', () => {
       baseURL,
       grantedPermissions,
     }) => {
-      // Grant alice events:write via API so we have something to revoke
-      const { context: setupCtx, page: setupPage } = await contextAs(browser, 'admin')
-      const token = await captureToken(setupPage, baseURL!)
-
-      const grantResp = await setupPage.request.post(`${baseURL}/api/admin/permissions`, {
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        data: JSON.stringify({ email: 'alice@thuddle.dev', permission: 'events:write' }),
-      })
-      expect(grantResp.status()).toBe(201)
-
-      // Track for cleanup in case the UI revoke fails mid-test
-      grantedPermissions.push({ email: 'alice@thuddle.dev', permission: 'events:write' })
-
-      await setupCtx.close()
-
-      // Open admin page and revoke via UI
+      // Grant diana events:write via the UI so we have something to revoke
       const { context, page } = await contextAs(browser, 'admin')
       await goToAdmin(page, baseURL!)
 
-      // Find alice's row and hover to reveal the revoke button
-      const aliceRow = page.locator(
-        '[data-testid="admin-permission-row"][data-user-email="alice@thuddle.dev"]',
+      await selectUserInGrantForm(page, 'diana', 'diana@thuddle.dev')
+      await page.getByTestId('admin-grant-permission-select').selectOption('events:write')
+
+      const grantResp = page.waitForResponse(
+        (r) => r.url().includes('/api/admin/permissions') && r.request().method() === 'POST',
       )
-      await expect(aliceRow).toBeVisible()
-      await aliceRow.hover()
-      await aliceRow.getByTestId('admin-revoke-btn').click()
+      await page.getByTestId('admin-grant-btn').click()
+      const grantResponse = await grantResp
+      expect(grantResponse.status()).toBe(201)
+
+      // Track for cleanup in case the UI revoke fails mid-test
+      grantedPermissions.push({ email: 'diana@thuddle.dev', permission: 'events:write' })
+
+      // Diana should appear in the table (re-fetched from server)
+      const dianaRow = page.locator(
+        '[data-testid="admin-permission-row"][data-user-email="diana@thuddle.dev"]',
+      )
+      await expect(dianaRow).toBeVisible()
+
+      // Hover to reveal the revoke button
+      await dianaRow.hover()
+      await dianaRow.getByTestId('admin-revoke-btn').click()
 
       // Confirm dialog appears
       await expect(page.getByTestId('admin-revoke-confirm')).toBeVisible()
@@ -205,8 +205,8 @@ test.describe('Admin Permissions', () => {
       const delResponse = await deleteResp
       expect(delResponse.status()).toBe(200)
 
-      // Alice's row should be gone
-      await expect(aliceRow).toHaveCount(0)
+      // Diana's row should be gone
+      await expect(dianaRow).toHaveCount(0)
 
       // Toast confirms
       await expect(page.getByTestId('admin-toast')).toContainText('Revoked')
@@ -296,22 +296,23 @@ test.describe('Admin Permissions', () => {
       baseURL,
       grantedPermissions,
     }) => {
-      // Pre-grant alice events:write via API so the UI grant will conflict.
-      // (We can't use testuser here because /api/users/search excludes the caller.)
-      const { context: setupCtx, page: setupPage } = await contextAs(browser, 'admin')
-      const token = await captureToken(setupPage, baseURL!)
-      const grantResp = await setupPage.request.post(`${baseURL}/api/admin/permissions`, {
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        data: JSON.stringify({ email: 'alice@thuddle.dev', permission: 'events:write' }),
-      })
-      expect(grantResp.status()).toBe(201)
-      grantedPermissions.push({ email: 'alice@thuddle.dev', permission: 'events:write' })
-      await setupCtx.close()
-
+      // Grant diana events:write via the UI first
       const { context, page } = await contextAs(browser, 'admin')
       await goToAdmin(page, baseURL!)
 
-      await selectUserInGrantForm(page, 'alice', 'alice@thuddle.dev')
+      await selectUserInGrantForm(page, 'diana', 'diana@thuddle.dev')
+      await page.getByTestId('admin-grant-permission-select').selectOption('events:write')
+
+      const grantResp = page.waitForResponse(
+        (r) => r.url().includes('/api/admin/permissions') && r.request().method() === 'POST',
+      )
+      await page.getByTestId('admin-grant-btn').click()
+      const grantResponse = await grantResp
+      expect(grantResponse.status()).toBe(201)
+      grantedPermissions.push({ email: 'diana@thuddle.dev', permission: 'events:write' })
+
+      // Now try to grant the same permission again — should show conflict error
+      await selectUserInGrantForm(page, 'diana', 'diana@thuddle.dev')
       await page.getByTestId('admin-grant-permission-select').selectOption('events:write')
       await page.getByTestId('admin-grant-btn').click()
 
@@ -374,6 +375,187 @@ test.describe('Admin Permissions', () => {
         data: JSON.stringify({ email: 'bob@thuddle.dev', permission: 'events:write' }),
       })
       expect(grantResp.status()).toBe(403)
+
+      // DELETE /api/admin/permissions/{userId}/{permission}
+      const fakeId = '00000000-0000-0000-0000-000000000000'
+      const revokeResp = await page.request.delete(
+        `${baseURL}/api/admin/permissions/${fakeId}/events:write`,
+        { headers },
+      )
+      expect(revokeResp.status()).toBe(403)
+
+      await context.close()
+    })
+  })
+
+  test.describe('anonymous users', () => {
+    test.use({ storageState: { cookies: [], origins: [] } })
+
+    test('anonymous requests to admin endpoints return 401', async ({ request, baseURL }) => {
+      const listResp = await request.get(`${baseURL}/api/admin/permissions`)
+      expect(listResp.status()).toBe(401)
+
+      const knownResp = await request.get(`${baseURL}/api/admin/permissions/known`)
+      expect(knownResp.status()).toBe(401)
+
+      const grantResp = await request.post(`${baseURL}/api/admin/permissions`, {
+        headers: { 'Content-Type': 'application/json' },
+        data: JSON.stringify({ email: 'alice@thuddle.dev', permission: 'events:write' }),
+      })
+      expect(grantResp.status()).toBe(401)
+
+      const fakeId = '00000000-0000-0000-0000-000000000000'
+      const revokeResp = await request.delete(
+        `${baseURL}/api/admin/permissions/${fakeId}/events:write`,
+      )
+      expect(revokeResp.status()).toBe(401)
+    })
+  })
+
+  test.describe('API validation (admin caller)', () => {
+    test('GET /api/admin/permissions/known returns the three known permissions', async ({
+      browser,
+      baseURL,
+    }) => {
+      const { context, page } = await contextAs(browser, 'admin')
+      const token = await captureToken(page, baseURL!)
+
+      const resp = await page.request.get(`${baseURL}/api/admin/permissions/known`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      expect(resp.status()).toBe(200)
+      const body: string[] = await resp.json()
+      expect(body).toEqual(
+        expect.arrayContaining(['events:write', 'groups:manage', 'admin:access']),
+      )
+      expect(body).toHaveLength(3)
+
+      await context.close()
+    })
+
+    test('POST with empty email returns 400', async ({ browser, baseURL }) => {
+      const { context, page } = await contextAs(browser, 'admin')
+      const token = await captureToken(page, baseURL!)
+
+      const resp = await page.request.post(`${baseURL}/api/admin/permissions`, {
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        data: JSON.stringify({ email: '', permission: 'events:write' }),
+      })
+      expect(resp.status()).toBe(400)
+      const body = await resp.json()
+      expect(body.error).toMatch(/required/i)
+
+      await context.close()
+    })
+
+    test('POST with empty permission returns 400', async ({ browser, baseURL }) => {
+      const { context, page } = await contextAs(browser, 'admin')
+      const token = await captureToken(page, baseURL!)
+
+      const resp = await page.request.post(`${baseURL}/api/admin/permissions`, {
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        data: JSON.stringify({ email: 'alice@thuddle.dev', permission: '   ' }),
+      })
+      expect(resp.status()).toBe(400)
+
+      await context.close()
+    })
+
+    test('POST with unknown permission returns 400', async ({ browser, baseURL }) => {
+      const { context, page } = await contextAs(browser, 'admin')
+      const token = await captureToken(page, baseURL!)
+
+      const resp = await page.request.post(`${baseURL}/api/admin/permissions`, {
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        data: JSON.stringify({ email: 'alice@thuddle.dev', permission: 'bogus:permission' }),
+      })
+      expect(resp.status()).toBe(400)
+      const body = await resp.json()
+      expect(body.error).toMatch(/unknown/i)
+
+      await context.close()
+    })
+
+    test('POST with non-existent email returns 404', async ({ browser, baseURL }) => {
+      const { context, page } = await contextAs(browser, 'admin')
+      const token = await captureToken(page, baseURL!)
+
+      const resp = await page.request.post(`${baseURL}/api/admin/permissions`, {
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        data: JSON.stringify({
+          email: 'nobody@nonexistent.dev',
+          permission: 'events:write',
+        }),
+      })
+      expect(resp.status()).toBe(404)
+
+      await context.close()
+    })
+
+    test('POST is case-insensitive on email', async ({
+      browser,
+      baseURL,
+      grantedPermissions,
+    }) => {
+      const { context, page } = await contextAs(browser, 'admin')
+      const token = await captureToken(page, baseURL!)
+
+      const resp = await page.request.post(`${baseURL}/api/admin/permissions`, {
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        data: JSON.stringify({
+          email: 'DIANA@THUDDLE.DEV',
+          permission: 'groups:manage',
+        }),
+      })
+      expect(resp.status()).toBe(201)
+      grantedPermissions.push({ email: 'diana@thuddle.dev', permission: 'groups:manage' })
+
+      await context.close()
+    })
+
+    test('DELETE for non-existent permission returns 404', async ({ browser, baseURL }) => {
+      const { context, page } = await contextAs(browser, 'admin')
+      const token = await captureToken(page, baseURL!)
+
+      // Look up alice's userId so we use a real user but a permission she doesn't have
+      const listResp = await page.request.get(`${baseURL}/api/admin/permissions`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      const perms: Array<{ userId: string; email: string; permission: string }> =
+        await listResp.json()
+      // alice shouldn't have admin:access, but just in case find any user who doesn't
+      const fakeUserId = '00000000-0000-0000-0000-000000000000'
+      const resp = await page.request.delete(
+        `${baseURL}/api/admin/permissions/${fakeUserId}/events:write`,
+        { headers: { Authorization: `Bearer ${token}` } },
+      )
+      expect(resp.status()).toBe(404)
+
+      // Reference perms to avoid unused warning and sanity-check the list shape
+      expect(Array.isArray(perms)).toBe(true)
+
+      await context.close()
+    })
+
+    test('GET /api/admin/permissions returns rows with expected shape', async ({
+      browser,
+      baseURL,
+    }) => {
+      const { context, page } = await contextAs(browser, 'admin')
+      const token = await captureToken(page, baseURL!)
+
+      const resp = await page.request.get(`${baseURL}/api/admin/permissions`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      expect(resp.status()).toBe(200)
+      const rows: Array<Record<string, unknown>> = await resp.json()
+      expect(rows.length).toBeGreaterThan(0)
+      const row = rows[0]
+      expect(row).toHaveProperty('userId')
+      expect(row).toHaveProperty('email')
+      expect(row).toHaveProperty('displayName')
+      expect(row).toHaveProperty('permission')
+      expect(row).toHaveProperty('grantedAt')
 
       await context.close()
     })

@@ -19,30 +19,19 @@ export function useAdminApi() {
   }
 
   async function grantPermission(email, permission) {
-    const resp = await authFetch('/api/admin/permissions', {
+    await authFetch('/api/admin/permissions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, permission }),
     })
-    const data = await resp.json()
-    entries.value.push({
-      userId: data.id,
-      email: data.email,
-      displayName: data.displayName,
-      permission: data.permission,
-      grantedAt: new Date().toISOString(),
-    })
-    entries.value.sort((a, b) => a.email.localeCompare(b.email) || a.permission.localeCompare(b.permission))
-    return data
+    await loadPermissions()
   }
 
   async function revokePermission(userId, permission) {
     await authFetch(`/api/admin/permissions/${userId}/${encodeURIComponent(permission)}`, {
       method: 'DELETE',
     })
-    entries.value = entries.value.filter(
-      (e) => !(e.userId === userId && e.permission === permission),
-    )
+    await loadPermissions()
   }
 
   return {

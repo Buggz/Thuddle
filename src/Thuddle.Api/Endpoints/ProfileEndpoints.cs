@@ -104,7 +104,7 @@ public static class ProfileEndpoints
             {
                 DisplayName = fullName,
                 Email = email,
-                HasProfilePicture = false,
+                ProfilePictureUrl = (string?)null,
                 Permissions = new List<string>()
             });
         }
@@ -113,7 +113,7 @@ public static class ProfileEndpoints
         {
             dbUser.DisplayName,
             dbUser.Email,
-            HasProfilePicture = dbUser.ScaledPicturePath is not null,
+            ProfilePictureUrl = dbUser.ScaledPicturePath is not null ? $"/api/profile/picture/{dbUser.KeycloakId}" : null,
             Permissions = await db.UserPermissions
                 .AsNoTracking()
                 .Where(p => p.UserId == dbUser.Id)
@@ -234,7 +234,7 @@ public static class ProfileEndpoints
 
         cache.Remove($"profile-picture:{keycloakId}");
 
-        return Results.Ok(new { message = "Profile picture uploaded." });
+        return Results.Ok(new { message = "Profile picture uploaded.", profilePictureUrl = $"/api/profile/picture/{keycloakId}" });
     }
 
     private static async Task<IResult> GetProfilePicture(

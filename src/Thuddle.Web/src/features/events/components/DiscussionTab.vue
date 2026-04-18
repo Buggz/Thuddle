@@ -1,7 +1,8 @@
 <script setup>
-import { ref, shallowRef, onMounted } from 'vue'
+import { ref, shallowRef, onMounted, onBeforeUnmount } from 'vue'
 import { useApi } from '@/shared/composables/useApi'
 import { useAuthStore } from '@/features/auth/stores/auth'
+import { useRealtime, RealtimeEvents } from '@/shared/composables/useRealtime'
 import { apiUrl } from '@/api'
 import RichTextEditor from '@/shared/components/RichTextEditor.vue'
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
@@ -13,6 +14,7 @@ const props = defineProps({
 
 const { authFetch } = useApi()
 const auth = useAuthStore()
+const realtime = useRealtime()
 
 const posts = ref([])
 const settings = ref(null)
@@ -189,9 +191,9 @@ async function addComment(postId) {
     if (!commentsMap.value[postId]) commentsMap.value[postId] = []
     commentsMap.value[postId].push(comment)
     newCommentText.value[postId] = ''
-    // Update comment count on the post
-    const post = posts.value.find(p => p.id === postId)
-    if (post) post.commentCount++
+    // Post.commentCount is NOT bumped optimistically — the server broadcasts
+    // an authoritative CommentCountChanged frame that we apply absolutely.
+    // Applying a +1 here would race with that frame and double-count.
   } catch (err) {
     error.value = err.message || 'Failed to add comment.'
   } finally {
@@ -209,17 +211,13 @@ function deleteComment(postId, comment) {
       try {
         await authFetch(`/api/events/${props.eventId}/discussion/${postId}/comments/${comment.id}`, { method: 'DELETE' })
         commentsMap.value[postId] = commentsMap.value[postId].filter(c => c.id !== comment.id)
-        const post = posts.value.find(p => p.id === postId)
-        if (post) post.commentCount--
+        // Post.commentCount is NOT decremented optimistically — server
+        // broadcasts an authoritative CommentCountChanged we apply absolutely.
       } catch (err) {
         error.value = err.message || 'Failed to delete comment.'
       }
     }
   )
-}
-
-function profilePictureUrl(keycloakId) {
-  return apiUrl(`/api/profile/picture/${keycloakId}`)
 }
 
 function formatRelative(iso) {
@@ -267,7 +265,38 @@ function hasNewComments(post) {
   return new Date(post.latestCommentAt) > new Date(lastReadAt.value)
 }
 
-onMounted(loadPosts)
+function handleDiscussionActivity({ eventId }) {
+  if (eventId !== props.eventId) return
+  loadPosts()
+  // Refresh any comments the user currently has open
+  expandedComments.value.forEach((postId) => loadComments(postId))
+}
+
+/**
+ * Apply an authoritative comment-count update for a single post. The payload
+ * is absolute ({ commentCount, latestCommentAt }) so we replace fields rather
+ * than adding deltas — that avoids any race with in-flight optimistic
+ * mutations on the client.
+ */
+function handleCommentCountChanged({ eventId, postId, commentCount, latestCommentAt }) {
+  if (eventId !== props.eventId) return
+  const post = posts.value.find(p => p.id === postId)
+  if (!post) return
+  post.commentCount = commentCount
+  post.latestCommentAt = latestCommentAt
+}
+
+onMounted(() => {
+  loadPosts()
+  realtime.ensureStarted().catch(() => { /* best-effort */ })
+  realtime.on(RealtimeEvents.DiscussionActivity, handleDiscussionActivity)
+  realtime.on(RealtimeEvents.CommentCountChanged, handleCommentCountChanged)
+})
+
+onBeforeUnmount(() => {
+  realtime.off(RealtimeEvents.DiscussionActivity, handleDiscussionActivity)
+  realtime.off(RealtimeEvents.CommentCountChanged, handleCommentCountChanged)
+})
 </script>
 
 <template>
@@ -347,8 +376,8 @@ onMounted(loadPosts)
           <!-- Post header -->
           <div class="flex items-center gap-3.5 px-5 pt-5 pb-2">
             <img
-              v-if="post.hasProfilePicture"
-              :src="profilePictureUrl(post.authorKeycloakId)"
+              v-if="post.profilePictureUrl"
+              :src="apiUrl(post.profilePictureUrl)"
               :alt="post.authorName"
               class="w-10 h-10 rounded-full object-cover border border-slate-200/50 shadow-sm"
             />
@@ -367,7 +396,7 @@ onMounted(loadPosts)
                 class="inline-flex items-center rounded-lg bg-amber-50 border border-amber-200/50 px-2 py-1 text-[10px] uppercase tracking-wider font-bold text-amber-600 shadow-sm">
                 Pending
               </span>
-              <button v-if="isAdmin && !post.isOwnPost" data-testid="discussion-approve-btn" @click="toggleApproval(post)"
+              <button v-if="isAdmin && !post.isOwnPost && settings?.memberPostPolicy === 0" data-testid="discussion-approve-btn" @click="toggleApproval(post)"
                 class="text-[11px] uppercase tracking-wider font-bold px-3 py-1.5 rounded-lg transition-colors"
                 :class="post.isApproved
                   ? 'text-amber-600 hover:bg-amber-50 border border-amber-200/50'
@@ -423,8 +452,8 @@ onMounted(loadPosts)
                 >
                   <div class="hidden sm:flex shrink-0">
                     <img
-                      v-if="comment.hasProfilePicture"
-                      :src="profilePictureUrl(comment.authorKeycloakId)"
+                      v-if="comment.profilePictureUrl"
+                      :src="apiUrl(comment.profilePictureUrl)"
                       :alt="comment.authorName"
                       class="w-8 h-8 rounded-full object-cover border border-slate-200/50 shadow-sm mt-0.5"
                     />
@@ -446,8 +475,8 @@ onMounted(loadPosts)
                        <!-- Mobile Avatar positioned over the bubble edge -->
                       <div class="absolute -left-2 top-0.5 sm:hidden shrink-0">
                         <img
-                          v-if="comment.hasProfilePicture"
-                          :src="profilePictureUrl(comment.authorKeycloakId)"
+                          v-if="comment.profilePictureUrl"
+                          :src="apiUrl(comment.profilePictureUrl)"
                           :alt="comment.authorName"
                           class="w-7 h-7 rounded-full object-cover border border-slate-200/50 shadow-sm"
                         />

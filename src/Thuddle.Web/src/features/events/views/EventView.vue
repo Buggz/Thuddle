@@ -1,8 +1,9 @@
 <script setup>
-import { shallowRef, ref, onMounted, watch } from 'vue'
+import { shallowRef, ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRoute, useRouter, RouterLink } from 'vue-router'
 import { useApi } from '@/shared/composables/useApi'
 import { useAuthStore } from '@/features/auth/stores/auth'
+import { useEventsStore } from '@/features/events/stores/events'
 import { apiUrl } from '@/api'
 import DiscussionTab from '@/features/events/components/DiscussionTab.vue'
 import FunnyLoader from '@/shared/components/FunnyLoader.vue'
@@ -11,8 +12,8 @@ const route = useRoute()
 const router = useRouter()
 const { authFetch } = useApi()
 const auth = useAuthStore()
+const eventsStore = useEventsStore()
 
-const event = ref(null)
 const loading = shallowRef(true)
 const error = shallowRef(null)
 const joining = shallowRef(false)
@@ -22,22 +23,14 @@ const participants = ref([])
 const participantsLoading = shallowRef(false)
 const participantsLoaded = shallowRef(false)
 
+const event = computed(() => eventsStore.byId[route.params.id] ?? null)
+
 async function loadEvent() {
   loading.value = true
   error.value = null
   try {
-    const url = apiUrl(`/api/events/${route.params.id}`)
-    let res
-    if (auth.isAuthenticated) {
-      res = await authFetch(`/api/events/${route.params.id}`)
-    } else {
-      res = await fetch(url)
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}))
-        throw new Error(data.error || `HTTP ${res.status}`)
-      }
-    }
-    event.value = await res.json()
+    const data = await eventsStore.loadEvent(route.params.id)
+    if (!data) error.value = eventsStore.eventError
   } catch (err) {
     error.value = err.message || 'Failed to load event.'
   } finally {
@@ -70,8 +63,8 @@ async function loadParticipants() {
 
 function selectTab(tab) {
   activeTab.value = tab
-  if (tab === 'discussion' && event.value) {
-    event.value.hasUnreadDiscussion = false
+  if (tab === 'discussion') {
+    eventsStore.markDiscussionRead(route.params.id)
   }
   if (tab === 'attendees' && !participantsLoaded.value) {
     loadParticipants()
@@ -82,11 +75,8 @@ async function joinEvent() {
   joining.value = true
   error.value = null
   try {
-    await authFetch(`/api/events/${route.params.id}/join`, { method: 'POST' })
-    event.value.hasJoined = true
-    event.value.canJoin = false
-    event.value.participantCount++
-    // Refresh attendee list if already loaded
+    await eventsStore.joinEvent(route.params.id)
+    // Refresh attendee list if already loaded / currently viewing
     participantsLoaded.value = false
     if (activeTab.value === 'attendees') loadParticipants()
   } catch (err) {
@@ -94,10 +84,6 @@ async function joinEvent() {
   } finally {
     joining.value = false
   }
-}
-
-function profilePictureUrl(keycloakId) {
-  return apiUrl(`/api/profile/picture/${keycloakId}`)
 }
 
 function formatDate(iso) {
@@ -132,11 +118,24 @@ function eventImageGradient(id) {
 
 onMounted(loadEvent)
 
+onBeforeUnmount(() => {
+  eventsStore.releaseEvent(route.params.id)
+})
+
 // Re-fetch event data when auth state changes so admin/join status updates
 watch(() => auth.isAuthenticated, (authenticated, wasAuthenticated) => {
   if (authenticated !== wasAuthenticated) {
     participantsLoaded.value = false
     loadEvent()
+  }
+})
+
+// When realtime signals the attendee count changed and we're on the attendees
+// tab, refresh the list so names stay in sync.
+watch(() => event.value?.participantCount, (newCount, oldCount) => {
+  if (newCount !== oldCount && activeTab.value === 'attendees') {
+    participantsLoaded.value = false
+    loadParticipants()
   }
 })
 </script>
@@ -414,8 +413,8 @@ watch(() => auth.isAuthenticated, (authenticated, wasAuthenticated) => {
               class="flex items-center gap-3 rounded-xl border border-slate-200/60 bg-white px-4 py-3 shadow-sm hover:shadow-md hover:border-slate-300 transition-all cursor-default"
             >
               <img
-                v-if="p.hasProfilePicture"
-                :src="profilePictureUrl(p.keycloakId)"
+                v-if="p.profilePictureUrl"
+                :src="apiUrl(p.profilePictureUrl)"
                 :alt="p.displayName"
                 class="w-10 h-10 rounded-full object-cover shadow-sm border border-slate-200/50"
               />

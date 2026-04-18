@@ -1,5 +1,5 @@
 import { test, expect } from '../helpers/fixtures'
-import { STORAGE_STATE, uid, futureDates, contextAs } from '../helpers/auth'
+import { STORAGE_STATE, uid, futureDates, contextAs, expectJson } from '../helpers/auth'
 
 /** Helper: admin creates a public open event and returns the event URL + id. */
 async function createEvent(
@@ -24,7 +24,7 @@ async function createEvent(
   )
   await page.getByTestId('event-submit-btn').click()
   const response = await responsePromise
-  const body = await response.json()
+  const body = await expectJson<{ id: string }>(response)
 
   await context.close()
   return { eventUrl: `${baseURL}/events/${body.id}`, eventId: body.id }
@@ -183,6 +183,49 @@ test.describe('Discussion', () => {
       await expect(page.getByTestId('discussion-empty')).toBeVisible()
 
       await context.close()
+    })
+
+    test('deleted post disappears on another user\'s screen via SignalR', async ({ browser, baseURL, createdEvents }) => {
+      const name = `DiscDelRT ${uid()}`
+      const { eventUrl, eventId } = await createEvent(browser, baseURL!, name)
+      createdEvents.push(eventId)
+
+      // Admin creates a post
+      const { context: adminCtx, page: adminPage } = await contextAs(browser, 'admin')
+      await goToDiscussion(adminPage, eventUrl)
+
+      await adminPage.getByTestId('discussion-new-post-btn').click()
+      await adminPage.locator('.ProseMirror').click()
+      const postText = `RT delete me ${uid()}`
+      await adminPage.locator('.ProseMirror').fill(postText)
+
+      const createResponse = adminPage.waitForResponse(
+        (r) => r.url().includes('/discussion') && r.request().method() === 'POST',
+      )
+      await adminPage.getByTestId('discussion-submit-post-btn').click()
+      await createResponse
+      await expect(adminPage.getByTestId('discussion-post')).toBeVisible()
+
+      // Alice joins the event and opens the discussion tab (with SignalR connected)
+      const { context: aliceCtx, page: alicePage } = await contextAs(browser, 'alice')
+      await alicePage.goto(eventUrl)
+      await alicePage.getByTestId('event-detail').waitFor({ state: 'visible', timeout: 20000 })
+      await alicePage.getByTestId('event-join-btn').click()
+      await expect(alicePage.getByTestId('event-joined-badge')).toBeVisible({ timeout: 10000 })
+      await alicePage.getByTestId('event-tab-discussion').click()
+      await expect(alicePage.getByTestId('discussion-post-content')).toContainText(postText)
+
+      // Admin deletes the post via UI
+      await adminPage.getByTestId('discussion-delete-post-btn').click()
+      await adminPage.getByTestId('confirm-dialog-confirm').click()
+      await expect(adminPage.getByTestId('discussion-post')).toBeHidden({ timeout: 10000 })
+
+      // Alice's screen should update without a page refresh
+      await expect(alicePage.getByTestId('discussion-post')).toBeHidden({ timeout: 15000 })
+      await expect(alicePage.getByTestId('discussion-empty')).toBeVisible()
+
+      await aliceCtx.close()
+      await adminCtx.close()
     })
   })
 

@@ -10,6 +10,7 @@ const accounts = [
   { name: 'alice', username: 'alice', password: 'testpassword' },
   { name: 'bob', username: 'bob', password: 'testpassword' },
   { name: 'charlie', username: 'charlie', password: 'testpassword' },
+  { name: 'diana', username: 'diana', password: 'testpassword' },
 ]
 
 for (const account of accounts) {

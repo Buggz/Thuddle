@@ -24,6 +24,13 @@ export const useAuthStore = defineStore('auth', () => {
     return await getToken()
   }
 
+  async function refreshAccessToken() {
+    try {
+      await keycloak.value?.updateToken(Number.MAX_SAFE_INTEGER)
+    } catch { /* refresh token may have expired; fall through */ }
+    return await getToken()
+  }
+
   return {
     isAuthenticated,
     decodedToken,
@@ -31,6 +38,7 @@ export const useAuthStore = defineStore('auth', () => {
     keycloakId,
     login,
     logout,
-    getAccessToken
+    getAccessToken,
+    refreshAccessToken
   }
 })

@@ -22,6 +22,12 @@ export default defineConfig({
         target: process.env.services__api__http__0 || process.env.services__api__https__0 || 'http://localhost:5208',
         changeOrigin: true,
         secure: false
+      },
+      '/hubs': {
+        target: process.env.services__api__http__0 || process.env.services__api__https__0 || 'http://localhost:5208',
+        changeOrigin: true,
+        secure: false,
+        ws: true
       }
     }
   }

@@ -1,12 +1,10 @@
 import { ref } from 'vue'
 import { useApi } from '@/shared/composables/useApi'
-import { useAuthStore } from '@/features/auth/stores/auth'
 import { useProfileStore } from '@/features/profile/stores/profile'
 import { apiUrl } from '@/api'
 
 export function useProfileApi() {
   const { authFetch } = useApi()
-  const auth = useAuthStore()
   const profile = useProfileStore()
 
   const displayName = ref('')
@@ -24,9 +22,9 @@ export function useProfileApi() {
       const data = await res.json()
       displayName.value = data.displayName || ''
       savedName.value = data.displayName || ''
-      hasProfilePicture.value = data.hasProfilePicture
-      if (data.hasProfilePicture) {
-        pictureUrl.value = apiUrl(`/api/profile/picture/${auth.keycloakId}?v=${profile.pictureVersion}`)
+      hasProfilePicture.value = !!data.profilePictureUrl
+      if (data.profilePictureUrl) {
+        pictureUrl.value = apiUrl(`${data.profilePictureUrl}?v=${profile.pictureVersion}`)
       }
     } catch {
       error.value = 'Failed to load profile.'
@@ -64,13 +62,14 @@ export function useProfileApi() {
     formData.append('picture', blob, 'profile.png')
 
     try {
-      await authFetch('/api/profile/picture', {
+      const res = await authFetch('/api/profile/picture', {
         method: 'POST',
         body: formData
       })
+      const data = await res.json()
       hasProfilePicture.value = true
       profile.bumpPictureVersion()
-      pictureUrl.value = apiUrl(`/api/profile/picture/${auth.keycloakId}?v=${profile.pictureVersion}`)
+      pictureUrl.value = apiUrl(`${data.profilePictureUrl}?v=${profile.pictureVersion}`)
       message.value = 'Profile picture uploaded.'
     } catch (err) {
       error.value = err.message || 'Failed to upload picture.'

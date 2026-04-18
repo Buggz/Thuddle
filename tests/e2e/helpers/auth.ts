@@ -1,4 +1,4 @@
-import { type Browser, type BrowserContext, type Page } from '@playwright/test'
+import { type Browser, type BrowserContext, type Page, type Response } from '@playwright/test'
 import { randomUUID } from 'crypto'
 import path from 'path'
 
@@ -9,6 +9,7 @@ export const STORAGE_STATE = {
   alice: path.join(__dirname, '../playwright/.auth/alice.json'),
   bob: path.join(__dirname, '../playwright/.auth/bob.json'),
   charlie: path.join(__dirname, '../playwright/.auth/charlie.json'),
+  diana: path.join(__dirname, '../playwright/.auth/diana.json'),
 }
 
 // --- Test-data helpers ---
@@ -53,6 +54,33 @@ export async function contextAs(
   const context = await browser.newContext({ storageState: STORAGE_STATE[user] })
   const page = await context.newPage()
   return { context, page }
+}
+
+/**
+ * Parse a JSON response body, throwing a diagnostic error with status + body
+ * text if the body is not valid JSON. This prevents cryptic
+ * "Unexpected end of JSON input" errors from swallowing the real server error.
+ */
+export async function expectJson<T = unknown>(resp: Response): Promise<T> {
+  const status = resp.status()
+  const url = resp.url()
+  const method = resp.request().method()
+  const text = await resp.text()
+  if (!resp.ok()) {
+    throw new Error(
+      `Expected JSON response but got ${status} from ${method} ${url}\n` +
+        `Body (${text.length} bytes): ${text.slice(0, 2000)}`,
+    )
+  }
+  try {
+    return JSON.parse(text) as T
+  } catch (err) {
+    throw new Error(
+      `Response was ${status} but body is not valid JSON from ${method} ${url}\n` +
+        `Parse error: ${(err as Error).message}\n` +
+        `Body (${text.length} bytes): ${text.slice(0, 2000)}`,
+    )
+  }
 }
 
 // --- UI login (used only by auth/login.spec.ts) ---

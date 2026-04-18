@@ -2,6 +2,7 @@ using System.Security.Claims;
 using FluentValidation;
 using Microsoft.EntityFrameworkCore;
 using Thuddle.Api.Data;
+using Thuddle.Api.Realtime;
 using Thuddle.Api.Services;
 
 namespace Thuddle.Api.Endpoints;
@@ -66,7 +67,7 @@ public static class EventEndpoints
                 u.Email,
                 u.DisplayName,
                 u.FullName,
-                HasProfilePicture = u.ScaledPicturePath != null
+                ProfilePictureUrl = u.ScaledPicturePath != null ? $"/api/profile/picture/{u.KeycloakId}" : null
             })
             .ToListAsync(ct);
 
@@ -91,6 +92,7 @@ public static class EventEndpoints
         Guid eventId,
         ClaimsPrincipal user,
         ThuddleDbContext db,
+        IRealtimeNotifier realtime,
         CancellationToken ct)
     {
         var keycloakId = GetKeycloakId(user);
@@ -105,6 +107,8 @@ public static class EventEndpoints
 
         db.Events.Remove(evt);
         await db.SaveChangesAsync(ct);
+
+        await realtime.EventDeletedAsync(eventId, ct);
 
         return Results.NoContent();
     }
@@ -343,6 +347,7 @@ public static class EventEndpoints
         CreateEventRequest request,
         IValidator<CreateEventRequest> validator,
         ThuddleDbContext db,
+        IRealtimeNotifier realtime,
         CancellationToken ct)
     {
         var keycloakId = GetKeycloakId(user);
@@ -379,6 +384,8 @@ public static class EventEndpoints
         db.Events.Add(evt);
         await db.SaveChangesAsync(ct);
 
+        await realtime.EventCreatedAsync(evt.Id, evt.Visibility, ct);
+
         return Results.Created($"/api/events/{evt.Id}", new
         {
             evt.Id,
@@ -403,6 +410,7 @@ public static class EventEndpoints
         SmtpEmailSender emailSender,
         RazorTemplateService templateService,
         IConfiguration config,
+        IRealtimeNotifier realtime,
         CancellationToken ct)
     {
         var keycloakId = GetKeycloakId(user);
@@ -444,6 +452,19 @@ public static class EventEndpoints
             db.EventInvitations.AddRange(newInvitations);
             await db.SaveChangesAsync(ct);
 
+            // Notify any invited users who already have an account (keycloak id lookup)
+            var invitedEmails = newInvitations.Select(i => i.Email).ToList();
+            var invitedUsers = await db.Users
+                .AsNoTracking()
+                .Where(u => invitedEmails.Contains(u.Email.ToLower()))
+                .Select(u => u.KeycloakId)
+                .ToListAsync(ct);
+            foreach (var kcId in invitedUsers)
+            {
+                if (!string.IsNullOrEmpty(kcId))
+                    await realtime.InvitationSentAsync(kcId, eventId, ct);
+            }
+
             // Send email invitations
             var baseUrl = config["App:BaseUrl"] ?? "https://thuddle.app";
             foreach (var inv in newInvitations)
@@ -474,6 +495,7 @@ public static class EventEndpoints
         Guid eventId,
         ClaimsPrincipal user,
         ThuddleDbContext db,
+        IRealtimeNotifier realtime,
         CancellationToken ct)
     {
         var keycloakId = GetKeycloakId(user);
@@ -520,6 +542,9 @@ public static class EventEndpoints
         db.EventParticipants.Add(participant);
         await db.SaveChangesAsync(ct);
 
+        var newCount = await db.EventParticipants.CountAsync(p => p.EventId == eventId, ct);
+        await realtime.ParticipantChangedAsync(eventId, newCount, ct);
+
         return Results.Ok(new { joined = true, eventId });
     }
 
@@ -529,6 +554,7 @@ public static class EventEndpoints
         IValidator<UpdateEventRequest> validator,
         ClaimsPrincipal user,
         ThuddleDbContext db,
+        IRealtimeNotifier realtime,
         CancellationToken ct)
     {
         var keycloakId = GetKeycloakId(user);
@@ -564,6 +590,8 @@ public static class EventEndpoints
 
         db.Events.Update(evt);
         await db.SaveChangesAsync(ct);
+
+        await realtime.EventUpdatedAsync(eventId, ct);
 
         return Results.Ok(new
         {
@@ -738,7 +766,7 @@ public static class EventEndpoints
                 p.User.DisplayName,
                 p.User.FullName,
                 p.User.Email,
-                HasProfilePicture = p.User.ScaledPicturePath != null
+                ProfilePictureUrl = p.User.ScaledPicturePath != null ? $"/api/profile/picture/{p.User.KeycloakId}" : null
             })
             .ToListAsync(ct);
 
@@ -746,7 +774,7 @@ public static class EventEndpoints
         {
             p.KeycloakId,
             DisplayName = p.DisplayName ?? p.FullName ?? (p.Email != null ? MaskEmail(p.Email) : "Anonymous Attendee"),
-            p.HasProfilePicture
+            p.ProfilePictureUrl
         });
 
         return Results.Ok(participants);
@@ -796,6 +824,7 @@ public static class EventEndpoints
         ClaimsPrincipal user,
         ThuddleDbContext db,
         EventImageStorage imageStorage,
+        IRealtimeNotifier realtime,
         CancellationToken ct)
     {
         var keycloakId = GetKeycloakId(user);
@@ -829,6 +858,7 @@ public static class EventEndpoints
                 evt.PicturePath = url;
                 evt.UpdatedAt = DateTime.UtcNow;
                 await db.SaveChangesAsync(ct);
+                await realtime.EventUpdatedAsync(eventId, ct);
             }
 
             return Results.Ok(new { url });
