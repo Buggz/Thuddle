@@ -125,15 +125,15 @@ public static class AuctionEndpoints
         var existing = await db.EventAuctionSettings.AsTracking()
             .FirstOrDefaultAsync(s => s.EventId == eventId, ct);
 
-        if (existing is not null && existing.Status == AuctionStatus.Live)
+        if (existing is not null && existing.Status is AuctionStatus.Live or AuctionStatus.Ended)
         {
-            // Only AnonymousBidHistory and ItemModerationPolicy may change while live
+            // Only AnonymousBidHistory and ItemModerationPolicy may change while live/ended
             existing.AnonymousBidHistory = request.AnonymousBidHistory;
             existing.ItemModerationPolicy = request.ItemModerationPolicy;
             existing.UpdatedAt = DateTime.UtcNow;
             await db.SaveChangesAsync(ct);
             await realtime.AuctionSettingsChangedAsync(eventId, ct);
-            return Results.Ok(new { updated = true, locked = true });
+            return Results.Ok(new { updated = true, locked = true, status = existing.Status.ToString() });
         }
 
         var now = DateTime.UtcNow;
@@ -148,8 +148,9 @@ public static class AuctionEndpoints
             db.EventAuctionSettings.Add(existing);
         }
 
+        var previousStatus = existing.Status;
+
         existing.Enabled = request.Enabled;
-        existing.Status = request.Status;
         existing.StartsAt = request.StartsAt;
         existing.LatestEndsAt = request.LatestEndsAt;
         existing.VeiledCloseWindow = request.VeiledCloseWindow;
@@ -160,9 +161,22 @@ public static class AuctionEndpoints
         existing.AnonymousBidHistory = request.AnonymousBidHistory;
         existing.UpdatedAt = now;
 
+        // Server-controlled status: auto-promote to Scheduled when settings are complete
+        existing.Status = existing.Enabled
+            && existing.StartsAt.HasValue
+            && existing.LatestEndsAt.HasValue
+            && existing.MinBidIncrement > 0
+            && existing.StartsAt < existing.LatestEndsAt
+            ? AuctionStatus.Scheduled
+            : AuctionStatus.Draft;
+
         await db.SaveChangesAsync(ct);
         await realtime.AuctionSettingsChangedAsync(eventId, ct);
-        return Results.Ok(new { updated = true, locked = false });
+
+        if (existing.Status != previousStatus)
+            await realtime.AuctionStatusChangedAsync(eventId, existing.Status.ToString(), ct);
+
+        return Results.Ok(new { updated = true, locked = false, status = existing.Status.ToString() });
     }
 
     private static async Task<IResult> StartAuction(
@@ -188,7 +202,16 @@ public static class AuctionEndpoints
             return Results.NotFound(new { error = "Auction not configured." });
 
         if (settings.Status != AuctionStatus.Scheduled)
-            return Results.BadRequest(new { error = $"Cannot start auction in {settings.Status} status. Must be Scheduled." });
+        {
+            var message = settings.Status switch
+            {
+                AuctionStatus.Draft => "Auction settings are incomplete. Ensure it is enabled and has valid start/end times before starting.",
+                AuctionStatus.Live => "Auction is already live.",
+                AuctionStatus.Ended => "Auction has already ended.",
+                _ => $"Cannot start auction in {settings.Status} status."
+            };
+            return Results.BadRequest(new { error = message });
+        }
 
         if (!settings.StartsAt.HasValue || !settings.LatestEndsAt.HasValue)
             return Results.BadRequest(new { error = "StartsAt and LatestEndsAt must be set." });
@@ -1127,7 +1150,6 @@ public static class AuctionEndpoints
 
 public record UpdateAuctionSettingsRequest(
     bool Enabled,
-    AuctionStatus Status,
     DateTime? StartsAt,
     DateTime? LatestEndsAt,
     TimeSpan VeiledCloseWindow,

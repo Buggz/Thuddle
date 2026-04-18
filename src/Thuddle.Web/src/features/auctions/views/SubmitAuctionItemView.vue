@@ -1,9 +1,10 @@
 <script setup>
-import { ref, computed, shallowRef, onMounted } from 'vue'
+import { ref, computed, shallowRef, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter, RouterLink } from 'vue-router'
 import { storeToRefs } from 'pinia'
 import { useAuctionStore } from '@/features/auctions/stores/auction'
 import { parseDecimalInput, formatCurrency } from '@/shared/formatCurrency'
+import ImageCropper from '@/features/profile/components/ImageCropper.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -26,21 +27,51 @@ const error = shallowRef('')
 // Image management — selected before save, uploaded one by one after.
 const selectedImages = ref([])  // { file, previewUrl }
 
+// Queue of files awaiting cropping. The first item in the queue is shown in the cropper.
+const pendingFiles = ref([])
+const currentPendingFile = computed(() => pendingFiles.value[0] ?? null)
+
 function onFiles(event) {
   const files = Array.from(event.target.files || [])
   for (const file of files) {
-    selectedImages.value.push({
-      file,
-      previewUrl: URL.createObjectURL(file)
-    })
+    pendingFiles.value.push(file)
   }
   event.target.value = ''
+}
+
+function onCropDone(blob) {
+  const original = pendingFiles.value[0]
+  if (!original) return
+  const baseName = original.name.replace(/\.[^.]+$/, '')
+  const file = new File([blob], `${baseName}.jpg`, { type: 'image/jpeg' })
+  selectedImages.value.push({
+    file,
+    previewUrl: URL.createObjectURL(blob)
+  })
+  pendingFiles.value.shift()
+}
+
+function onCropCancel() {
+  pendingFiles.value.shift()
 }
 
 function removeImage(idx) {
   const removed = selectedImages.value.splice(idx, 1)[0]
   if (removed?.previewUrl) URL.revokeObjectURL(removed.previewUrl)
 }
+
+function editImage(idx) {
+  const removed = selectedImages.value.splice(idx, 1)[0]
+  if (!removed) return
+  if (removed.previewUrl) URL.revokeObjectURL(removed.previewUrl)
+  pendingFiles.value.unshift(removed.file)
+}
+
+onBeforeUnmount(() => {
+  for (const img of selectedImages.value) {
+    if (img.previewUrl) URL.revokeObjectURL(img.previewUrl)
+  }
+})
 
 function moveImage(idx, dir) {
   const target = idx + dir
@@ -213,18 +244,39 @@ onMounted(async () => {
                 <button type="button" @click="moveImage(i, -1)" :disabled="i === 0" class="disabled:opacity-30">↑</button>
                 <button type="button" @click="moveImage(i, 1)" :disabled="i === selectedImages.length - 1" class="disabled:opacity-30">↓</button>
               </div>
-              <button
-                type="button"
-                :data-testid="`submit-item-image-remove-${i}`"
-                @click="removeImage(i)"
-                class="text-rose-200 hover:text-white"
-              >
-                Remove
-              </button>
+              <div class="flex gap-2">
+                <button
+                  type="button"
+                  :data-testid="`submit-item-image-edit-${i}`"
+                  @click="editImage(i)"
+                  class="text-indigo-200 hover:text-white"
+                  aria-label="Edit image"
+                  title="Edit"
+                >
+                  ✎ Edit
+                </button>
+                <button
+                  type="button"
+                  :data-testid="`submit-item-image-remove-${i}`"
+                  @click="removeImage(i)"
+                  class="text-rose-200 hover:text-white"
+                >
+                  Remove
+                </button>
+              </div>
             </div>
           </div>
         </div>
       </div>
+
+      <ImageCropper
+        v-if="currentPendingFile"
+        :image-file="currentPendingFile"
+        shape="rectangle"
+        title="Crop Item Image"
+        @crop="onCropDone"
+        @cancel="onCropCancel"
+      />
 
       <div v-if="error" class="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
         {{ error }}
