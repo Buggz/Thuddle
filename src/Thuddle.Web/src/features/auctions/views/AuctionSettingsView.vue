@@ -47,8 +47,6 @@ const form = ref({
 const saving = shallowRef(false)
 const savedFlash = shallowRef(false)
 const saveError = shallowRef('')
-const startingNow = shallowRef(false)
-const startError = shallowRef('')
 const activeTab = shallowRef('schedule')
 
 const allAttendees = ref([])
@@ -130,7 +128,6 @@ watch(settings, (val) => {
 
 const isLive = computed(() => settings.value?.status === 'Live')
 const isEnded = computed(() => settings.value?.status === 'Ended')
-const isScheduled = computed(() => settings.value?.status === 'Scheduled')
 
 // Most fields lock once Live; before-Live, everything is editable.
 const editableField = computed(() => !isLive.value && !isEnded.value)
@@ -281,18 +278,6 @@ async function save() {
   }
 }
 
-async function startNow() {
-  startingNow.value = true
-  startError.value = ''
-  try {
-    await auctionStore.startAuction(eventId.value)
-  } catch (err) {
-    startError.value = err.message || 'Failed to start auction.'
-  } finally {
-    startingNow.value = false
-  }
-}
-
 onMounted(async () => {
   await auctionStore.loadAuction(eventId.value)
 })
@@ -317,25 +302,11 @@ onMounted(async () => {
           Status: <span class="font-bold text-gray-700">{{ settings.status || '—' }}</span>
         </p>
       </div>
-      <button
-        v-if="isScheduled"
-        type="button"
-        data-testid="auction-start-btn"
-        :disabled="startingNow"
-        @click="startNow"
-        class="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-bold text-white shadow-sm hover:bg-emerald-700 disabled:opacity-50"
-      >
-        {{ startingNow ? 'Starting…' : 'Start auction now' }}
-      </button>
     </div>
 
     <div v-if="loadError" class="mb-4 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
       {{ loadError }}
     </div>
-    <div v-if="startError" class="mb-4 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
-      {{ startError }}
-    </div>
-
     <form
       data-testid="auction-settings-form"
       @submit.prevent="save"
