@@ -96,7 +96,8 @@ public static class AuctionEndpoints
             itemModerationPolicy = settings.ItemModerationPolicy.ToString(),
             settings.MinBidIncrement,
             settings.AllowBuyout,
-            settings.AnonymousBidHistory,
+            settings.AnonymousBidders,
+            settings.AnonymousSubmitters,
             eventStart = evt.Start,
             eventEnd = evt.End,
             currency = evt.Currency,
@@ -138,8 +139,9 @@ public static class AuctionEndpoints
 
         if (existing is not null && existing.Status is AuctionStatus.Live or AuctionStatus.Ended)
         {
-            // Only AnonymousBidHistory and ItemModerationPolicy may change while live/ended
-            existing.AnonymousBidHistory = request.AnonymousBidHistory;
+            // Only AnonymousBidders, AnonymousSubmitters, and ItemModerationPolicy may change while live/ended
+            existing.AnonymousBidders = request.AnonymousBidders;
+            existing.AnonymousSubmitters = request.AnonymousSubmitters;
             existing.ItemModerationPolicy = request.ItemModerationPolicy;
             existing.UpdatedAt = DateTime.UtcNow;
             await db.SaveChangesAsync(ct);
@@ -170,7 +172,8 @@ public static class AuctionEndpoints
         existing.ItemModerationPolicy = request.ItemModerationPolicy;
         existing.MinBidIncrement = request.MinBidIncrement;
         existing.AllowBuyout = request.AllowBuyout;
-        existing.AnonymousBidHistory = request.AnonymousBidHistory;
+        existing.AnonymousBidders = request.AnonymousBidders;
+        existing.AnonymousSubmitters = request.AnonymousSubmitters;
         existing.UpdatedAt = now;
 
         // Server-controlled status: auto-promote to Scheduled when settings are complete
@@ -396,6 +399,38 @@ public static class AuctionEndpoints
             ? new { earliestEndsAt = settings.EarliestEndsAt, settings.LatestEndsAt }
             : null;
 
+        // Anonymize submitter info for non-admins when enabled
+        if (settings?.AnonymousSubmitters == true && !isAdmin)
+        {
+            var anonymizedItems = items.Select(i => new
+            {
+                i.Id,
+                i.Name,
+                i.Description,
+                i.StartingBid,
+                i.BuyoutPrice,
+                i.status,
+                i.FinalPrice,
+                submittedByUserId = (Guid?)null,
+                submittedByName = (string?)null,
+                i.currentBid,
+                i.bidCount,
+                i.imageUrls,
+                i.CreatedAt,
+                i.UpdatedAt
+            }).ToList();
+
+            return Results.Ok(new
+            {
+                items = anonymizedItems,
+                endsAtBoundsForDisplay = endsAtBounds,
+                page = p,
+                pageSize = size,
+                totalCount,
+                totalPages = (int)Math.Ceiling((double)totalCount / size)
+            });
+        }
+
         return Results.Ok(new
         {
             items,
@@ -458,6 +493,33 @@ public static class AuctionEndpoints
             && item.status is not ("Live" or "Sold" or "Unsold"))
         {
             return Results.NotFound(new { error = "Item not found." });
+        }
+
+        var settings = await db.EventAuctionSettings.AsNoTracking()
+            .FirstOrDefaultAsync(s => s.EventId == eventId, ct);
+
+        if (settings?.AnonymousSubmitters == true && !isAdmin && item.submittedByUserId != dbUser.Id)
+        {
+            return Results.Ok(new
+            {
+                item.Id,
+                item.EventId,
+                item.Name,
+                item.Description,
+                item.StartingBid,
+                item.BuyoutPrice,
+                item.status,
+                item.FinalPrice,
+                item.WinnerUserId,
+                item.ClaimedAt,
+                submittedByUserId = (Guid?)null,
+                submittedByName = (string?)null,
+                item.currentBid,
+                item.bidCount,
+                item.imageUrls,
+                item.CreatedAt,
+                item.UpdatedAt
+            });
         }
 
         return Results.Ok(item);
@@ -1088,7 +1150,7 @@ public static class AuctionEndpoints
         var settings = await db.EventAuctionSettings.AsNoTracking()
             .FirstOrDefaultAsync(s => s.EventId == eventId, ct);
 
-        var anonymous = settings?.AnonymousBidHistory == true && !isAdmin;
+        var anonymous = settings?.AnonymousBidders == true && !isAdmin;
 
         var p = Math.Max(page ?? 1, 1);
         var size = Math.Clamp(pageSize ?? 50, 1, 100);
@@ -1170,7 +1232,8 @@ public record UpdateAuctionSettingsRequest(
     ModerationPolicy ItemModerationPolicy,
     decimal MinBidIncrement,
     bool AllowBuyout,
-    bool AnonymousBidHistory);
+    bool AnonymousBidders,
+    bool AnonymousSubmitters);
 
 public record CreateAuctionItemRequest(
     string Name,

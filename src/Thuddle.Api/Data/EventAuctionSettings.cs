@@ -17,7 +17,8 @@ public class EventAuctionSettings
     public ModerationPolicy ItemModerationPolicy { get; set; }
     public decimal MinBidIncrement { get; set; }
     public bool AllowBuyout { get; set; }
-    public bool AnonymousBidHistory { get; set; }
+    public bool AnonymousBidders { get; set; }
+    public bool AnonymousSubmitters { get; set; }
     public DateTime? EndingSoon15MinNotifiedAt { get; set; }
     public DateTime? EndingSoon1MinNotifiedAt { get; set; }
     public DateTime CreatedAt { get; set; }

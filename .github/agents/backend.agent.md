@@ -37,3 +37,11 @@ You speak and reason as **Dr. Gregory House** would: brilliant, blunt, sarcastic
 - .NET / C#
 - Entity Framework Core
 - ASP.NET Core Minimal APIs
+
+## Hard rules
+
+- **Never hand-craft EF Core migration files.** Always generate migrations using the CLI:
+  ```
+  dotnet ef migrations add <MigrationName> --project src/Thuddle.Api --startup-project src/Thuddle.Api
+  ```
+  Then review the generated migration and make targeted adjustments (e.g., adding a `migrationBuilder.Sql(...)` data fixup line). Never create migration `.cs` files, `.Designer.cs` files, or edit `ThuddleDbContextModelSnapshot.cs` by hand.

@@ -27,13 +27,14 @@ const form = ref({
   veiledCloseValue: 5,
   veiledCloseUnit: 'minutes',
   bidTimeExtensionEnabled: false,
-  bidTimeExtensionValue: 30,
-  bidTimeExtensionUnit: 'seconds',
+  bidTimeExtensionValue: 5,
+  bidTimeExtensionUnit: 'minutes',
   submissionMode: 'AllAttendees',
   itemModerationPolicy: 'RequireApproval',
   minBidIncrement: '1',
   allowBuyout: false,
-  anonymousBidHistory: false
+  anonymousBidders: false,
+  anonymousSubmitters: false
 })
 
 const saving = shallowRef(false)
@@ -96,14 +97,15 @@ function hydrate(s) {
     }
   } else {
     form.value.bidTimeExtensionEnabled = false
-    form.value.bidTimeExtensionValue = 30
-    form.value.bidTimeExtensionUnit = 'seconds'
+    form.value.bidTimeExtensionValue = 5
+    form.value.bidTimeExtensionUnit = 'minutes'
   }
   form.value.submissionMode = s.submissionMode || 'AllAttendees'
   form.value.itemModerationPolicy = s.itemModerationPolicy || 'RequireApproval'
   form.value.minBidIncrement = String(s.minBidIncrement ?? '1')
   form.value.allowBuyout = !!s.allowBuyout
-  form.value.anonymousBidHistory = !!s.anonymousBidHistory
+  form.value.anonymousBidders = !!s.anonymousBidders
+  form.value.anonymousSubmitters = !!s.anonymousSubmitters
 }
 
 watch(settings, (val) => {
@@ -178,7 +180,8 @@ async function save() {
       itemModerationPolicy: MOD_POLICY_INT[form.value.itemModerationPolicy] ?? 0,
       minBidIncrement: parseDecimalInput(form.value.minBidIncrement),
       allowBuyout: form.value.allowBuyout,
-      anonymousBidHistory: form.value.anonymousBidHistory
+      anonymousBidders: form.value.anonymousBidders,
+      anonymousSubmitters: form.value.anonymousSubmitters
     })
     savedFlash.value = true
     setTimeout(() => { savedFlash.value = false }, 2500)
@@ -403,14 +406,20 @@ onMounted(async () => {
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
           <label class="block text-sm font-medium text-gray-700 mb-1">Minimum bid increment<span class="text-amber-600 text-xs ml-1" title="Locked when live">🔒</span></label>
-          <input
-            v-model="form.minBidIncrement"
-            data-testid="auction-settings-min-increment"
-            type="text"
-            inputmode="decimal"
-            class="w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500"
-            :class="fieldErrors.minBidIncrement ? 'border-red-400' : 'border-gray-300 focus:border-indigo-500'"
-          />
+          <div class="flex items-stretch">
+            <input
+              v-model="form.minBidIncrement"
+              data-testid="auction-settings-min-increment"
+              type="text"
+              inputmode="decimal"
+              :disabled="!editableField"
+              class="w-full rounded-l-lg border border-r-0 px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500"
+              :class="fieldErrors.minBidIncrement ? 'border-red-400' : 'border-gray-300 focus:border-indigo-500'"
+            />
+            <span class="inline-flex items-center rounded-r-lg border border-l-0 border-gray-300 bg-gray-50 px-3 text-sm text-gray-500">
+              {{ settings?.currency || 'EUR' }}
+            </span>
+          </div>
           <p v-if="fieldErrors.minBidIncrement" class="mt-1 text-xs text-red-600">{{ fieldErrors.minBidIncrement }}</p>
           <p v-else class="mt-1 text-[11px] text-gray-400">The minimum amount each new bid must exceed the current highest bid.</p>
         </div>
@@ -427,19 +436,31 @@ onMounted(async () => {
             />
             <span class="text-sm text-gray-700">Allow buyout<span class="text-amber-600 text-xs ml-1" title="Locked when live">🔒</span></span>
           </label>
-          <p class="ml-9 text-[11px] text-gray-400">Let bidders instantly win an item at its set buyout price.</p>
+          <p class="ml-9 text-[11px] text-gray-400">Allow item submitters to set an optional buyout price. Bidders can then instantly win the item by paying that price. Not every item needs to have one.</p>
         </div>
         <div>
           <label class="flex items-center gap-3">
             <input
-              v-model="form.anonymousBidHistory"
-              data-testid="auction-settings-anonymous-history"
+              v-model="form.anonymousBidders"
+              data-testid="auction-settings-anonymous-bidders"
               type="checkbox"
               class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
             />
-            <span class="text-sm text-gray-700">Hide submitter and bidder names</span>
+            <span class="text-sm text-gray-700">Anonymous bidders</span>
           </label>
-          <p class="ml-9 text-[11px] text-gray-400">Bidder identities are hidden from other participants.</p>
+          <p class="ml-9 text-[11px] text-gray-400">Hide bidder identities from other participants. Event admins can always see who placed each bid.</p>
+        </div>
+        <div>
+          <label class="flex items-center gap-3">
+            <input
+              v-model="form.anonymousSubmitters"
+              data-testid="auction-settings-anonymous-submitters"
+              type="checkbox"
+              class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+            />
+            <span class="text-sm text-gray-700">Anonymous submitters</span>
+          </label>
+          <p class="ml-9 text-[11px] text-gray-400">Hide who submitted each item from other participants. Submitters can still see their own items, and event admins can always see all submitter identities.</p>
         </div>
       </div>
 
