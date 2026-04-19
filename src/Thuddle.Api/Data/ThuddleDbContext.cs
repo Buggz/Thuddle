@@ -21,6 +21,7 @@ public class ThuddleDbContext(DbContextOptions<ThuddleDbContext> options) : DbCo
     public DbSet<AuctionItemImage> AuctionItemImages => Set<AuctionItemImage>();
     public DbSet<AuctionBid> AuctionBids => Set<AuctionBid>();
     public DbSet<Notification> Notifications => Set<Notification>();
+    public DbSet<BoardGame> BoardGames => Set<BoardGame>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -189,6 +190,10 @@ public class ThuddleDbContext(DbContextOptions<ThuddleDbContext> options) : DbCo
                 .WithMany()
                 .HasForeignKey(i => i.WinnerUserId)
                 .OnDelete(DeleteBehavior.SetNull);
+            entity.HasOne(i => i.BoardGame)
+                .WithMany()
+                .HasForeignKey(i => i.BggId)
+                .OnDelete(DeleteBehavior.SetNull);
             entity.Property(i => i.RowVersion)
                 .IsRowVersion();
         });
@@ -224,6 +229,16 @@ public class ThuddleDbContext(DbContextOptions<ThuddleDbContext> options) : DbCo
                 .WithMany()
                 .HasForeignKey(n => n.RecipientUserId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<BoardGame>(entity =>
+        {
+            entity.HasKey(b => b.BggId);
+            entity.Property(b => b.BggId).ValueGeneratedNever();
+            entity.HasIndex(b => b.Name)
+                .HasMethod("gist")
+                .HasOperators("gist_trgm_ops");
+            entity.HasIndex(b => b.BggRank);
         });
     }
 }

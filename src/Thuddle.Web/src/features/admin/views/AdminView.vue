@@ -1,6 +1,8 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useAdminApi } from '@/features/admin/composables/useAdminApi'
+import { boardGameApi } from '@/api'
+import { useApi } from '@/shared/composables/useApi'
 import UserSearchComboBox from '@/shared/components/UserSearchComboBox.vue'
 
 const {
@@ -12,6 +14,8 @@ const {
   revokePermission,
 } = useAdminApi()
 
+const { authFetch } = useApi()
+
 const selectedUser = ref(null)
 const grantPerm = ref('')
 const granting = ref(false)
@@ -20,6 +24,38 @@ const toast = ref(null)
 let toastTimer = null
 
 const confirmRevoke = ref(null)
+
+const bggStats = ref(null)
+const bggImporting = ref(false)
+const bggImportResult = ref(null)
+const bggFile = ref(null)
+
+async function loadBggStats() {
+  try {
+    bggStats.value = await boardGameApi.getStats(authFetch)
+  } catch { /* ignore */ }
+}
+
+function onBggFileSelected(event) {
+  bggFile.value = event.target.files?.[0] || null
+}
+
+async function importBgg() {
+  if (!bggFile.value) return
+  bggImporting.value = true
+  bggImportResult.value = null
+  try {
+    const result = await boardGameApi.importCsv(authFetch, bggFile.value)
+    bggImportResult.value = result
+    showToast(`Imported ${result.imported.toLocaleString()} new games, updated ${result.updated.toLocaleString()}`)
+    bggFile.value = null
+    await loadBggStats()
+  } catch (err) {
+    error.value = err.message || 'BGG import failed.'
+  } finally {
+    bggImporting.value = false
+  }
+}
 
 // Group entries by user for a cleaner table
 const userMap = computed(() => {
@@ -49,6 +85,7 @@ onMounted(async () => {
   if (knownPermissions.value.length && !grantPerm.value) {
     grantPerm.value = knownPermissions.value[0]
   }
+  loadBggStats()
 })
 
 function onUserSelected(result) {
@@ -217,6 +254,56 @@ function badgeClass(perm) {
           </template>
         </tbody>
       </table>
+    </div>
+
+    <!-- Board Games Database -->
+    <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 mt-8" data-testid="admin-bgg-section">
+      <div class="flex items-start justify-between mb-4">
+        <div>
+          <h2 class="text-base font-bold text-slate-900">Board Games Database</h2>
+          <p class="text-sm text-slate-500 mt-0.5">Import game data from BoardGameGeek for search-powered item submission.</p>
+        </div>
+        <div v-if="bggStats" data-testid="admin-bgg-stats" class="text-right text-xs text-slate-500 shrink-0 ml-4">
+          <p><span class="font-bold text-slate-700">{{ bggStats.totalGames?.toLocaleString() }}</span> games</p>
+          <p><span class="font-bold text-slate-700">{{ bggStats.totalExpansions?.toLocaleString() }}</span> expansions</p>
+          <p v-if="bggStats.lastImportedAt" class="mt-0.5">
+            Last import: {{ new Date(bggStats.lastImportedAt).toLocaleDateString() }}
+          </p>
+        </div>
+      </div>
+
+      <div class="flex flex-col sm:flex-row gap-3 items-start">
+        <label
+          data-testid="admin-bgg-upload"
+          class="flex-1 flex items-center justify-center rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 px-4 py-4 cursor-pointer hover:bg-slate-100 transition-colors text-sm text-slate-600"
+        >
+          <svg class="w-5 h-5 text-slate-400 mr-2 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+          </svg>
+          <span v-if="bggFile">{{ bggFile.name }}</span>
+          <span v-else>Select boardgames_ranks.csv</span>
+          <input type="file" accept=".csv" class="hidden" @change="onBggFileSelected" />
+        </label>
+        <button
+          type="button"
+          data-testid="admin-bgg-import-btn"
+          :disabled="!bggFile || bggImporting"
+          @click="importBgg"
+          class="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-indigo-600 text-white text-sm font-bold shadow-sm hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+        >
+          <svg v-if="bggImporting" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+          </svg>
+          {{ bggImporting ? 'Importing…' : 'Import' }}
+        </button>
+      </div>
+
+      <div v-if="bggImportResult" data-testid="admin-bgg-import-result" class="mt-3 rounded-lg bg-emerald-50 border border-emerald-200 px-4 py-2.5 text-sm text-emerald-800">
+        Imported <span class="font-bold">{{ bggImportResult.imported?.toLocaleString() }}</span> new,
+        updated <span class="font-bold">{{ bggImportResult.updated?.toLocaleString() }}</span>,
+        skipped <span class="font-bold">{{ bggImportResult.skipped?.toLocaleString() }}</span>
+      </div>
     </div>
 
     <!-- Confirm revoke dialog -->

@@ -382,6 +382,8 @@ public static class AuctionEndpoints
                     .OrderBy(img => img.SortOrder)
                     .Select(img => img.BlobUrl)
                     .ToList(),
+                i.BggId,
+                i.BggImageUrl,
                 i.CreatedAt,
                 i.UpdatedAt
             })
@@ -409,6 +411,8 @@ public static class AuctionEndpoints
                 i.currentBid,
                 i.bidCount,
                 i.imageUrls,
+                i.BggId,
+                i.BggImageUrl,
                 i.CreatedAt,
                 i.UpdatedAt
             }).ToList();
@@ -473,6 +477,8 @@ public static class AuctionEndpoints
                     .OrderBy(img => img.SortOrder)
                     .Select(img => img.BlobUrl)
                     .ToList(),
+                i.BggId,
+                i.BggImageUrl,
                 i.CreatedAt,
                 i.UpdatedAt
             })
@@ -510,6 +516,8 @@ public static class AuctionEndpoints
                 item.currentBid,
                 item.bidCount,
                 item.imageUrls,
+                item.BggId,
+                item.BggImageUrl,
                 item.CreatedAt,
                 item.UpdatedAt
             });
@@ -588,6 +596,17 @@ public static class AuctionEndpoints
             UpdatedAt = DateTime.UtcNow
         };
 
+        if (request.BggId.HasValue)
+        {
+            var boardGame = await db.BoardGames.AsNoTracking()
+                .FirstOrDefaultAsync(bg => bg.BggId == request.BggId.Value, ct);
+            if (boardGame is not null)
+            {
+                item.BggId = boardGame.BggId;
+                item.BggImageUrl = boardGame.ImageUrl;
+            }
+        }
+
         db.AuctionItems.Add(item);
         await db.SaveChangesAsync(ct);
 
@@ -661,6 +680,25 @@ public static class AuctionEndpoints
         item.StartingBid = request.StartingBid;
         item.BuyoutPrice = request.BuyoutPrice;
         item.UpdatedAt = DateTime.UtcNow;
+
+        if (request.BggId != item.BggId)
+        {
+            if (request.BggId.HasValue)
+            {
+                var boardGame = await db.BoardGames.AsNoTracking()
+                    .FirstOrDefaultAsync(bg => bg.BggId == request.BggId.Value, ct);
+                if (boardGame is not null)
+                {
+                    item.BggId = boardGame.BggId;
+                    item.BggImageUrl = boardGame.ImageUrl;
+                }
+            }
+            else
+            {
+                item.BggId = null;
+                item.BggImageUrl = null;
+            }
+        }
 
         await db.SaveChangesAsync(ct);
         await realtime.AuctionItemUpdatedAsync(eventId, itemId, ct);
@@ -1232,13 +1270,15 @@ public record CreateAuctionItemRequest(
     string Name,
     string? Description,
     decimal StartingBid,
-    decimal? BuyoutPrice);
+    decimal? BuyoutPrice,
+    int? BggId = null);
 
 public record UpdateAuctionItemRequest(
     string Name,
     string? Description,
     decimal StartingBid,
-    decimal? BuyoutPrice);
+    decimal? BuyoutPrice,
+    int? BggId = null);
 
 public record PlaceBidRequest(
     decimal Amount,

@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using Thuddle.Api.Data;
@@ -11,9 +12,11 @@ using Thuddle.Api.Data;
 namespace Thuddle.Api.Migrations
 {
     [DbContext(typeof(ThuddleDbContext))]
-    partial class ThuddleDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260419211122_AddBoardGames")]
+    partial class AddBoardGames
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -189,22 +192,10 @@ namespace Thuddle.Api.Migrations
                     b.Property<int>("BggId")
                         .HasColumnType("integer");
 
-                    b.Property<int?>("AbstractsRank")
-                        .HasColumnType("integer");
-
                     b.Property<decimal?>("AverageRating")
                         .HasColumnType("numeric");
 
                     b.Property<int?>("BggRank")
-                        .HasColumnType("integer");
-
-                    b.Property<int?>("CgsRank")
-                        .HasColumnType("integer");
-
-                    b.Property<int?>("ChildrensGamesRank")
-                        .HasColumnType("integer");
-
-                    b.Property<int?>("FamilyGamesRank")
                         .HasColumnType("integer");
 
                     b.Property<string>("ImageUrl")
@@ -223,22 +214,10 @@ namespace Thuddle.Api.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
-                    b.Property<int?>("PartyGamesRank")
-                        .HasColumnType("integer");
-
-                    b.Property<int?>("StrategyGamesRank")
-                        .HasColumnType("integer");
-
-                    b.Property<int?>("ThematicRank")
-                        .HasColumnType("integer");
-
                     b.Property<string>("ThumbnailUrl")
                         .HasColumnType("text");
 
                     b.Property<int>("UsersRated")
-                        .HasColumnType("integer");
-
-                    b.Property<int?>("WarGamesRank")
                         .HasColumnType("integer");
 
                     b.Property<int?>("YearPublished")

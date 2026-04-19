@@ -9,7 +9,7 @@ const props = defineProps({
   eventId: { type: String, required: true }
 })
 
-const thumbnail = computed(() => props.item.imageUrls?.[0] || null)
+const thumbnail = computed(() => props.item.imageUrls?.[0] || props.item.bggImageUrl || null)
 const currentBidLabel = computed(() => {
   const amt = props.item.currentBid ?? props.item.startingBid
   return formatCurrency(amt, props.currency)
@@ -63,6 +63,19 @@ const statusBadge = computed(() => {
       <h3 data-testid="auction-item-name" class="text-sm font-bold text-gray-900 line-clamp-2">
         {{ item.name }}
       </h3>
+      <a
+        v-if="item.bggId"
+        :href="`https://boardgamegeek.com/boardgame/${item.bggId}`"
+        target="_blank"
+        rel="noopener"
+        class="mt-1 inline-flex items-center gap-1 text-[10px] font-bold text-orange-600 hover:text-orange-700"
+        @click.stop
+      >
+        <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
+        </svg>
+        View on BGG
+      </a>
       <div class="mt-auto flex items-end justify-between pt-3">
         <div>
           <p class="text-[10px] font-bold uppercase tracking-widest text-gray-400">
