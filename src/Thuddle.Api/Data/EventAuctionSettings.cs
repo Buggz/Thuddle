@@ -11,7 +11,8 @@ public class EventAuctionSettings
     public DateTime? StartsAt { get; set; }
     public DateTime? LatestEndsAt { get; set; }
     public DateTime? SealedEndsAt { get; set; }
-    public TimeSpan VeiledCloseWindow { get; set; }
+    public TimeSpan? VeiledCloseWindow { get; set; }
+    public TimeSpan? BidTimeExtension { get; set; }
     public AuctionSubmissionMode SubmissionMode { get; set; }
     public ModerationPolicy ItemModerationPolicy { get; set; }
     public decimal MinBidIncrement { get; set; }
@@ -25,7 +26,9 @@ public class EventAuctionSettings
     /// <summary>
     /// Computed: LatestEndsAt minus VeiledCloseWindow. Not stored.
     /// </summary>
-    public DateTime? EarliestEndsAt => LatestEndsAt.HasValue ? LatestEndsAt.Value - VeiledCloseWindow : null;
+    public DateTime? EarliestEndsAt => LatestEndsAt.HasValue && VeiledCloseWindow.HasValue
+        ? LatestEndsAt.Value - VeiledCloseWindow.Value
+        : LatestEndsAt;
 
     public Event Event { get; set; } = null!;
 }

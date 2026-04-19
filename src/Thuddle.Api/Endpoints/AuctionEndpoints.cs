@@ -90,12 +90,15 @@ public static class AuctionEndpoints
             earliestEndsAt = settings.EarliestEndsAt,
             // SealedEndsAt only visible to admins after ended
             sealedEndsAt = isAdmin && settings.Status == AuctionStatus.Ended ? settings.SealedEndsAt : null,
-            veiledCloseWindow = settings.VeiledCloseWindow.TotalSeconds,
+            veiledCloseWindow = settings.VeiledCloseWindow?.TotalSeconds,
+            bidTimeExtension = settings.BidTimeExtension?.TotalSeconds,
             submissionMode = settings.SubmissionMode.ToString(),
             itemModerationPolicy = settings.ItemModerationPolicy.ToString(),
             settings.MinBidIncrement,
             settings.AllowBuyout,
             settings.AnonymousBidHistory,
+            eventStart = evt.Start,
+            eventEnd = evt.End,
             currency = evt.Currency,
             serverTime = DateTime.UtcNow
         });
@@ -121,6 +124,14 @@ public static class AuctionEndpoints
 
         if (ValidationError(await validator.ValidateAsync(request, ct)) is { } validationError)
             return validationError;
+
+        var evt = await db.Events.AsNoTracking().FirstOrDefaultAsync(e => e.Id == eventId, ct);
+        if (evt is null) return Results.NotFound(new { error = "Event not found." });
+
+        if (request.StartsAt.HasValue && request.StartsAt.Value < evt.Start)
+            return Results.BadRequest(new { error = "Auction start cannot be before event start." });
+        if (request.LatestEndsAt.HasValue && request.LatestEndsAt.Value > evt.End)
+            return Results.BadRequest(new { error = "Auction end cannot be after event end." });
 
         var existing = await db.EventAuctionSettings.AsTracking()
             .FirstOrDefaultAsync(s => s.EventId == eventId, ct);
@@ -154,6 +165,7 @@ public static class AuctionEndpoints
         existing.StartsAt = request.StartsAt;
         existing.LatestEndsAt = request.LatestEndsAt;
         existing.VeiledCloseWindow = request.VeiledCloseWindow;
+        existing.BidTimeExtension = request.BidTimeExtension;
         existing.SubmissionMode = request.SubmissionMode;
         existing.ItemModerationPolicy = request.ItemModerationPolicy;
         existing.MinBidIncrement = request.MinBidIncrement;
@@ -1152,7 +1164,8 @@ public record UpdateAuctionSettingsRequest(
     bool Enabled,
     DateTime? StartsAt,
     DateTime? LatestEndsAt,
-    TimeSpan VeiledCloseWindow,
+    TimeSpan? VeiledCloseWindow,
+    TimeSpan? BidTimeExtension,
     AuctionSubmissionMode SubmissionMode,
     ModerationPolicy ItemModerationPolicy,
     decimal MinBidIncrement,
