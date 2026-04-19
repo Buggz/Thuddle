@@ -139,14 +139,7 @@ public static class AuctionEndpoints
 
         if (existing is not null && existing.Status is AuctionStatus.Live or AuctionStatus.Ended)
         {
-            // Only AnonymousBidders, AnonymousSubmitters, and ItemModerationPolicy may change while live/ended
-            existing.AnonymousBidders = request.AnonymousBidders;
-            existing.AnonymousSubmitters = request.AnonymousSubmitters;
-            existing.ItemModerationPolicy = request.ItemModerationPolicy;
-            existing.UpdatedAt = DateTime.UtcNow;
-            await db.SaveChangesAsync(ct);
-            await realtime.AuctionSettingsChangedAsync(eventId, ct);
-            return Results.Ok(new { updated = true, locked = true, status = existing.Status.ToString() });
+            return Results.Conflict(new { error = "Settings are locked while the auction is live or ended. Only the submitter list can be changed." });
         }
 
         var now = DateTime.UtcNow;

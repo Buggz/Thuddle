@@ -319,9 +319,10 @@ onMounted(async () => {
             v-model="form.enabled"
             type="checkbox"
             data-testid="auction-settings-enabled"
-            class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+            :disabled="!editableField"
+            class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
           />
-          <label class="text-sm font-bold text-gray-700">Auction enabled</label>
+          <label class="text-sm font-bold" :class="editableField ? 'text-gray-700' : 'text-gray-400'">Auction enabled</label>
         </div>
         <div
           v-if="isLive || isEnded"
@@ -407,7 +408,7 @@ onMounted(async () => {
         <div v-if="activeTab === 'schedule'" role="tabpanel" class="p-6 space-y-5">
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">Starts at</label>
+              <label class="block text-sm font-medium mb-1" :class="editableField ? 'text-gray-700' : 'text-gray-400'">Starts at</label>
               <input
                 v-model="form.startsAt"
                 data-testid="auction-settings-starts-at"
@@ -415,14 +416,14 @@ onMounted(async () => {
                 :disabled="!editableField"
                 :min="eventStartLocal"
                 :max="eventEndLocal"
-                class="w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500"
+                class="w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 disabled:bg-gray-50 disabled:text-gray-400 disabled:cursor-not-allowed"
                 :class="fieldErrors.startsAt ? 'border-red-400' : 'border-gray-300 focus:border-indigo-500'"
               />
               <p v-if="fieldErrors.startsAt" class="mt-1 text-xs text-red-600">{{ fieldErrors.startsAt }}</p>
               <p v-else class="mt-1 text-[11px] text-gray-400">When bidding opens. Must fall within the event's timeframe.</p>
             </div>
             <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">Latest end</label>
+              <label class="block text-sm font-medium mb-1" :class="editableField ? 'text-gray-700' : 'text-gray-400'">Latest end</label>
               <input
                 v-model="form.latestEndsAt"
                 data-testid="auction-settings-latest-ends-at"
@@ -430,7 +431,7 @@ onMounted(async () => {
                 :disabled="!editableField"
                 :min="eventStartLocal"
                 :max="eventEndLocal"
-                class="w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500"
+                class="w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 disabled:bg-gray-50 disabled:text-gray-400 disabled:cursor-not-allowed"
                 :class="fieldErrors.latestEndsAt ? 'border-red-400' : 'border-gray-300 focus:border-indigo-500'"
               />
               <p v-if="fieldErrors.latestEndsAt" class="mt-1 text-xs text-red-600">{{ fieldErrors.latestEndsAt }}</p>
@@ -452,9 +453,9 @@ onMounted(async () => {
                   data-testid="auction-veiled-close-toggle"
                   type="checkbox"
                   :disabled="!editableField"
-                  class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                  class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
                 />
-                <span class="text-sm font-medium text-gray-700">Enable veiled close</span>
+                <span class="text-sm font-medium" :class="editableField ? 'text-gray-700' : 'text-gray-400'">Enable veiled close</span>
               </label>
               <p class="text-[11px] text-gray-400 ml-6">The auction ends at a random time within this window before the deadline, so bidders can't time last-second bids.</p>
               <div v-if="form.veiledCloseEnabled" class="ml-6 flex items-start gap-2">
@@ -464,14 +465,14 @@ onMounted(async () => {
                   type="number"
                   min="1"
                   :disabled="!editableField"
-                  class="w-24 rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500"
+                  class="w-24 rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 disabled:bg-gray-50 disabled:text-gray-400 disabled:cursor-not-allowed"
                   :class="fieldErrors.veiledClose ? 'border-red-400' : 'border-gray-300 focus:border-indigo-500'"
                 />
                 <select
                   v-model="form.veiledCloseUnit"
                   data-testid="auction-veiled-close-unit"
                   :disabled="!editableField"
-                  class="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500"
+                  class="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500 disabled:bg-gray-50 disabled:text-gray-400 disabled:cursor-not-allowed"
                 >
                   <option value="seconds">seconds</option>
                   <option value="minutes">minutes</option>
@@ -489,9 +490,9 @@ onMounted(async () => {
                   data-testid="auction-bid-extension-toggle"
                   type="checkbox"
                   :disabled="!editableField"
-                  class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                  class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
                 />
-                <span class="text-sm font-medium text-gray-700">Enable bid time extension</span>
+                <span class="text-sm font-medium" :class="editableField ? 'text-gray-700' : 'text-gray-400'">Enable bid time extension</span>
               </label>
               <p class="text-[11px] text-gray-400 ml-6">When a bid is placed near the end of an item's deadline, extra time is added so others can respond.</p>
               <div v-if="form.bidTimeExtensionEnabled" class="ml-6 flex items-start gap-2">
@@ -501,14 +502,14 @@ onMounted(async () => {
                   type="number"
                   min="1"
                   :disabled="!editableField"
-                  class="w-24 rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500"
+                  class="w-24 rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 disabled:bg-gray-50 disabled:text-gray-400 disabled:cursor-not-allowed"
                   :class="fieldErrors.bidTimeExtension ? 'border-red-400' : 'border-gray-300 focus:border-indigo-500'"
                 />
                 <select
                   v-model="form.bidTimeExtensionUnit"
                   data-testid="auction-bid-extension-unit"
                   :disabled="!editableField"
-                  class="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500"
+                  class="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500 disabled:bg-gray-50 disabled:text-gray-400 disabled:cursor-not-allowed"
                 >
                   <option value="seconds">seconds</option>
                   <option value="minutes">minutes</option>
@@ -540,12 +541,12 @@ onMounted(async () => {
           <!-- Submissions -->
           <div class="flex flex-col sm:flex-row sm:gap-6 p-6">
             <div class="sm:w-1/2">
-              <label class="block text-sm font-semibold text-gray-900 mb-1.5">Submissions</label>
+              <label class="block text-sm font-semibold mb-1.5" :class="editableField ? 'text-gray-900' : 'text-gray-400'">Submissions</label>
               <select
                 v-model="form.submissionMode"
                 data-testid="auction-settings-submission-mode"
                 :disabled="!editableField"
-                class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500"
+                class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500 disabled:bg-gray-50 disabled:text-gray-400 disabled:cursor-not-allowed"
               >
                 <option value="AdminsOnly">Admins only</option>
                 <option value="SelectedAttendees">Selected attendees</option>
@@ -568,11 +569,12 @@ onMounted(async () => {
           <!-- Item moderation -->
           <div class="flex flex-col sm:flex-row sm:gap-6 p-6">
             <div class="sm:w-1/2">
-              <label class="block text-sm font-semibold text-gray-900 mb-1.5">Item moderation</label>
+              <label class="block text-sm font-semibold mb-1.5" :class="editableField ? 'text-gray-900' : 'text-gray-400'">Item moderation</label>
               <select
                 v-model="form.itemModerationPolicy"
                 data-testid="auction-settings-moderation-policy"
-                class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500"
+                :disabled="!editableField"
+                class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500 disabled:bg-gray-50 disabled:text-gray-400 disabled:cursor-not-allowed"
               >
                 <option value="RequireApproval">Require admin approval</option>
                 <option value="AutoApprove">Auto-approve</option>
@@ -586,7 +588,7 @@ onMounted(async () => {
           <!-- Minimum bid increment -->
           <div class="flex flex-col sm:flex-row sm:gap-6 p-6">
             <div class="sm:w-1/2">
-              <label class="block text-sm font-semibold text-gray-900 mb-1.5">Minimum bid increment</label>
+              <label class="block text-sm font-semibold mb-1.5" :class="editableField ? 'text-gray-900' : 'text-gray-400'">Minimum bid increment</label>
               <div class="flex items-stretch">
                 <input
                   v-model="form.minBidIncrement"
@@ -594,7 +596,7 @@ onMounted(async () => {
                   type="text"
                   inputmode="decimal"
                   :disabled="!editableField"
-                  class="w-full rounded-l-lg border border-r-0 px-3 py-2.5 text-sm focus:ring-2 focus:ring-indigo-500"
+                  class="w-full rounded-l-lg border border-r-0 px-3 py-2.5 text-sm focus:ring-2 focus:ring-indigo-500 disabled:bg-gray-50 disabled:text-gray-400 disabled:cursor-not-allowed"
                   :class="fieldErrors.minBidIncrement ? 'border-red-400' : 'border-gray-300 focus:border-indigo-500'"
                 />
                 <span class="inline-flex items-center rounded-r-lg border border-l-0 border-gray-300 bg-gray-50 px-3 text-sm text-gray-500">
@@ -617,9 +619,9 @@ onMounted(async () => {
                   data-testid="auction-settings-allow-buyout"
                   type="checkbox"
                   :disabled="!editableField"
-                  class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                  class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
                 />
-                <span class="text-sm font-semibold text-gray-900">Allow buyout</span>
+                <span class="text-sm font-semibold" :class="editableField ? 'text-gray-900' : 'text-gray-400'">Allow buyout</span>
               </label>
             </div>
             <div class="mt-2 ml-9 sm:ml-0 sm:mt-0 sm:w-1/2 sm:border-l sm:border-gray-100 sm:pl-6 flex items-center">
@@ -635,9 +637,10 @@ onMounted(async () => {
                   v-model="form.anonymousBidders"
                   data-testid="auction-settings-anonymous-bidders"
                   type="checkbox"
-                  class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                  :disabled="!editableField"
+                  class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
                 />
-                <span class="text-sm font-semibold text-gray-900">Anonymous bidders</span>
+                <span class="text-sm font-semibold" :class="editableField ? 'text-gray-900' : 'text-gray-400'">Anonymous bidders</span>
               </label>
             </div>
             <div class="mt-2 ml-9 sm:ml-0 sm:mt-0 sm:w-1/2 sm:border-l sm:border-gray-100 sm:pl-6 flex items-center">
@@ -653,9 +656,10 @@ onMounted(async () => {
                   v-model="form.anonymousSubmitters"
                   data-testid="auction-settings-anonymous-submitters"
                   type="checkbox"
-                  class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                  :disabled="!editableField"
+                  class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
                 />
-                <span class="text-sm font-semibold text-gray-900">Anonymous submitters</span>
+                <span class="text-sm font-semibold" :class="editableField ? 'text-gray-900' : 'text-gray-400'">Anonymous submitters</span>
               </label>
             </div>
             <div class="mt-2 ml-9 sm:ml-0 sm:mt-0 sm:w-1/2 sm:border-l sm:border-gray-100 sm:pl-6 flex items-center">
@@ -731,13 +735,13 @@ onMounted(async () => {
           <button
             type="submit"
             data-testid="auction-settings-save-btn"
-            :disabled="saving || !isValid"
-            class="rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-indigo-700 disabled:opacity-50"
+            :disabled="saving || !isValid || !editableField"
+            class="rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {{ saving ? 'Saving…' : 'Save settings' }}
           </button>
           <p v-if="isLive" class="text-xs text-amber-700 font-semibold">
-            Auction is live. Only submitters can be changed.
+            Settings are locked while the auction is live.
           </p>
           <p v-if="isEnded" class="text-xs text-gray-500 font-semibold">
             Auction has ended.

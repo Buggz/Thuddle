@@ -192,7 +192,7 @@ test.describe('Auction settings', () => {
   test.describe('fields lock when live', () => {
     test.use({ storageState: STORAGE_STATE.admin })
 
-    test('live auction locks schedule and core rules but allows privacy changes', async ({
+    test('live auction locks all fields and disables save', async ({
       page,
       baseURL,
       browser,
@@ -222,30 +222,22 @@ test.describe('Auction settings', () => {
       // Locked banner visible
       await expect(page.getByTestId('auction-settings-locked-banner')).toBeVisible()
 
-      // Schedule tab: inputs disabled
+      // Schedule tab: all inputs disabled
+      await expect(page.getByTestId('auction-settings-enabled')).toBeDisabled()
       await expect(page.getByTestId('auction-settings-starts-at')).toBeDisabled()
       await expect(page.getByTestId('auction-settings-latest-ends-at')).toBeDisabled()
 
-      // Rules tab: core fields disabled
+      // Rules tab: ALL fields disabled
       await page.getByTestId('auction-settings-tab-rules').click()
+      await expect(page.getByTestId('auction-settings-submission-mode')).toBeDisabled()
+      await expect(page.getByTestId('auction-settings-moderation-policy')).toBeDisabled()
       await expect(page.getByTestId('auction-settings-min-increment')).toBeDisabled()
       await expect(page.getByTestId('auction-settings-allow-buyout')).toBeDisabled()
+      await expect(page.getByTestId('auction-settings-anonymous-bidders')).toBeDisabled()
+      await expect(page.getByTestId('auction-settings-anonymous-submitters')).toBeDisabled()
 
-      // Privacy fields remain changeable — toggle them and verify via API
-      await page.getByTestId('auction-settings-anonymous-bidders').check()
-      await page.getByTestId('auction-settings-anonymous-submitters').check()
-      await page.getByTestId('auction-settings-moderation-policy').selectOption('RequireApproval')
-
-      const saveResp = page.waitForResponse(
-        (r) => r.url().includes(`/api/events/${eventId}/auction`) && r.request().method() === 'PUT',
-      )
-      await page.getByTestId('auction-settings-save-btn').click()
-      await saveResp
-
-      const settings = await getAuctionSettingsApi(api, eventId)
-      expect(settings.anonymousBidders).toBe(true)
-      expect(settings.anonymousSubmitters).toBe(true)
-      expect(settings.itemModerationPolicy).toBe('RequireApproval')
+      // Save button disabled
+      await expect(page.getByTestId('auction-settings-save-btn')).toBeDisabled()
 
       await api.close()
     })
