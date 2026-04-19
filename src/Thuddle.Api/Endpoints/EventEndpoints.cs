@@ -171,6 +171,7 @@ public static class EventEndpoints
                 e.JoinMode,
                 e.Capacity,
                 e.Cost,
+                e.Currency,
                 ParticipantCount = db.EventParticipants.Count(ep => ep.EventId == e.Id),
                 PostCount = db.DiscussionPosts.Count(dp => dp.EventId == e.Id && dp.IsApproved),
                 LatestPostAt = db.DiscussionPosts
@@ -213,6 +214,7 @@ public static class EventEndpoints
                 e.JoinMode,
                 e.Capacity,
                 e.Cost,
+                e.Currency,
                 e.ParticipantCount,
                 e.PostCount,
                 HasUnreadDiscussion = !isAnonymous && e.PostCount > 0
@@ -258,6 +260,7 @@ public static class EventEndpoints
                 e.JoinMode,
                 e.Capacity,
                 e.Cost,
+                e.Currency,
                 OwnerName = e.Owner.DisplayName ?? e.Owner.Email
             })
             .FirstOrDefaultAsync(ct);
@@ -332,6 +335,7 @@ public static class EventEndpoints
             evt.JoinMode,
             evt.Capacity,
             evt.Cost,
+            evt.Currency,
             ParticipantCount = participantCount,
             PostCount = postCount,
             PendingPostCount = pendingPostCount,
