@@ -16,13 +16,20 @@ const props = defineProps({
   earliestEndsAt: { type: String, default: null },
   veiledCloseWindowSeconds: { type: Number, default: 0 },
   serverTime: { type: String, default: null },
-  status: { type: String, default: 'Live' }
+  status: { type: String, default: 'Live' },
+  showTotalDuration: { type: Boolean, default: false },
+  bidTimeExtensionSeconds: { type: Number, default: 0 }
 })
 
-const clock = useServerClock(props.serverTime)
+const EXTENSION_PCT = 8
+
+const hasExtension = computed(() => props.bidTimeExtensionSeconds > 0)
+const barScale = computed(() => hasExtension.value ? (100 - EXTENSION_PCT) / 100 : 1)
+
+const clock = props.showTotalDuration ? null : useServerClock(props.serverTime)
 
 watch(() => props.serverTime, (val) => {
-  if (val) clock.sync(val)
+  if (val && clock) clock.sync(val)
 })
 
 const startMs = computed(() => Date.parse(props.startsAt))
@@ -36,6 +43,7 @@ const veilMs = computed(() => Math.max(latestMs.value - earliestMs.value, 0))
 
 // `tick` is read so the computed re-runs every animation frame.
 const nowMs = computed(() => {
+  if (!clock) return 0
   // eslint-disable-next-line no-unused-expressions
   clock.tick.value
   return clock.now()
@@ -43,11 +51,22 @@ const nowMs = computed(() => {
 
 const certainPct = computed(() => {
   const certain = Math.max(0, earliestMs.value - startMs.value)
-  return Math.min(100, (certain / totalMs.value) * 100)
+  const rawCertain = Math.min(100, (certain / totalMs.value) * 100)
+  if (veilMs.value > 0) {
+    const rawVeil = Math.min(100 - rawCertain, (veilMs.value / totalMs.value) * 100)
+    const MIN_VEIL_PCT = 5
+    if (rawVeil < MIN_VEIL_PCT) {
+      return Math.max(0, 100 - MIN_VEIL_PCT)
+    }
+  }
+  return rawCertain
 })
 
-const veilPct = computed(() => {
-  return Math.min(100 - certainPct.value, (veilMs.value / totalMs.value) * 100)
+const effectiveVeilPct = computed(() => {
+  if (veilMs.value <= 0) return 0
+  const rawVeil = Math.min(100, (veilMs.value / totalMs.value) * 100)
+  const MIN_VEIL_PCT = 5
+  return Math.max(rawVeil, MIN_VEIL_PCT)
 })
 
 const markerPct = computed(() => {
@@ -65,14 +84,21 @@ const ended = computed(() => nowMs.value > latestMs.value)
 function fmtDuration(ms) {
   if (ms <= 0) return '00:00:00'
   const totalSec = Math.floor(ms / 1000)
+  const pad = (n) => String(n).padStart(2, '0')
+  if (totalSec >= 86400) {
+    const d = Math.floor(totalSec / 86400)
+    const h = Math.floor((totalSec % 86400) / 3600)
+    const m = Math.floor((totalSec % 3600) / 60)
+    return `${d}d ${pad(h)}h ${pad(m)}m`
+  }
   const h = Math.floor(totalSec / 3600)
   const m = Math.floor((totalSec % 3600) / 60)
   const s = totalSec % 60
-  const pad = (n) => String(n).padStart(2, '0')
   return `${pad(h)}:${pad(m)}:${pad(s)}`
 }
 
 const labelText = computed(() => {
+  if (props.showTotalDuration) return `Total: ${fmtDuration(totalMs.value)}`
   if (props.status === 'Ended' || ended.value) return 'Auction has ended'
   if (props.status === 'Scheduled') {
     const toStart = startMs.value - nowMs.value
@@ -95,48 +121,65 @@ const labelText = computed(() => {
     class="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm"
     :data-veil-active="veilActive ? 'true' : 'false'"
   >
-    <div class="relative h-3 w-full overflow-hidden rounded-full bg-gray-100">
+    <div class="relative h-10 w-full overflow-hidden rounded-full bg-gray-100">
       <!-- Certain segment -->
       <div
         class="absolute inset-y-0 left-0 bg-emerald-500/80 transition-[width] duration-500"
-        :style="{ width: certainPct + '%' }"
+        :style="{ width: (certainPct * barScale) + '%' }"
       />
       <!-- Veil segment -->
       <div
         v-if="veilMs > 0"
         class="absolute inset-y-0 transition-[width] duration-500"
         :class="veilActive ? 'veil-active bg-rose-500/80' : 'bg-amber-400/70'"
-        :style="{ left: certainPct + '%', width: veilPct + '%' }"
+        :style="{ left: (certainPct * barScale) + '%', width: (effectiveVeilPct * barScale) + '%' }"
       />
+      <div
+        v-if="hasExtension"
+        class="extension-stripes absolute inset-y-0 flex items-center justify-center transition-[left] duration-500"
+        :style="{ left: (100 - EXTENSION_PCT) + '%', width: EXTENSION_PCT + '%' }"
+      >
+        <span class="text-sm font-extrabold text-gray-500 drop-shadow-sm">?</span>
+      </div>
       <!-- Now marker -->
       <div
-        class="absolute -top-1 h-5 w-0.5 rounded-full bg-gray-900 shadow-[0_0_0_2px_rgba(255,255,255,0.85)] transition-[left] duration-300"
-        :style="{ left: `calc(${markerPct}% - 1px)` }"
+        v-if="!showTotalDuration"
+        class="absolute -top-1 -bottom-1 w-0.5 rounded-full bg-gray-900 shadow-[0_0_0_2px_rgba(255,255,255,0.85)] transition-[left] duration-300"
+        :style="{ left: `calc(${markerPct * barScale}% - 1px)` }"
         aria-hidden="true"
       />
-    </div>
-    <div class="mt-3 flex items-baseline justify-between gap-3">
       <p
         data-testid="auction-time-remaining-text"
         aria-live="polite"
-        class="text-sm font-bold text-gray-900 tabular-nums"
-        :class="veilActive ? 'text-rose-700' : ''"
+        class="timeline-label absolute inset-0 flex items-center justify-center text-sm font-bold text-white tabular-nums"
       >
         {{ labelText }}
       </p>
-      <p v-if="veilMs > 0" class="text-[11px] font-bold uppercase tracking-widest text-gray-400">
-        Veiled close
-      </p>
     </div>
+    <p v-if="veilMs > 0" class="mt-2 text-[11px] font-bold uppercase tracking-widest text-gray-400">
+      Veiled close
+    </p>
   </div>
 </template>
 
 <style scoped>
+.timeline-label {
+  text-shadow: 0 1px 4px rgba(0,0,0,0.6), 0 0 10px rgba(0,0,0,0.3);
+}
 .veil-active {
   animation: veil-pulse 1.4s ease-in-out infinite;
 }
 @keyframes veil-pulse {
   0%, 100% { opacity: 0.85; box-shadow: 0 0 0 0 rgba(244, 63, 94, 0.45); }
   50% { opacity: 1; box-shadow: 0 0 0 4px rgba(244, 63, 94, 0); }
+}
+.extension-stripes {
+  background: repeating-linear-gradient(
+    -45deg,
+    rgb(209 213 219 / 0.5),
+    rgb(209 213 219 / 0.5) 3px,
+    rgb(229 231 235 / 0.5) 3px,
+    rgb(229 231 235 / 0.5) 6px
+  );
 }
 </style>

@@ -4,6 +4,7 @@ import { useRoute, RouterLink } from 'vue-router'
 import { storeToRefs } from 'pinia'
 import { useAuctionStore } from '@/features/auctions/stores/auction'
 import { parseDecimalInput } from '@/shared/formatCurrency'
+import AuctionTimeline from '@/features/auctions/components/AuctionTimeline.vue'
 
 const route = useRoute()
 const auctionStore = useAuctionStore()
@@ -261,11 +262,29 @@ onMounted(async () => {
         />
         <label class="text-sm font-bold text-gray-700">Auction enabled</label>
       </div>
-      <p class="text-xs text-gray-400 mt-1">Fields marked with <span class="text-amber-600">🔒</span> are locked once the auction is live.</p>
+      <div
+        v-if="isLive || isEnded"
+        data-testid="auction-settings-locked-banner"
+        role="status"
+        class="rounded-xl p-4 flex items-start gap-3"
+        :class="isLive ? 'bg-amber-50 border border-amber-200' : 'bg-gray-50 border border-gray-200'"
+      >
+        <svg class="w-6 h-6 shrink-0 mt-0.5" :class="isLive ? 'text-amber-600' : 'text-gray-400'" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" />
+        </svg>
+        <div>
+          <p class="text-sm font-bold" :class="isLive ? 'text-amber-800' : 'text-gray-700'">
+            {{ isLive ? 'Settings locked' : 'Auction ended' }}
+          </p>
+          <p class="text-sm mt-0.5" :class="isLive ? 'text-amber-700' : 'text-gray-500'">
+            {{ isLive ? 'All settings are locked while the auction is live. Changes could only be made before the start time.' : 'The auction has ended. Settings can no longer be changed.' }}
+          </p>
+        </div>
+      </div>
 
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">Starts at<span class="text-amber-600 text-xs ml-1" title="Locked when live">🔒</span></label>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Starts at</label>
           <input
             v-model="form.startsAt"
             data-testid="auction-settings-starts-at"
@@ -278,7 +297,7 @@ onMounted(async () => {
           <p v-else class="mt-1 text-[11px] text-gray-400">When bidding opens. Must fall within the event's timeframe.</p>
         </div>
         <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">Latest end<span class="text-amber-600 text-xs ml-1" title="Locked when live">🔒</span></label>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Latest end</label>
           <input
             v-model="form.latestEndsAt"
             data-testid="auction-settings-latest-ends-at"
@@ -292,10 +311,20 @@ onMounted(async () => {
         </div>
       </div>
 
+      <AuctionTimeline
+        v-if="form.startsAt && form.latestEndsAt && durationSec > 0"
+        :starts-at="fromLocalInput(form.startsAt)"
+        :latest-ends-at="fromLocalInput(form.latestEndsAt)"
+        :veiled-close-window-seconds="form.veiledCloseEnabled ? veiledCloseSeconds : 0"
+        :status="form.status"
+        :show-total-duration="true"
+        :bid-time-extension-seconds="form.bidTimeExtensionEnabled ? bidTimeExtensionSeconds : 0"
+        data-testid="auction-settings-duration-timeline"
+      />
+
       <div data-testid="auction-anti-sniping-section" class="space-y-4 rounded-xl border border-amber-200 bg-amber-50/50 p-5">
         <div class="flex items-center gap-2">
           <h3 class="text-sm font-bold text-gray-800">Anti-sniping</h3>
-          <span v-if="!editableField" class="text-xs text-amber-600" title="Locked while auction is live">🔒</span>
         </div>
         <p class="text-xs text-gray-500 -mt-2">Prevent last-second bidding strategies that disadvantage other participants.</p>
 
@@ -376,7 +405,7 @@ onMounted(async () => {
 
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">Submissions<span class="text-amber-600 text-xs ml-1" title="Locked when live">🔒</span></label>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Submissions</label>
           <select
             v-model="form.submissionMode"
             data-testid="auction-settings-submission-mode"
@@ -405,7 +434,7 @@ onMounted(async () => {
 
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">Minimum bid increment<span class="text-amber-600 text-xs ml-1" title="Locked when live">🔒</span></label>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Minimum bid increment</label>
           <div class="flex items-stretch">
             <input
               v-model="form.minBidIncrement"
@@ -434,7 +463,7 @@ onMounted(async () => {
               type="checkbox"
               class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
             />
-            <span class="text-sm text-gray-700">Allow buyout<span class="text-amber-600 text-xs ml-1" title="Locked when live">🔒</span></span>
+            <span class="text-sm text-gray-700">Allow buyout</span>
           </label>
           <p class="ml-9 text-[11px] text-gray-400">Allow item submitters to set an optional buyout price. Bidders can then instantly win the item by paying that price. Not every item needs to have one.</p>
         </div>
