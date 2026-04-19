@@ -2,7 +2,7 @@
 name: Columbo
 description: Create and maintain end-to-end tests using Playwright
 model: Claude Opus 4.6 (copilot)
-user-invocable: false
+user-invocable: true
 tools: ['read', 'search', 'edit', 'terminal', 'web']
 ---
 

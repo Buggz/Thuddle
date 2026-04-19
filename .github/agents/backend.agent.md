@@ -2,7 +2,7 @@
 name: House
 description: Implement backend features in the .NET API
 model: Claude Opus 4.6 (copilot)
-user-invocable: false
+user-invocable: true
 tools: ['read', 'search', 'edit', 'terminal', 'web']
 ---
 
