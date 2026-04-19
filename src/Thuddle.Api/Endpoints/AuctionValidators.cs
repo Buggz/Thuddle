@@ -9,13 +9,22 @@ public sealed class UpdateAuctionSettingsRequestValidator : AbstractValidator<Up
         RuleFor(x => x.StartsAt).NotNull().WithMessage("StartsAt is required.");
         RuleFor(x => x.LatestEndsAt).NotNull().WithMessage("LatestEndsAt is required.");
         RuleFor(x => x.LatestEndsAt).GreaterThan(x => x.StartsAt).WithMessage("LatestEndsAt must be after StartsAt.");
-        RuleFor(x => x.VeiledCloseWindow).GreaterThanOrEqualTo(TimeSpan.Zero).WithMessage("VeiledCloseWindow must be non-negative.");
+        RuleFor(x => x.VeiledCloseWindow).Must(v => v!.Value > TimeSpan.Zero)
+            .WithMessage("VeiledCloseWindow must be greater than zero when enabled.")
+            .When(x => x.VeiledCloseWindow.HasValue);
         RuleFor(x => x.VeiledCloseWindow).Must((req, vcw) =>
         {
             if (!req.StartsAt.HasValue || !req.LatestEndsAt.HasValue) return true;
             var maxWindow = (req.LatestEndsAt.Value - req.StartsAt.Value) / 2;
-            return vcw <= maxWindow;
-        }).WithMessage("VeiledCloseWindow must be at most half the auction duration.");
+            return vcw!.Value <= maxWindow;
+        }).WithMessage("VeiledCloseWindow must be at most half the auction duration.")
+            .When(x => x.VeiledCloseWindow.HasValue);
+        RuleFor(x => x.BidTimeExtension).Must(v => v!.Value > TimeSpan.Zero)
+            .WithMessage("BidTimeExtension must be greater than zero when enabled.")
+            .When(x => x.BidTimeExtension.HasValue);
+        RuleFor(x => x.BidTimeExtension).Must(v => v!.Value <= TimeSpan.FromMinutes(30))
+            .WithMessage("BidTimeExtension must be at most 30 minutes.")
+            .When(x => x.BidTimeExtension.HasValue);
         RuleFor(x => x.MinBidIncrement).GreaterThan(0).WithMessage("MinBidIncrement must be greater than zero.");
     }
 }

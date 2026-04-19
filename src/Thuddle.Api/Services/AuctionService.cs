@@ -26,15 +26,21 @@ public static class AuctionService
         {
             if (settings.StartsAt.Value >= settings.LatestEndsAt.Value)
                 return "StartsAt must be before LatestEndsAt.";
-
-            var auctionDuration = settings.LatestEndsAt.Value - settings.StartsAt.Value;
-            var maxVeiled = auctionDuration / 2;
-            if (settings.VeiledCloseWindow > maxVeiled)
-                return "VeiledCloseWindow must be at most half the auction duration.";
         }
 
-        if (settings.VeiledCloseWindow < TimeSpan.Zero)
-            return "VeiledCloseWindow must be non-negative.";
+        if (settings.VeiledCloseWindow.HasValue)
+        {
+            if (settings.VeiledCloseWindow.Value < TimeSpan.Zero)
+                return "VeiledCloseWindow must be non-negative.";
+
+            if (settings.StartsAt.HasValue && settings.LatestEndsAt.HasValue)
+            {
+                var auctionDuration = settings.LatestEndsAt.Value - settings.StartsAt.Value;
+                var maxVeiled = auctionDuration / 2;
+                if (settings.VeiledCloseWindow.Value > maxVeiled)
+                    return "VeiledCloseWindow must be at most half the auction duration.";
+            }
+        }
 
         if (settings.MinBidIncrement <= 0)
             return "MinBidIncrement must be greater than zero.";

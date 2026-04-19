@@ -41,8 +41,39 @@ public sealed class AuctionLifecycleWorker(
         var notifications = scope.ServiceProvider.GetRequiredService<NotificationService>();
         var now = DateTime.UtcNow;
 
+        await StartScheduledAuctions(db, realtime, now, ct);
         await FinalizeEndedAuctions(db, realtime, notifications, now, ct);
         await SendEndingSoonNotifications(db, notifications, now, ct);
+    }
+
+    private async Task StartScheduledAuctions(
+        ThuddleDbContext db,
+        IRealtimeNotifier realtime,
+        DateTime now,
+        CancellationToken ct)
+    {
+        var scheduledAuctions = await db.EventAuctionSettings
+            .AsTracking()
+            .Where(a => a.Status == AuctionStatus.Scheduled && a.StartsAt != null && a.StartsAt <= now)
+            .ToListAsync(ct);
+
+        foreach (var auction in scheduledAuctions)
+        {
+            if (auction.EarliestEndsAt is null || auction.LatestEndsAt is null)
+            {
+                logger.LogWarning("Skipping scheduled auction for event {EventId}: EarliestEndsAt or LatestEndsAt is null.", auction.EventId);
+                continue;
+            }
+
+            auction.SealedEndsAt = AuctionService.SealRandomEndsAt(auction.EarliestEndsAt.Value, auction.LatestEndsAt.Value);
+            auction.Status = AuctionStatus.Live;
+            auction.UpdatedAt = now;
+
+            await db.SaveChangesAsync(ct);
+            await realtime.AuctionStatusChangedAsync(auction.EventId, "Live", ct);
+
+            logger.LogInformation("Auto-started scheduled auction for event {EventId}. SealedEndsAt={SealedEndsAt}.", auction.EventId, auction.SealedEndsAt);
+        }
     }
 
     private async Task FinalizeEndedAuctions(

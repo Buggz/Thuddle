@@ -392,8 +392,14 @@ namespace Thuddle.Api.Migrations
                     b.Property<bool>("AllowBuyout")
                         .HasColumnType("boolean");
 
-                    b.Property<bool>("AnonymousBidHistory")
+                    b.Property<bool>("AnonymousBidders")
                         .HasColumnType("boolean");
+
+                    b.Property<bool>("AnonymousSubmitters")
+                        .HasColumnType("boolean");
+
+                    b.Property<TimeSpan?>("BidTimeExtension")
+                        .HasColumnType("interval");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
@@ -431,7 +437,7 @@ namespace Thuddle.Api.Migrations
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<TimeSpan>("VeiledCloseWindow")
+                    b.Property<TimeSpan?>("VeiledCloseWindow")
                         .HasColumnType("interval");
 
                     b.HasKey("EventId");
@@ -621,15 +627,15 @@ namespace Thuddle.Api.Migrations
 
             modelBuilder.Entity("Thuddle.Api.Data.AuctionBid", b =>
                 {
-                    b.HasOne("Thuddle.Api.Data.AuctionItem", "Item")
-                        .WithMany()
-                        .HasForeignKey("ItemId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
                     b.HasOne("Thuddle.Api.Data.User", "Bidder")
                         .WithMany()
                         .HasForeignKey("BidderUserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Thuddle.Api.Data.AuctionItem", "Item")
+                        .WithMany()
+                        .HasForeignKey("ItemId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
