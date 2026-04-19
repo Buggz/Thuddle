@@ -616,6 +616,7 @@ onMounted(async () => {
                   v-model="form.allowBuyout"
                   data-testid="auction-settings-allow-buyout"
                   type="checkbox"
+                  :disabled="!editableField"
                   class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
                 />
                 <span class="text-sm font-semibold text-gray-900">Allow buyout</span>
