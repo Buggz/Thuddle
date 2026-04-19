@@ -23,7 +23,12 @@ const form = ref({
   status: 'Draft',
   startsAt: '',
   latestEndsAt: '',
-  veiledCloseWindowSeconds: 300,
+  veiledCloseEnabled: false,
+  veiledCloseValue: 5,
+  veiledCloseUnit: 'minutes',
+  bidTimeExtensionEnabled: false,
+  bidTimeExtensionValue: 30,
+  bidTimeExtensionUnit: 'seconds',
   submissionMode: 'AllAttendees',
   itemModerationPolicy: 'RequireApproval',
   minBidIncrement: '1',
@@ -64,7 +69,36 @@ function hydrate(s) {
   form.value.status = s.status || 'Draft'
   form.value.startsAt = toLocalInput(s.startsAt)
   form.value.latestEndsAt = toLocalInput(s.latestEndsAt)
-  form.value.veiledCloseWindowSeconds = Number(s.veiledCloseWindow) || 0
+  if (s.veiledCloseWindow != null) {
+    form.value.veiledCloseEnabled = true
+    const sec = Number(s.veiledCloseWindow)
+    if (sec >= 60 && sec % 60 === 0) {
+      form.value.veiledCloseValue = sec / 60
+      form.value.veiledCloseUnit = 'minutes'
+    } else {
+      form.value.veiledCloseValue = sec
+      form.value.veiledCloseUnit = 'seconds'
+    }
+  } else {
+    form.value.veiledCloseEnabled = false
+    form.value.veiledCloseValue = 5
+    form.value.veiledCloseUnit = 'minutes'
+  }
+  if (s.bidTimeExtension != null) {
+    form.value.bidTimeExtensionEnabled = true
+    const sec = Number(s.bidTimeExtension)
+    if (sec >= 60 && sec % 60 === 0) {
+      form.value.bidTimeExtensionValue = sec / 60
+      form.value.bidTimeExtensionUnit = 'minutes'
+    } else {
+      form.value.bidTimeExtensionValue = sec
+      form.value.bidTimeExtensionUnit = 'seconds'
+    }
+  } else {
+    form.value.bidTimeExtensionEnabled = false
+    form.value.bidTimeExtensionValue = 30
+    form.value.bidTimeExtensionUnit = 'seconds'
+  }
   form.value.submissionMode = s.submissionMode || 'AllAttendees'
   form.value.itemModerationPolicy = s.itemModerationPolicy || 'RequireApproval'
   form.value.minBidIncrement = String(s.minBidIncrement ?? '1')
@@ -83,21 +117,43 @@ const isScheduled = computed(() => settings.value?.status === 'Scheduled')
 // Most fields lock once Live; before-Live, everything is editable.
 const editableField = computed(() => !isLive.value && !isEnded.value)
 
+const eventStart = computed(() => settings.value?.eventStart ? new Date(settings.value.eventStart) : null)
+const eventEnd = computed(() => settings.value?.eventEnd ? new Date(settings.value.eventEnd) : null)
+
 const startMs = computed(() => form.value.startsAt ? Date.parse(form.value.startsAt) : 0)
 const endMs = computed(() => form.value.latestEndsAt ? Date.parse(form.value.latestEndsAt) : 0)
 const durationSec = computed(() => Math.max(0, Math.floor((endMs.value - startMs.value) / 1000)))
 const maxVeil = computed(() => Math.floor(durationSec.value / 2))
 
+const veiledCloseSeconds = computed(() =>
+  form.value.veiledCloseValue * (form.value.veiledCloseUnit === 'minutes' ? 60 : 1)
+)
+const bidTimeExtensionSeconds = computed(() =>
+  form.value.bidTimeExtensionValue * (form.value.bidTimeExtensionUnit === 'minutes' ? 60 : 1)
+)
+
 const fieldErrors = computed(() => {
   const errs = {}
   if (!form.value.startsAt) errs.startsAt = 'Required.'
+  else if (eventStart.value && new Date(form.value.startsAt) < eventStart.value) {
+    errs.startsAt = 'Cannot be before event start.'
+  }
   if (!form.value.latestEndsAt) errs.latestEndsAt = 'Required.'
+  else if (eventEnd.value && new Date(form.value.latestEndsAt) > eventEnd.value) {
+    errs.latestEndsAt = 'Cannot be after event end.'
+  }
   if (startMs.value && endMs.value && startMs.value >= endMs.value) {
     errs.latestEndsAt = 'Must be after start.'
   }
-  if (form.value.veiledCloseWindowSeconds < 0) errs.veiledCloseWindowSeconds = 'Must be ≥ 0.'
-  if (form.value.veiledCloseWindowSeconds > maxVeil.value) {
-    errs.veiledCloseWindowSeconds = `Must be ≤ half the duration (${maxVeil.value}s).`
+  if (form.value.veiledCloseEnabled) {
+    if (veiledCloseSeconds.value <= 0) errs.veiledClose = 'Must be greater than 0.'
+    else if (veiledCloseSeconds.value > maxVeil.value) {
+      errs.veiledClose = `Must be ≤ half the duration (${maxVeil.value}s).`
+    }
+  }
+  if (form.value.bidTimeExtensionEnabled) {
+    if (bidTimeExtensionSeconds.value <= 0) errs.bidTimeExtension = 'Must be greater than 0.'
+    else if (bidTimeExtensionSeconds.value > 1800) errs.bidTimeExtension = 'Must be ≤ 30 minutes.'
   }
   const mbi = parseDecimalInput(form.value.minBidIncrement)
   if (mbi === null || mbi <= 0) errs.minBidIncrement = 'Must be > 0.'
@@ -114,10 +170,10 @@ async function save() {
   try {
     await auctionStore.updateSettings(eventId.value, {
       enabled: form.value.enabled,
-      status: STATUS_INT[form.value.status] ?? 0,
       startsAt: fromLocalInput(form.value.startsAt),
       latestEndsAt: fromLocalInput(form.value.latestEndsAt),
-      veiledCloseWindow: secondsToTimeSpan(form.value.veiledCloseWindowSeconds),
+      veiledCloseWindow: form.value.veiledCloseEnabled ? secondsToTimeSpan(veiledCloseSeconds.value) : null,
+      bidTimeExtension: form.value.bidTimeExtensionEnabled ? secondsToTimeSpan(bidTimeExtensionSeconds.value) : null,
       submissionMode: SUB_MODE_INT[form.value.submissionMode] ?? 2,
       itemModerationPolicy: MOD_POLICY_INT[form.value.itemModerationPolicy] ?? 0,
       minBidIncrement: parseDecimalInput(form.value.minBidIncrement),
@@ -202,10 +258,11 @@ onMounted(async () => {
         />
         <label class="text-sm font-bold text-gray-700">Auction enabled</label>
       </div>
+      <p class="text-xs text-gray-400 mt-1">Fields marked with <span class="text-amber-600">🔒</span> are locked once the auction is live.</p>
 
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">Starts at</label>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Starts at<span class="text-amber-600 text-xs ml-1" title="Locked when live">🔒</span></label>
           <input
             v-model="form.startsAt"
             data-testid="auction-settings-starts-at"
@@ -215,43 +272,108 @@ onMounted(async () => {
             :class="fieldErrors.startsAt ? 'border-red-400' : 'border-gray-300 focus:border-indigo-500'"
           />
           <p v-if="fieldErrors.startsAt" class="mt-1 text-xs text-red-600">{{ fieldErrors.startsAt }}</p>
+          <p v-else class="mt-1 text-[11px] text-gray-400">When bidding opens. Must fall within the event's timeframe.</p>
         </div>
         <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">Latest end</label>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Latest end<span class="text-amber-600 text-xs ml-1" title="Locked when live">🔒</span></label>
           <input
             v-model="form.latestEndsAt"
             data-testid="auction-settings-latest-ends-at"
             type="datetime-local"
+            :disabled="!editableField"
             class="w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500"
             :class="fieldErrors.latestEndsAt ? 'border-red-400' : 'border-gray-300 focus:border-indigo-500'"
           />
           <p v-if="fieldErrors.latestEndsAt" class="mt-1 text-xs text-red-600">{{ fieldErrors.latestEndsAt }}</p>
+          <p v-else class="mt-1 text-[11px] text-gray-400">The latest possible time the auction can close. Must fall within the event's timeframe.</p>
         </div>
       </div>
 
-      <div>
-        <label class="block text-sm font-medium text-gray-700 mb-1">
-          Veiled close window
-          <span class="text-gray-400 font-normal">(seconds)</span>
-        </label>
-        <input
-          v-model.number="form.veiledCloseWindowSeconds"
-          data-testid="auction-settings-veil-window"
-          type="number"
-          min="0"
-          :max="maxVeil"
-          class="w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500"
-          :class="fieldErrors.veiledCloseWindowSeconds ? 'border-red-400' : 'border-gray-300 focus:border-indigo-500'"
-        />
-        <p v-if="fieldErrors.veiledCloseWindowSeconds" class="mt-1 text-xs text-red-600">{{ fieldErrors.veiledCloseWindowSeconds }}</p>
-        <p v-else class="mt-1 text-[11px] text-gray-400">
-          Set to 0 for a fixed-time auction. Maximum: half the auction duration ({{ maxVeil }}s).
-        </p>
+      <div data-testid="auction-anti-sniping-section" class="space-y-4 rounded-xl border border-amber-200 bg-amber-50/50 p-5">
+        <div class="flex items-center gap-2">
+          <h3 class="text-sm font-bold text-gray-800">Anti-sniping</h3>
+          <span v-if="!editableField" class="text-xs text-amber-600" title="Locked while auction is live">🔒</span>
+        </div>
+        <p class="text-xs text-gray-500 -mt-2">Prevent last-second bidding strategies that disadvantage other participants.</p>
+
+        <!-- Veiled Close Window -->
+        <div class="space-y-2">
+          <label class="flex items-center gap-2">
+            <input
+              v-model="form.veiledCloseEnabled"
+              data-testid="auction-veiled-close-toggle"
+              type="checkbox"
+              :disabled="!editableField"
+              class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+            />
+            <span class="text-sm font-medium text-gray-700">Enable veiled close</span>
+          </label>
+          <p class="text-[11px] text-gray-400 ml-6">The auction ends at a random time within this window before the deadline, so bidders can't time last-second bids.</p>
+          <div v-if="form.veiledCloseEnabled" class="ml-6 flex items-start gap-2">
+            <input
+              v-model.number="form.veiledCloseValue"
+              data-testid="auction-veiled-close-value"
+              type="number"
+              min="1"
+              :disabled="!editableField"
+              class="w-24 rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500"
+              :class="fieldErrors.veiledClose ? 'border-red-400' : 'border-gray-300 focus:border-indigo-500'"
+            />
+            <select
+              v-model="form.veiledCloseUnit"
+              data-testid="auction-veiled-close-unit"
+              :disabled="!editableField"
+              class="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500"
+            >
+              <option value="seconds">seconds</option>
+              <option value="minutes">minutes</option>
+            </select>
+          </div>
+          <p v-if="fieldErrors.veiledClose" class="ml-6 text-xs text-red-600">{{ fieldErrors.veiledClose }}</p>
+          <p v-else-if="form.veiledCloseEnabled" class="ml-6 text-[11px] text-gray-400">Maximum: half the auction duration.</p>
+        </div>
+
+        <!-- Bid Time Extension -->
+        <div class="space-y-2 border-t border-amber-200 pt-4">
+          <label class="flex items-center gap-2">
+            <input
+              v-model="form.bidTimeExtensionEnabled"
+              data-testid="auction-bid-extension-toggle"
+              type="checkbox"
+              :disabled="!editableField"
+              class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+            />
+            <span class="text-sm font-medium text-gray-700">Enable bid time extension</span>
+          </label>
+          <p class="text-[11px] text-gray-400 ml-6">When a bid is placed near the end of an item's deadline, extra time is added so others can respond.</p>
+          <div v-if="form.bidTimeExtensionEnabled" class="ml-6 flex items-start gap-2">
+            <input
+              v-model.number="form.bidTimeExtensionValue"
+              data-testid="auction-bid-extension-value"
+              type="number"
+              min="1"
+              :disabled="!editableField"
+              class="w-24 rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500"
+              :class="fieldErrors.bidTimeExtension ? 'border-red-400' : 'border-gray-300 focus:border-indigo-500'"
+            />
+            <select
+              v-model="form.bidTimeExtensionUnit"
+              data-testid="auction-bid-extension-unit"
+              :disabled="!editableField"
+              class="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500"
+            >
+              <option value="seconds">seconds</option>
+              <option value="minutes">minutes</option>
+            </select>
+          </div>
+          <p v-if="fieldErrors.bidTimeExtension" class="ml-6 text-xs text-red-600">{{ fieldErrors.bidTimeExtension }}</p>
+          <p v-else-if="form.bidTimeExtensionEnabled" class="ml-6 text-[11px] text-gray-400">Maximum: 30 minutes.</p>
+        </div>
       </div>
 
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">Submissions</label>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Submissions<span class="text-amber-600 text-xs ml-1" title="Locked when live">🔒</span></label>
           <select
             v-model="form.submissionMode"
             data-testid="auction-settings-submission-mode"
@@ -262,6 +384,7 @@ onMounted(async () => {
             <option value="SelectedAttendees">Selected attendees</option>
             <option value="AllAttendees">All attendees</option>
           </select>
+          <p class="mt-1 text-[11px] text-gray-400">Who is allowed to submit items for auction.</p>
         </div>
         <div>
           <label class="block text-sm font-medium text-gray-700 mb-1">Item moderation</label>
@@ -273,12 +396,13 @@ onMounted(async () => {
             <option value="RequireApproval">Require admin approval</option>
             <option value="AutoApprove">Auto-approve</option>
           </select>
+          <p class="mt-1 text-[11px] text-gray-400">Whether submitted items need admin approval before being listed.</p>
         </div>
       </div>
 
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">Minimum bid increment</label>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Minimum bid increment<span class="text-amber-600 text-xs ml-1" title="Locked when live">🔒</span></label>
           <input
             v-model="form.minBidIncrement"
             data-testid="auction-settings-min-increment"
@@ -288,28 +412,35 @@ onMounted(async () => {
             :class="fieldErrors.minBidIncrement ? 'border-red-400' : 'border-gray-300 focus:border-indigo-500'"
           />
           <p v-if="fieldErrors.minBidIncrement" class="mt-1 text-xs text-red-600">{{ fieldErrors.minBidIncrement }}</p>
+          <p v-else class="mt-1 text-[11px] text-gray-400">The minimum amount each new bid must exceed the current highest bid.</p>
         </div>
       </div>
 
-      <div class="space-y-2 pt-2 border-t border-gray-100">
-        <label class="flex items-center gap-3">
-          <input
-            v-model="form.allowBuyout"
-            data-testid="auction-settings-allow-buyout"
-            type="checkbox"
-            class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-          />
-          <span class="text-sm text-gray-700">Allow buyout</span>
-        </label>
-        <label class="flex items-center gap-3">
-          <input
-            v-model="form.anonymousBidHistory"
-            data-testid="auction-settings-anonymous-history"
-            type="checkbox"
-            class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-          />
-          <span class="text-sm text-gray-700">Hide submitter and bidder names</span>
-        </label>
+      <div class="space-y-3 pt-2 border-t border-gray-100">
+        <div>
+          <label class="flex items-center gap-3">
+            <input
+              v-model="form.allowBuyout"
+              data-testid="auction-settings-allow-buyout"
+              type="checkbox"
+              class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+            />
+            <span class="text-sm text-gray-700">Allow buyout<span class="text-amber-600 text-xs ml-1" title="Locked when live">🔒</span></span>
+          </label>
+          <p class="ml-9 text-[11px] text-gray-400">Let bidders instantly win an item at its set buyout price.</p>
+        </div>
+        <div>
+          <label class="flex items-center gap-3">
+            <input
+              v-model="form.anonymousBidHistory"
+              data-testid="auction-settings-anonymous-history"
+              type="checkbox"
+              class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+            />
+            <span class="text-sm text-gray-700">Hide submitter and bidder names</span>
+          </label>
+          <p class="ml-9 text-[11px] text-gray-400">Bidder identities are hidden from other participants.</p>
+        </div>
       </div>
 
       <div v-if="saveError" class="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
