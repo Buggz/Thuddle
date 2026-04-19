@@ -76,7 +76,7 @@ public static class AuctionEndpoints
             .FirstOrDefaultAsync(s => s.EventId == eventId, ct);
 
         if (settings is null)
-            return Results.Ok(new { configured = false, serverTime = DateTime.UtcNow });
+            return Results.Ok(new { configured = false, eventStart = evt.Start, eventEnd = evt.End, serverTime = DateTime.UtcNow });
 
         var isAdmin = dbUser is not null && await IsEventAdmin(db, eventId, dbUser.Id, ct);
 

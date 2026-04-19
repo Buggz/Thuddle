@@ -43,6 +43,7 @@ const savedFlash = shallowRef(false)
 const saveError = shallowRef('')
 const startingNow = shallowRef(false)
 const startError = shallowRef('')
+const activeTab = shallowRef('schedule')
 
 function toLocalInput(iso) {
   if (!iso) return ''
@@ -122,6 +123,8 @@ const editableField = computed(() => !isLive.value && !isEnded.value)
 
 const eventStart = computed(() => settings.value?.eventStart ? new Date(settings.value.eventStart) : null)
 const eventEnd = computed(() => settings.value?.eventEnd ? new Date(settings.value.eventEnd) : null)
+const eventStartLocal = computed(() => eventStart.value ? toLocalInput(eventStart.value.toISOString()) : '')
+const eventEndLocal = computed(() => eventEnd.value ? toLocalInput(eventEnd.value.toISOString()) : '')
 
 const startMs = computed(() => form.value.startsAt ? Date.parse(form.value.startsAt) : 0)
 const endMs = computed(() => form.value.latestEndsAt ? Date.parse(form.value.latestEndsAt) : 0)
@@ -251,270 +254,371 @@ onMounted(async () => {
     <form
       data-testid="auction-settings-form"
       @submit.prevent="save"
-      class="space-y-5 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm"
+      class="space-y-5"
     >
-      <div class="flex items-center gap-3">
-        <input
-          v-model="form.enabled"
-          type="checkbox"
-          data-testid="auction-settings-enabled"
-          class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-        />
-        <label class="text-sm font-bold text-gray-700">Auction enabled</label>
-      </div>
-      <div
-        v-if="isLive || isEnded"
-        data-testid="auction-settings-locked-banner"
-        role="status"
-        class="rounded-xl p-4 flex items-start gap-3"
-        :class="isLive ? 'bg-amber-50 border border-amber-200' : 'bg-gray-50 border border-gray-200'"
-      >
-        <svg class="w-6 h-6 shrink-0 mt-0.5" :class="isLive ? 'text-amber-600' : 'text-gray-400'" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" />
-        </svg>
-        <div>
-          <p class="text-sm font-bold" :class="isLive ? 'text-amber-800' : 'text-gray-700'">
-            {{ isLive ? 'Settings locked' : 'Auction ended' }}
-          </p>
-          <p class="text-sm mt-0.5" :class="isLive ? 'text-amber-700' : 'text-gray-500'">
-            {{ isLive ? 'All settings are locked while the auction is live. Changes could only be made before the start time.' : 'The auction has ended. Settings can no longer be changed.' }}
-          </p>
-        </div>
-      </div>
-
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">Starts at</label>
+      <!-- Top card: enabled toggle + locked banner + timeline -->
+      <div class="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm space-y-5">
+        <div class="flex items-center gap-3">
           <input
-            v-model="form.startsAt"
-            data-testid="auction-settings-starts-at"
-            type="datetime-local"
-            :disabled="!editableField"
-            class="w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500"
-            :class="fieldErrors.startsAt ? 'border-red-400' : 'border-gray-300 focus:border-indigo-500'"
+            v-model="form.enabled"
+            type="checkbox"
+            data-testid="auction-settings-enabled"
+            class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
           />
-          <p v-if="fieldErrors.startsAt" class="mt-1 text-xs text-red-600">{{ fieldErrors.startsAt }}</p>
-          <p v-else class="mt-1 text-[11px] text-gray-400">When bidding opens. Must fall within the event's timeframe.</p>
+          <label class="text-sm font-bold text-gray-700">Auction enabled</label>
         </div>
-        <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">Latest end</label>
-          <input
-            v-model="form.latestEndsAt"
-            data-testid="auction-settings-latest-ends-at"
-            type="datetime-local"
-            :disabled="!editableField"
-            class="w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500"
-            :class="fieldErrors.latestEndsAt ? 'border-red-400' : 'border-gray-300 focus:border-indigo-500'"
-          />
-          <p v-if="fieldErrors.latestEndsAt" class="mt-1 text-xs text-red-600">{{ fieldErrors.latestEndsAt }}</p>
-          <p v-else class="mt-1 text-[11px] text-gray-400">The latest possible time the auction can close. Must fall within the event's timeframe.</p>
-        </div>
-      </div>
-
-      <AuctionTimeline
-        v-if="form.startsAt && form.latestEndsAt && durationSec > 0"
-        :starts-at="fromLocalInput(form.startsAt)"
-        :latest-ends-at="fromLocalInput(form.latestEndsAt)"
-        :veiled-close-window-seconds="form.veiledCloseEnabled ? veiledCloseSeconds : 0"
-        :status="form.status"
-        :show-total-duration="true"
-        :bid-time-extension-seconds="form.bidTimeExtensionEnabled ? bidTimeExtensionSeconds : 0"
-        data-testid="auction-settings-duration-timeline"
-      />
-
-      <div data-testid="auction-anti-sniping-section" class="space-y-4 rounded-xl border border-amber-200 bg-amber-50/50 p-5">
-        <div class="flex items-center gap-2">
-          <h3 class="text-sm font-bold text-gray-800">Anti-sniping</h3>
-        </div>
-        <p class="text-xs text-gray-500 -mt-2">Prevent last-second bidding strategies that disadvantage other participants.</p>
-
-        <!-- Veiled Close Window -->
-        <div class="space-y-2">
-          <label class="flex items-center gap-2">
-            <input
-              v-model="form.veiledCloseEnabled"
-              data-testid="auction-veiled-close-toggle"
-              type="checkbox"
-              :disabled="!editableField"
-              class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-            />
-            <span class="text-sm font-medium text-gray-700">Enable veiled close</span>
-          </label>
-          <p class="text-[11px] text-gray-400 ml-6">The auction ends at a random time within this window before the deadline, so bidders can't time last-second bids.</p>
-          <div v-if="form.veiledCloseEnabled" class="ml-6 flex items-start gap-2">
-            <input
-              v-model.number="form.veiledCloseValue"
-              data-testid="auction-veiled-close-value"
-              type="number"
-              min="1"
-              :disabled="!editableField"
-              class="w-24 rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500"
-              :class="fieldErrors.veiledClose ? 'border-red-400' : 'border-gray-300 focus:border-indigo-500'"
-            />
-            <select
-              v-model="form.veiledCloseUnit"
-              data-testid="auction-veiled-close-unit"
-              :disabled="!editableField"
-              class="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500"
-            >
-              <option value="seconds">seconds</option>
-              <option value="minutes">minutes</option>
-            </select>
-          </div>
-          <p v-if="fieldErrors.veiledClose" class="ml-6 text-xs text-red-600">{{ fieldErrors.veiledClose }}</p>
-          <p v-else-if="form.veiledCloseEnabled" class="ml-6 text-[11px] text-gray-400">Maximum: half the auction duration.</p>
-        </div>
-
-        <!-- Bid Time Extension -->
-        <div class="space-y-2 border-t border-amber-200 pt-4">
-          <label class="flex items-center gap-2">
-            <input
-              v-model="form.bidTimeExtensionEnabled"
-              data-testid="auction-bid-extension-toggle"
-              type="checkbox"
-              :disabled="!editableField"
-              class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-            />
-            <span class="text-sm font-medium text-gray-700">Enable bid time extension</span>
-          </label>
-          <p class="text-[11px] text-gray-400 ml-6">When a bid is placed near the end of an item's deadline, extra time is added so others can respond.</p>
-          <div v-if="form.bidTimeExtensionEnabled" class="ml-6 flex items-start gap-2">
-            <input
-              v-model.number="form.bidTimeExtensionValue"
-              data-testid="auction-bid-extension-value"
-              type="number"
-              min="1"
-              :disabled="!editableField"
-              class="w-24 rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500"
-              :class="fieldErrors.bidTimeExtension ? 'border-red-400' : 'border-gray-300 focus:border-indigo-500'"
-            />
-            <select
-              v-model="form.bidTimeExtensionUnit"
-              data-testid="auction-bid-extension-unit"
-              :disabled="!editableField"
-              class="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500"
-            >
-              <option value="seconds">seconds</option>
-              <option value="minutes">minutes</option>
-            </select>
-          </div>
-          <p v-if="fieldErrors.bidTimeExtension" class="ml-6 text-xs text-red-600">{{ fieldErrors.bidTimeExtension }}</p>
-          <p v-else-if="form.bidTimeExtensionEnabled" class="ml-6 text-[11px] text-gray-400">Maximum: 30 minutes.</p>
-        </div>
-      </div>
-
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">Submissions</label>
-          <select
-            v-model="form.submissionMode"
-            data-testid="auction-settings-submission-mode"
-            :disabled="!editableField"
-            class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500"
-          >
-            <option value="AdminsOnly">Admins only</option>
-            <option value="SelectedAttendees">Selected attendees</option>
-            <option value="AllAttendees">All attendees</option>
-          </select>
-          <p class="mt-1 text-[11px] text-gray-400">Who is allowed to submit items for auction.</p>
-        </div>
-        <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">Item moderation</label>
-          <select
-            v-model="form.itemModerationPolicy"
-            data-testid="auction-settings-moderation-policy"
-            class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500"
-          >
-            <option value="RequireApproval">Require admin approval</option>
-            <option value="AutoApprove">Auto-approve</option>
-          </select>
-          <p class="mt-1 text-[11px] text-gray-400">Whether submitted items need admin approval before being listed.</p>
-        </div>
-      </div>
-
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">Minimum bid increment</label>
-          <div class="flex items-stretch">
-            <input
-              v-model="form.minBidIncrement"
-              data-testid="auction-settings-min-increment"
-              type="text"
-              inputmode="decimal"
-              :disabled="!editableField"
-              class="w-full rounded-l-lg border border-r-0 px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500"
-              :class="fieldErrors.minBidIncrement ? 'border-red-400' : 'border-gray-300 focus:border-indigo-500'"
-            />
-            <span class="inline-flex items-center rounded-r-lg border border-l-0 border-gray-300 bg-gray-50 px-3 text-sm text-gray-500">
-              {{ settings?.currency || 'EUR' }}
-            </span>
-          </div>
-          <p v-if="fieldErrors.minBidIncrement" class="mt-1 text-xs text-red-600">{{ fieldErrors.minBidIncrement }}</p>
-          <p v-else class="mt-1 text-[11px] text-gray-400">The minimum amount each new bid must exceed the current highest bid.</p>
-        </div>
-      </div>
-
-      <div class="space-y-3 pt-2 border-t border-gray-100">
-        <div>
-          <label class="flex items-center gap-3">
-            <input
-              v-model="form.allowBuyout"
-              data-testid="auction-settings-allow-buyout"
-              type="checkbox"
-              class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-            />
-            <span class="text-sm text-gray-700">Allow buyout</span>
-          </label>
-          <p class="ml-9 text-[11px] text-gray-400">Allow item submitters to set an optional buyout price. Bidders can then instantly win the item by paying that price. Not every item needs to have one.</p>
-        </div>
-        <div>
-          <label class="flex items-center gap-3">
-            <input
-              v-model="form.anonymousBidders"
-              data-testid="auction-settings-anonymous-bidders"
-              type="checkbox"
-              class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-            />
-            <span class="text-sm text-gray-700">Anonymous bidders</span>
-          </label>
-          <p class="ml-9 text-[11px] text-gray-400">Hide bidder identities from other participants. Event admins can always see who placed each bid.</p>
-        </div>
-        <div>
-          <label class="flex items-center gap-3">
-            <input
-              v-model="form.anonymousSubmitters"
-              data-testid="auction-settings-anonymous-submitters"
-              type="checkbox"
-              class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-            />
-            <span class="text-sm text-gray-700">Anonymous submitters</span>
-          </label>
-          <p class="ml-9 text-[11px] text-gray-400">Hide who submitted each item from other participants. Submitters can still see their own items, and event admins can always see all submitter identities.</p>
-        </div>
-      </div>
-
-      <div v-if="saveError" class="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
-        {{ saveError }}
-      </div>
-      <div v-if="savedFlash" class="rounded-lg bg-emerald-50 border border-emerald-200 px-4 py-3 text-sm text-emerald-700">
-        Settings saved. Voilà!
-      </div>
-
-      <div class="flex items-center gap-3 pt-2 border-t border-gray-100">
-        <button
-          type="submit"
-          data-testid="auction-settings-save-btn"
-          :disabled="saving || !isValid"
-          class="rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-indigo-700 disabled:opacity-50"
+        <div
+          v-if="isLive || isEnded"
+          data-testid="auction-settings-locked-banner"
+          role="status"
+          class="rounded-xl p-4 flex items-start gap-3"
+          :class="isLive ? 'bg-amber-50 border border-amber-200' : 'bg-gray-50 border border-gray-200'"
         >
-          {{ saving ? 'Saving…' : 'Save settings' }}
-        </button>
-        <p v-if="isLive" class="text-xs text-amber-700 font-semibold">
-          Auction is live. Some fields are locked.
-        </p>
-        <p v-if="isEnded" class="text-xs text-gray-500 font-semibold">
-          Auction has ended.
-        </p>
+          <svg class="w-6 h-6 shrink-0 mt-0.5" :class="isLive ? 'text-amber-600' : 'text-gray-400'" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" />
+          </svg>
+          <div>
+            <p class="text-sm font-bold" :class="isLive ? 'text-amber-800' : 'text-gray-700'">
+              {{ isLive ? 'Settings locked' : 'Auction ended' }}
+            </p>
+            <p class="text-sm mt-0.5" :class="isLive ? 'text-amber-700' : 'text-gray-500'">
+              {{ isLive ? 'All settings are locked while the auction is live. Changes could only be made before the start time.' : 'The auction has ended. Settings can no longer be changed.' }}
+            </p>
+          </div>
+        </div>
+
+        <AuctionTimeline
+          v-if="form.startsAt && form.latestEndsAt && durationSec > 0"
+          :starts-at="fromLocalInput(form.startsAt)"
+          :latest-ends-at="fromLocalInput(form.latestEndsAt)"
+          :veiled-close-window-seconds="form.veiledCloseEnabled ? veiledCloseSeconds : 0"
+          :status="form.status"
+          :show-total-duration="true"
+          :bid-time-extension-seconds="form.bidTimeExtensionEnabled ? bidTimeExtensionSeconds : 0"
+          data-testid="auction-settings-duration-timeline"
+        />
+      </div>
+
+      <!-- Tab container -->
+      <div class="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+        <!-- Tab bar -->
+        <div class="flex border-b border-gray-200" role="tablist">
+          <button
+            type="button"
+            role="tab"
+            :aria-selected="activeTab === 'schedule'"
+            data-testid="auction-settings-tab-schedule"
+            @click="activeTab = 'schedule'"
+            class="flex-1 border-b-2 px-4 py-3 text-sm font-semibold transition-colors"
+            :class="activeTab === 'schedule' ? 'border-indigo-500 text-indigo-600 bg-indigo-50/30' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
+          >
+            Schedule
+          </button>
+          <button
+            type="button"
+            role="tab"
+            :aria-selected="activeTab === 'rules'"
+            data-testid="auction-settings-tab-rules"
+            @click="activeTab = 'rules'"
+            class="flex-1 border-b-2 px-4 py-3 text-sm font-semibold transition-colors"
+            :class="activeTab === 'rules' ? 'border-indigo-500 text-indigo-600 bg-indigo-50/30' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
+          >
+            Rules & privacy
+          </button>
+        </div>
+
+        <!-- Tab: Schedule -->
+        <div v-if="activeTab === 'schedule'" role="tabpanel" class="p-6 space-y-5">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Starts at</label>
+              <input
+                v-model="form.startsAt"
+                data-testid="auction-settings-starts-at"
+                type="datetime-local"
+                :disabled="!editableField"
+                :min="eventStartLocal"
+                :max="eventEndLocal"
+                class="w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500"
+                :class="fieldErrors.startsAt ? 'border-red-400' : 'border-gray-300 focus:border-indigo-500'"
+              />
+              <p v-if="fieldErrors.startsAt" class="mt-1 text-xs text-red-600">{{ fieldErrors.startsAt }}</p>
+              <p v-else class="mt-1 text-[11px] text-gray-400">When bidding opens. Must fall within the event's timeframe.</p>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Latest end</label>
+              <input
+                v-model="form.latestEndsAt"
+                data-testid="auction-settings-latest-ends-at"
+                type="datetime-local"
+                :disabled="!editableField"
+                :min="eventStartLocal"
+                :max="eventEndLocal"
+                class="w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500"
+                :class="fieldErrors.latestEndsAt ? 'border-red-400' : 'border-gray-300 focus:border-indigo-500'"
+              />
+              <p v-if="fieldErrors.latestEndsAt" class="mt-1 text-xs text-red-600">{{ fieldErrors.latestEndsAt }}</p>
+              <p v-else class="mt-1 text-[11px] text-gray-400">The latest possible time the auction can close. Must fall within the event's timeframe.</p>
+            </div>
+          </div>
+
+          <div data-testid="auction-anti-sniping-section" class="space-y-4 rounded-xl border border-amber-200 bg-amber-50/50 p-5">
+            <div class="flex items-center gap-2">
+              <h3 class="text-sm font-bold text-gray-800">Anti-sniping</h3>
+            </div>
+            <p class="text-xs text-gray-500 -mt-2">Prevent last-second bidding strategies that disadvantage other participants.</p>
+
+            <!-- Veiled Close Window -->
+            <div class="space-y-2">
+              <label class="flex items-center gap-2">
+                <input
+                  v-model="form.veiledCloseEnabled"
+                  data-testid="auction-veiled-close-toggle"
+                  type="checkbox"
+                  :disabled="!editableField"
+                  class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                />
+                <span class="text-sm font-medium text-gray-700">Enable veiled close</span>
+              </label>
+              <p class="text-[11px] text-gray-400 ml-6">The auction ends at a random time within this window before the deadline, so bidders can't time last-second bids.</p>
+              <div v-if="form.veiledCloseEnabled" class="ml-6 flex items-start gap-2">
+                <input
+                  v-model.number="form.veiledCloseValue"
+                  data-testid="auction-veiled-close-value"
+                  type="number"
+                  min="1"
+                  :disabled="!editableField"
+                  class="w-24 rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500"
+                  :class="fieldErrors.veiledClose ? 'border-red-400' : 'border-gray-300 focus:border-indigo-500'"
+                />
+                <select
+                  v-model="form.veiledCloseUnit"
+                  data-testid="auction-veiled-close-unit"
+                  :disabled="!editableField"
+                  class="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500"
+                >
+                  <option value="seconds">seconds</option>
+                  <option value="minutes">minutes</option>
+                </select>
+              </div>
+              <p v-if="fieldErrors.veiledClose" class="ml-6 text-xs text-red-600">{{ fieldErrors.veiledClose }}</p>
+              <p v-else-if="form.veiledCloseEnabled" class="ml-6 text-[11px] text-gray-400">Maximum: half the auction duration.</p>
+            </div>
+
+            <!-- Bid Time Extension -->
+            <div class="space-y-2 border-t border-amber-200 pt-4">
+              <label class="flex items-center gap-2">
+                <input
+                  v-model="form.bidTimeExtensionEnabled"
+                  data-testid="auction-bid-extension-toggle"
+                  type="checkbox"
+                  :disabled="!editableField"
+                  class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                />
+                <span class="text-sm font-medium text-gray-700">Enable bid time extension</span>
+              </label>
+              <p class="text-[11px] text-gray-400 ml-6">When a bid is placed near the end of an item's deadline, extra time is added so others can respond.</p>
+              <div v-if="form.bidTimeExtensionEnabled" class="ml-6 flex items-start gap-2">
+                <input
+                  v-model.number="form.bidTimeExtensionValue"
+                  data-testid="auction-bid-extension-value"
+                  type="number"
+                  min="1"
+                  :disabled="!editableField"
+                  class="w-24 rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500"
+                  :class="fieldErrors.bidTimeExtension ? 'border-red-400' : 'border-gray-300 focus:border-indigo-500'"
+                />
+                <select
+                  v-model="form.bidTimeExtensionUnit"
+                  data-testid="auction-bid-extension-unit"
+                  :disabled="!editableField"
+                  class="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500"
+                >
+                  <option value="seconds">seconds</option>
+                  <option value="minutes">minutes</option>
+                </select>
+              </div>
+              <p v-if="fieldErrors.bidTimeExtension" class="ml-6 text-xs text-red-600">{{ fieldErrors.bidTimeExtension }}</p>
+              <p v-else-if="form.bidTimeExtensionEnabled" class="ml-6 text-[11px] text-gray-400">Maximum: 30 minutes.</p>
+            </div>
+          </div>
+
+          <div class="flex justify-end pt-2">
+            <button
+              type="button"
+              data-testid="auction-settings-next-tab"
+              @click="activeTab = 'rules'"
+              class="inline-flex items-center gap-1.5 text-sm font-semibold text-indigo-600 hover:text-indigo-700 transition-colors"
+            >
+              Rules &amp; privacy
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- Tab: Rules & privacy -->
+        <div v-if="activeTab === 'rules'" role="tabpanel" class="divide-y divide-gray-100">
+
+          <!-- Submissions -->
+          <div class="flex flex-col sm:flex-row sm:gap-6 p-6">
+            <div class="sm:w-1/2">
+              <label class="block text-sm font-semibold text-gray-900 mb-1.5">Submissions</label>
+              <select
+                v-model="form.submissionMode"
+                data-testid="auction-settings-submission-mode"
+                :disabled="!editableField"
+                class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500"
+              >
+                <option value="AdminsOnly">Admins only</option>
+                <option value="SelectedAttendees">Selected attendees</option>
+                <option value="AllAttendees">All attendees</option>
+              </select>
+            </div>
+            <div class="mt-2 sm:mt-0 sm:w-1/2 sm:border-l sm:border-gray-100 sm:pl-6 flex items-center">
+              <p class="text-sm text-gray-500">Who is allowed to submit items for auction.</p>
+            </div>
+          </div>
+
+          <!-- Item moderation -->
+          <div class="flex flex-col sm:flex-row sm:gap-6 p-6">
+            <div class="sm:w-1/2">
+              <label class="block text-sm font-semibold text-gray-900 mb-1.5">Item moderation</label>
+              <select
+                v-model="form.itemModerationPolicy"
+                data-testid="auction-settings-moderation-policy"
+                class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500"
+              >
+                <option value="RequireApproval">Require admin approval</option>
+                <option value="AutoApprove">Auto-approve</option>
+              </select>
+            </div>
+            <div class="mt-2 sm:mt-0 sm:w-1/2 sm:border-l sm:border-gray-100 sm:pl-6 flex items-center">
+              <p class="text-sm text-gray-500">Whether submitted items need admin approval before being listed.</p>
+            </div>
+          </div>
+
+          <!-- Minimum bid increment -->
+          <div class="flex flex-col sm:flex-row sm:gap-6 p-6">
+            <div class="sm:w-1/2">
+              <label class="block text-sm font-semibold text-gray-900 mb-1.5">Minimum bid increment</label>
+              <div class="flex items-stretch">
+                <input
+                  v-model="form.minBidIncrement"
+                  data-testid="auction-settings-min-increment"
+                  type="text"
+                  inputmode="decimal"
+                  :disabled="!editableField"
+                  class="w-full rounded-l-lg border border-r-0 px-3 py-2.5 text-sm focus:ring-2 focus:ring-indigo-500"
+                  :class="fieldErrors.minBidIncrement ? 'border-red-400' : 'border-gray-300 focus:border-indigo-500'"
+                />
+                <span class="inline-flex items-center rounded-r-lg border border-l-0 border-gray-300 bg-gray-50 px-3 text-sm text-gray-500">
+                  {{ settings?.currency || 'EUR' }}
+                </span>
+              </div>
+              <p v-if="fieldErrors.minBidIncrement" class="mt-1 text-xs text-red-600">{{ fieldErrors.minBidIncrement }}</p>
+            </div>
+            <div class="mt-2 sm:mt-0 sm:w-1/2 sm:border-l sm:border-gray-100 sm:pl-6 flex items-center">
+              <p class="text-sm text-gray-500">The minimum amount each new bid must exceed the current highest bid.</p>
+            </div>
+          </div>
+
+          <!-- Allow buyout -->
+          <div class="flex flex-col sm:flex-row sm:gap-6 p-6">
+            <div class="sm:w-1/2">
+              <label class="flex items-center gap-3">
+                <input
+                  v-model="form.allowBuyout"
+                  data-testid="auction-settings-allow-buyout"
+                  type="checkbox"
+                  class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                />
+                <span class="text-sm font-semibold text-gray-900">Allow buyout</span>
+              </label>
+            </div>
+            <div class="mt-2 ml-9 sm:ml-0 sm:mt-0 sm:w-1/2 sm:border-l sm:border-gray-100 sm:pl-6 flex items-center">
+              <p class="text-sm text-gray-500">Allow item submitters to set an optional buyout price. Bidders can then instantly win the item by paying that price.</p>
+            </div>
+          </div>
+
+          <!-- Anonymous bidders -->
+          <div class="flex flex-col sm:flex-row sm:gap-6 p-6">
+            <div class="sm:w-1/2">
+              <label class="flex items-center gap-3">
+                <input
+                  v-model="form.anonymousBidders"
+                  data-testid="auction-settings-anonymous-bidders"
+                  type="checkbox"
+                  class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                />
+                <span class="text-sm font-semibold text-gray-900">Anonymous bidders</span>
+              </label>
+            </div>
+            <div class="mt-2 ml-9 sm:ml-0 sm:mt-0 sm:w-1/2 sm:border-l sm:border-gray-100 sm:pl-6 flex items-center">
+              <p class="text-sm text-gray-500">Hide bidder identities from other participants. Event admins can always see who placed each bid.</p>
+            </div>
+          </div>
+
+          <!-- Anonymous submitters -->
+          <div class="flex flex-col sm:flex-row sm:gap-6 p-6">
+            <div class="sm:w-1/2">
+              <label class="flex items-center gap-3">
+                <input
+                  v-model="form.anonymousSubmitters"
+                  data-testid="auction-settings-anonymous-submitters"
+                  type="checkbox"
+                  class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                />
+                <span class="text-sm font-semibold text-gray-900">Anonymous submitters</span>
+              </label>
+            </div>
+            <div class="mt-2 ml-9 sm:ml-0 sm:mt-0 sm:w-1/2 sm:border-l sm:border-gray-100 sm:pl-6 flex items-center">
+              <p class="text-sm text-gray-500">Hide who submitted each item from other participants. Submitters can still see their own items, and event admins can always see all submitter identities.</p>
+            </div>
+          </div>
+
+          <!-- Previous tab button -->
+          <div class="flex justify-start p-6">
+            <button
+              type="button"
+              data-testid="auction-settings-prev-tab"
+              @click="activeTab = 'schedule'"
+              class="inline-flex items-center gap-1.5 text-sm font-semibold text-indigo-600 hover:text-indigo-700 transition-colors"
+            >
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
+              </svg>
+              Schedule
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Save area (always visible) -->
+      <div class="space-y-3">
+        <div v-if="saveError" class="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+          {{ saveError }}
+        </div>
+        <div v-if="savedFlash" class="rounded-lg bg-emerald-50 border border-emerald-200 px-4 py-3 text-sm text-emerald-700">
+          Settings saved. Voilà!
+        </div>
+        <div class="flex items-center gap-3">
+          <button
+            type="submit"
+            data-testid="auction-settings-save-btn"
+            :disabled="saving || !isValid"
+            class="rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-indigo-700 disabled:opacity-50"
+          >
+            {{ saving ? 'Saving…' : 'Save settings' }}
+          </button>
+          <p v-if="isLive" class="text-xs text-amber-700 font-semibold">
+            Auction is live. Some fields are locked.
+          </p>
+          <p v-if="isEnded" class="text-xs text-gray-500 font-semibold">
+            Auction has ended.
+          </p>
+        </div>
       </div>
     </form>
   </div>
