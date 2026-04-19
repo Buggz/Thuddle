@@ -3,11 +3,17 @@ import { ref, computed, shallowRef, onMounted, watch } from 'vue'
 import { useRoute, RouterLink } from 'vue-router'
 import { storeToRefs } from 'pinia'
 import { useAuctionStore } from '@/features/auctions/stores/auction'
+import { useEventsStore } from '@/features/events/stores/events'
+import { useApi } from '@/shared/composables/useApi'
 import { parseDecimalInput } from '@/shared/formatCurrency'
 import AuctionTimeline from '@/features/auctions/components/AuctionTimeline.vue'
+import SubmitterTransferPanel from '@/features/auctions/components/SubmitterTransferPanel.vue'
 
 const route = useRoute()
 const auctionStore = useAuctionStore()
+const eventsStore = useEventsStore()
+const { byId: eventsById } = storeToRefs(eventsStore)
+const { authFetch } = useApi()
 const eventId = computed(() => String(route.params.id))
 
 const { settingsByEvent, errorByEvent } = storeToRefs(auctionStore)
@@ -44,6 +50,14 @@ const saveError = shallowRef('')
 const startingNow = shallowRef(false)
 const startError = shallowRef('')
 const activeTab = shallowRef('schedule')
+
+const allAttendees = ref([])
+const selectedSubmitterIds = ref(new Set())
+const initialSubmitterIds = ref(new Set())
+const pinnedAdminIds = ref(new Set())
+const pinnedLabels = ref({})
+const loadingSubmitters = shallowRef(false)
+const submittersLoaded = shallowRef(false)
 
 function toLocalInput(iso) {
   if (!iso) return ''
@@ -168,6 +182,73 @@ const fieldErrors = computed(() => {
 
 const isValid = computed(() => Object.keys(fieldErrors.value).length === 0)
 
+const submittersDirty = computed(() => {
+  if (selectedSubmitterIds.value.size !== initialSubmitterIds.value.size) return true
+  for (const id of selectedSubmitterIds.value) {
+    if (!initialSubmitterIds.value.has(id)) return true
+  }
+  return false
+})
+
+const showSubmittersTab = computed(() => form.value.submissionMode === 'SelectedAttendees')
+
+async function loadSubmitterData() {
+  loadingSubmitters.value = true
+  try {
+    const [attendeesResp, submitters] = await Promise.all([
+      authFetch(`/api/events/${eventId.value}/attendees`).then((r) => r.json()),
+      auctionStore.getSubmitters(eventId.value)
+    ])
+    allAttendees.value = (attendeesResp.attendees || []).map((a) => ({
+      userId: a.userId,
+      displayName: a.displayName,
+      email: a.email
+    }))
+    const ids = new Set((submitters || []).map((s) => s.userId))
+    selectedSubmitterIds.value = new Set(ids)
+    initialSubmitterIds.value = new Set(ids)
+
+    const ownerId = eventsById.value[eventId.value]?.ownerId
+    const pinned = new Set()
+    const labels = {}
+    if (ownerId) {
+      pinned.add(ownerId)
+      labels[ownerId] = '(owner)'
+    }
+    for (const ca of attendeesResp.coAdmins || []) {
+      pinned.add(ca.userId)
+      labels[ca.userId] = '(co-host)'
+      if (!allAttendees.value.some((a) => a.userId === ca.userId)) {
+        allAttendees.value.push({ userId: ca.userId, displayName: ca.displayName, email: ca.email })
+      }
+    }
+    pinnedAdminIds.value = pinned
+    pinnedLabels.value = labels
+    submittersLoaded.value = true
+  } catch {
+    // silently fail — the tab will just be empty
+  } finally {
+    loadingSubmitters.value = false
+  }
+}
+
+watch(showSubmittersTab, (val) => {
+  if (val && !submittersLoaded.value) loadSubmitterData()
+  if (!val && activeTab.value === 'submitters') activeTab.value = 'rules'
+})
+
+function onSubmitterAdd(userId) {
+  const next = new Set(selectedSubmitterIds.value)
+  next.add(userId)
+  selectedSubmitterIds.value = next
+}
+
+function onSubmitterRemove(userId) {
+  const next = new Set(selectedSubmitterIds.value)
+  next.delete(userId)
+  selectedSubmitterIds.value = next
+}
+
 async function save() {
   if (!isValid.value) return
   saving.value = true
@@ -187,6 +268,10 @@ async function save() {
       anonymousBidders: form.value.anonymousBidders,
       anonymousSubmitters: form.value.anonymousSubmitters
     })
+    if (form.value.submissionMode === 'SelectedAttendees' && submittersDirty.value) {
+      await auctionStore.setSubmitters(eventId.value, [...selectedSubmitterIds.value])
+      initialSubmitterIds.value = new Set(selectedSubmitterIds.value)
+    }
     savedFlash.value = true
     setTimeout(() => { savedFlash.value = false }, 2500)
   } catch (err) {
@@ -312,6 +397,9 @@ onMounted(async () => {
             class="flex-1 border-b-2 px-4 py-3 text-sm font-semibold transition-colors"
             :class="activeTab === 'schedule' ? 'border-indigo-500 text-indigo-600 bg-indigo-50/30' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
           >
+            <svg v-if="isLive || isEnded" class="w-3.5 h-3.5 inline-block mr-1 -mt-0.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+            </svg>
             Schedule
           </button>
           <button
@@ -323,8 +411,25 @@ onMounted(async () => {
             class="flex-1 border-b-2 px-4 py-3 text-sm font-semibold transition-colors"
             :class="activeTab === 'rules' ? 'border-indigo-500 text-indigo-600 bg-indigo-50/30' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
           >
+            <svg v-if="isLive || isEnded" class="w-3.5 h-3.5 inline-block mr-1 -mt-0.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+            </svg>
             Rules & privacy
           </button>
+          <Transition name="tab-slide">
+            <button
+              v-if="showSubmittersTab"
+              type="button"
+              role="tab"
+              :aria-selected="activeTab === 'submitters'"
+              data-testid="auction-settings-tab-submitters"
+              @click="activeTab = 'submitters'"
+              class="flex-1 border-b-2 px-4 py-3 text-sm font-semibold transition-colors"
+              :class="activeTab === 'submitters' ? 'border-indigo-500 text-indigo-600 bg-indigo-50/30' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
+            >
+              Submitters
+            </button>
+          </Transition>
         </div>
 
         <!-- Tab: Schedule -->
@@ -477,7 +582,15 @@ onMounted(async () => {
               </select>
             </div>
             <div class="mt-2 sm:mt-0 sm:w-1/2 sm:border-l sm:border-gray-100 sm:pl-6 flex items-center">
-              <p class="text-sm text-gray-500">Who is allowed to submit items for auction.</p>
+              <div>
+                <p class="text-sm text-gray-500">Who is allowed to submit items for auction.</p>
+                <p v-if="form.submissionMode === 'SelectedAttendees'" class="text-sm text-gray-500 mt-1">
+                  Choose which attendees may submit items.
+                  <button type="button" @click="activeTab = 'submitters'" class="text-indigo-600 hover:text-indigo-700 font-semibold">
+                    Manage submitters →
+                  </button>
+                </p>
+              </div>
             </div>
           </div>
 
@@ -578,8 +691,8 @@ onMounted(async () => {
             </div>
           </div>
 
-          <!-- Previous tab button -->
-          <div class="flex justify-start p-6">
+          <!-- Previous / next tab buttons -->
+          <div class="flex justify-between p-6">
             <button
               type="button"
               data-testid="auction-settings-prev-tab"
@@ -590,6 +703,45 @@ onMounted(async () => {
                 <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
               </svg>
               Schedule
+            </button>
+            <button
+              v-if="showSubmittersTab"
+              type="button"
+              @click="activeTab = 'submitters'"
+              class="inline-flex items-center gap-1.5 text-sm font-semibold text-indigo-600 hover:text-indigo-700 transition-colors"
+            >
+              Submitters
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- Tab: Submitters -->
+        <div v-if="activeTab === 'submitters'" role="tabpanel" class="p-6">
+          <div v-if="loadingSubmitters" class="text-center py-12 text-sm text-gray-400">Loading attendees…</div>
+          <SubmitterTransferPanel
+            v-else
+            :attendees="allAttendees"
+            :selected-ids="selectedSubmitterIds"
+            :pinned-ids="pinnedAdminIds"
+            :pinned-labels="pinnedLabels"
+            :disabled="false"
+            @add="onSubmitterAdd"
+            @remove="onSubmitterRemove"
+          />
+
+          <div class="flex justify-start pt-5">
+            <button
+              type="button"
+              @click="activeTab = 'rules'"
+              class="inline-flex items-center gap-1.5 text-sm font-semibold text-indigo-600 hover:text-indigo-700 transition-colors"
+            >
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
+              </svg>
+              Rules &amp; privacy
             </button>
           </div>
         </div>
@@ -613,7 +765,7 @@ onMounted(async () => {
             {{ saving ? 'Saving…' : 'Save settings' }}
           </button>
           <p v-if="isLive" class="text-xs text-amber-700 font-semibold">
-            Auction is live. Some fields are locked.
+            Auction is live. Only submitters can be changed.
           </p>
           <p v-if="isEnded" class="text-xs text-gray-500 font-semibold">
             Auction has ended.
@@ -623,3 +775,23 @@ onMounted(async () => {
     </form>
   </div>
 </template>
+
+<style scoped>
+.tab-slide-enter-active,
+.tab-slide-leave-active {
+  transition: all 0.2s ease;
+  overflow: hidden;
+}
+.tab-slide-enter-from,
+.tab-slide-leave-to {
+  max-width: 0;
+  padding-left: 0;
+  padding-right: 0;
+  opacity: 0;
+}
+.tab-slide-enter-to,
+.tab-slide-leave-from {
+  max-width: 12rem;
+  opacity: 1;
+}
+</style>
