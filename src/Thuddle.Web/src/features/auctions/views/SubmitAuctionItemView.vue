@@ -27,6 +27,7 @@ const error = shallowRef('')
 
 const selectedBggId = ref(null)
 const selectedBggDetail = ref(null)
+const selectedGames = ref([])
 
 function onBggSelected(detail) {
   selectedBggDetail.value = detail
@@ -120,7 +121,10 @@ async function submit() {
       description: form.value.description.trim() || null,
       startingBid: startingBid.value,
       buyoutPrice: settings.value?.allowBuyout ? buyoutPrice.value : null,
-      bggId: selectedBggId.value
+      bggId: selectedGames.value[0]?.bggId ?? null,
+      extraBggIds: selectedGames.value.length > 1
+        ? selectedGames.value.slice(1).map(g => g.bggId)
+        : null
     })
     if (selectedImages.value.length) {
       await auctionStore.uploadItemImages(
@@ -168,6 +172,7 @@ onMounted(async () => {
         <BggSearchInput
           v-model="form.name"
           v-model:selectedBggId="selectedBggId"
+          v-model:games="selectedGames"
           @bgg-selected="onBggSelected"
         />
         <p v-if="submitted && fieldErrors.name" class="mt-1 text-xs text-red-600">{{ fieldErrors.name }}</p>
@@ -186,6 +191,8 @@ onMounted(async () => {
           </p>
         </div>
       </div>
+
+
 
       <div>
         <label class="block text-sm font-medium text-gray-700 mb-1">Description</label>

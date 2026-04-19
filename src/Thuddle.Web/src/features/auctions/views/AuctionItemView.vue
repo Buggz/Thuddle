@@ -151,6 +151,28 @@ onBeforeUnmount(() => {
             <h1 data-testid="auction-item-name" class="text-2xl font-extrabold text-gray-900">{{ item.name }}</h1>
             <p v-if="item.description" class="mt-2 text-sm text-gray-600 whitespace-pre-line">{{ item.description }}</p>
 
+            <!-- Package contents -->
+            <div v-if="item.extraGames?.length" class="mt-4">
+              <p class="text-[11px] font-bold uppercase tracking-widest text-gray-400 mb-2">
+                Package includes {{ item.extraGames.length + 1 }} games
+              </p>
+              <div class="space-y-1.5">
+                <!-- Primary game -->
+                <div v-if="item.bggId" class="flex items-center gap-2">
+                  <img v-if="item.bggImageUrl" :src="item.bggImageUrl" alt="" class="h-7 w-7 rounded object-cover" />
+                  <span class="text-sm font-semibold text-gray-900">{{ item.name }}</span>
+                  <span class="rounded bg-indigo-50 px-1.5 py-0.5 text-[9px] font-bold text-indigo-600 uppercase">Primary</span>
+                </div>
+                <!-- Extra games -->
+                <div v-for="game in item.extraGames" :key="game.bggId" class="flex items-center gap-2">
+                  <img v-if="game.thumbnailUrl" :src="game.thumbnailUrl" alt="" class="h-7 w-7 rounded object-cover" />
+                  <div v-else class="h-7 w-7 rounded bg-gray-100" />
+                  <span class="text-sm text-gray-700">{{ game.name }}</span>
+                  <span v-if="game.yearPublished" class="text-xs text-gray-400">({{ game.yearPublished }})</span>
+                </div>
+              </div>
+            </div>
+
             <div class="mt-4 flex items-end justify-between">
               <div>
                 <p class="text-[11px] font-bold uppercase tracking-widest text-gray-400">

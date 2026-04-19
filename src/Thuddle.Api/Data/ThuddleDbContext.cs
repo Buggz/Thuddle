@@ -19,6 +19,7 @@ public class ThuddleDbContext(DbContextOptions<ThuddleDbContext> options) : DbCo
     public DbSet<AuctionItemSubmitter> AuctionItemSubmitters => Set<AuctionItemSubmitter>();
     public DbSet<AuctionItem> AuctionItems => Set<AuctionItem>();
     public DbSet<AuctionItemImage> AuctionItemImages => Set<AuctionItemImage>();
+    public DbSet<AuctionItemBoardGame> AuctionItemBoardGames => Set<AuctionItemBoardGame>();
     public DbSet<AuctionBid> AuctionBids => Set<AuctionBid>();
     public DbSet<Notification> Notifications => Set<Notification>();
     public DbSet<BoardGame> BoardGames => Set<BoardGame>();
@@ -196,6 +197,20 @@ public class ThuddleDbContext(DbContextOptions<ThuddleDbContext> options) : DbCo
                 .OnDelete(DeleteBehavior.SetNull);
             entity.Property(i => i.RowVersion)
                 .IsRowVersion();
+        });
+
+        modelBuilder.Entity<AuctionItemBoardGame>(entity =>
+        {
+            entity.HasIndex(e => new { e.ItemId, e.BggId }).IsUnique();
+            entity.HasIndex(e => new { e.ItemId, e.SortOrder });
+            entity.HasOne(e => e.Item)
+                .WithMany()
+                .HasForeignKey(e => e.ItemId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(e => e.BoardGame)
+                .WithMany()
+                .HasForeignKey(e => e.BggId)
+                .OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<AuctionItemImage>(entity =>

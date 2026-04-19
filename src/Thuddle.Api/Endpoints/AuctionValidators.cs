@@ -38,6 +38,9 @@ public sealed class CreateAuctionItemRequestValidator : AbstractValidator<Create
         RuleFor(x => x.BuyoutPrice).GreaterThan(x => x.StartingBid)
             .WithMessage("BuyoutPrice must be greater than StartingBid.")
             .When(x => x.BuyoutPrice.HasValue);
+        RuleFor(x => x.ExtraBggIds)
+            .Must(ids => ids is null || ids.Count <= 20)
+            .WithMessage("A package can contain at most 20 extra games.");
     }
 }
 
@@ -50,6 +53,9 @@ public sealed class UpdateAuctionItemRequestValidator : AbstractValidator<Update
         RuleFor(x => x.BuyoutPrice).GreaterThan(x => x.StartingBid)
             .WithMessage("BuyoutPrice must be greater than StartingBid.")
             .When(x => x.BuyoutPrice.HasValue);
+        RuleFor(x => x.ExtraBggIds)
+            .Must(ids => ids is null || ids.Count <= 20)
+            .WithMessage("A package can contain at most 20 extra games.");
     }
 }
 
