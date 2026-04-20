@@ -79,6 +79,8 @@ builder.Services.AddSingleton<SmtpEmailSender>();
 builder.Services.AddSingleton(provider =>
     new RazorTemplateService(Path.Combine(AppContext.BaseDirectory, "EmailTemplates")));
 
+builder.Services.AddHttpClient();
+
 builder.Services.AddSignalR();
 builder.Services.AddSingleton<IRealtimeNotifier, RealtimeNotifier>();
 
@@ -138,6 +140,7 @@ app.MapDiscussionEndpoints();
 app.MapContactGroupEndpoints();
 app.MapAdminEndpoints();
 app.MapAuctionEndpoints();
+app.MapBoardGameEndpoints();
 app.MapNotificationEndpoints();
 app.MapHub<ThuddleHub>("/hubs/thuddle");
 

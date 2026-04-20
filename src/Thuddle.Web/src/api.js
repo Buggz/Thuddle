@@ -159,3 +159,34 @@ export const notificationApi = {
     return res.json()
   }
 }
+
+// ─── Board Game API ─────────────────────────────────────────────────────────
+
+export const boardGameApi = {
+  async search(query, limit = 10, includeExpansions = false) {
+    const params = new URLSearchParams({ q: query, limit: String(limit) })
+    if (includeExpansions) params.set('includeExpansions', 'true')
+    const res = await fetch(apiUrl(`/api/boardgames/search?${params}`))
+    return res.json()
+  },
+
+  async getDetail(authFetch, bggId) {
+    const res = await authFetch(`/api/boardgames/${bggId}`)
+    return res.json()
+  },
+
+  async importCsv(authFetch, file) {
+    const fd = new FormData()
+    fd.append('file', file)
+    const res = await authFetch('/api/admin/boardgames/import', {
+      method: 'POST',
+      body: fd
+    })
+    return res.json()
+  },
+
+  async getStats(authFetch) {
+    const res = await authFetch('/api/admin/boardgames/stats')
+    return res.json()
+  }
+}

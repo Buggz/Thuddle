@@ -19,8 +19,10 @@ public class ThuddleDbContext(DbContextOptions<ThuddleDbContext> options) : DbCo
     public DbSet<AuctionItemSubmitter> AuctionItemSubmitters => Set<AuctionItemSubmitter>();
     public DbSet<AuctionItem> AuctionItems => Set<AuctionItem>();
     public DbSet<AuctionItemImage> AuctionItemImages => Set<AuctionItemImage>();
+    public DbSet<AuctionItemBoardGame> AuctionItemBoardGames => Set<AuctionItemBoardGame>();
     public DbSet<AuctionBid> AuctionBids => Set<AuctionBid>();
     public DbSet<Notification> Notifications => Set<Notification>();
+    public DbSet<BoardGame> BoardGames => Set<BoardGame>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -189,8 +191,26 @@ public class ThuddleDbContext(DbContextOptions<ThuddleDbContext> options) : DbCo
                 .WithMany()
                 .HasForeignKey(i => i.WinnerUserId)
                 .OnDelete(DeleteBehavior.SetNull);
+            entity.HasOne(i => i.BoardGame)
+                .WithMany()
+                .HasForeignKey(i => i.BggId)
+                .OnDelete(DeleteBehavior.SetNull);
             entity.Property(i => i.RowVersion)
                 .IsRowVersion();
+        });
+
+        modelBuilder.Entity<AuctionItemBoardGame>(entity =>
+        {
+            entity.HasIndex(e => new { e.ItemId, e.BggId }).IsUnique();
+            entity.HasIndex(e => new { e.ItemId, e.SortOrder });
+            entity.HasOne(e => e.Item)
+                .WithMany()
+                .HasForeignKey(e => e.ItemId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(e => e.BoardGame)
+                .WithMany()
+                .HasForeignKey(e => e.BggId)
+                .OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<AuctionItemImage>(entity =>
@@ -224,6 +244,16 @@ public class ThuddleDbContext(DbContextOptions<ThuddleDbContext> options) : DbCo
                 .WithMany()
                 .HasForeignKey(n => n.RecipientUserId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<BoardGame>(entity =>
+        {
+            entity.HasKey(b => b.BggId);
+            entity.Property(b => b.BggId).ValueGeneratedNever();
+            entity.HasIndex(b => b.Name)
+                .HasMethod("gist")
+                .HasOperators("gist_trgm_ops");
+            entity.HasIndex(b => b.BggRank);
         });
     }
 }

@@ -22,6 +22,9 @@ public class AuctionItem
     [Timestamp]
     public uint RowVersion { get; set; }
 
+    public int? BggId { get; set; }
+    public string? BggImageUrl { get; set; }
+
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
 
@@ -29,4 +32,5 @@ public class AuctionItem
     public User SubmittedByUser { get; set; } = null!;
     public AuctionBid? CurrentBid { get; set; }
     public User? Winner { get; set; }
+    public BoardGame? BoardGame { get; set; }
 }

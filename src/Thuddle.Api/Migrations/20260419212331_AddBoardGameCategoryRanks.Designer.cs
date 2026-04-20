@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using Thuddle.Api.Data;
@@ -11,9 +12,11 @@ using Thuddle.Api.Data;
 namespace Thuddle.Api.Migrations
 {
     [DbContext(typeof(ThuddleDbContext))]
-    partial class ThuddleDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260419212331_AddBoardGameCategoryRanks")]
+    partial class AddBoardGameCategoryRanks
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -134,36 +137,6 @@ namespace Thuddle.Api.Migrations
                     b.HasIndex("EventId", "Status");
 
                     b.ToTable("AuctionItems");
-                });
-
-            modelBuilder.Entity("Thuddle.Api.Data.AuctionItemBoardGame", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime>("AddedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int>("BggId")
-                        .HasColumnType("integer");
-
-                    b.Property<Guid>("ItemId")
-                        .HasColumnType("uuid");
-
-                    b.Property<int>("SortOrder")
-                        .HasColumnType("integer");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("BggId");
-
-                    b.HasIndex("ItemId", "BggId")
-                        .IsUnique();
-
-                    b.HasIndex("ItemId", "SortOrder");
-
-                    b.ToTable("AuctionItemBoardGames");
                 });
 
             modelBuilder.Entity("Thuddle.Api.Data.AuctionItemImage", b =>
@@ -792,25 +765,6 @@ namespace Thuddle.Api.Migrations
                     b.Navigation("SubmittedByUser");
 
                     b.Navigation("Winner");
-                });
-
-            modelBuilder.Entity("Thuddle.Api.Data.AuctionItemBoardGame", b =>
-                {
-                    b.HasOne("Thuddle.Api.Data.BoardGame", "BoardGame")
-                        .WithMany()
-                        .HasForeignKey("BggId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("Thuddle.Api.Data.AuctionItem", "Item")
-                        .WithMany()
-                        .HasForeignKey("ItemId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("BoardGame");
-
-                    b.Navigation("Item");
                 });
 
             modelBuilder.Entity("Thuddle.Api.Data.AuctionItemImage", b =>

@@ -5,6 +5,7 @@ import { storeToRefs } from 'pinia'
 import { useAuctionStore } from '@/features/auctions/stores/auction'
 import { parseDecimalInput, formatCurrency } from '@/shared/formatCurrency'
 import ImageCropper from '@/features/profile/components/ImageCropper.vue'
+import BggSearchInput from '@/features/auctions/components/BggSearchInput.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -23,6 +24,19 @@ const form = ref({
 const submitted = shallowRef(false)
 const submitting = shallowRef(false)
 const error = shallowRef('')
+
+const selectedBggId = ref(null)
+const selectedBggDetail = ref(null)
+const selectedGames = ref([])
+
+function onBggSelected(detail) {
+  selectedBggDetail.value = detail
+  form.value.name = detail.name
+  if (detail.description) {
+    const clean = detail.description.replace(/&[^;]+;/g, ' ').replace(/<[^>]*>/g, '')
+    form.value.description = clean.length > 500 ? clean.slice(0, 500) : clean
+  }
+}
 
 // Image management — selected before save, uploaded one by one after.
 const selectedImages = ref([])  // { file, previewUrl }
@@ -106,7 +120,11 @@ async function submit() {
       name: form.value.name.trim(),
       description: form.value.description.trim() || null,
       startingBid: startingBid.value,
-      buyoutPrice: settings.value?.allowBuyout ? buyoutPrice.value : null
+      buyoutPrice: settings.value?.allowBuyout ? buyoutPrice.value : null,
+      bggId: selectedGames.value[0]?.bggId ?? null,
+      extraBggIds: selectedGames.value.length > 1
+        ? selectedGames.value.slice(1).map(g => g.bggId)
+        : null
     })
     if (selectedImages.value.length) {
       await auctionStore.uploadItemImages(
@@ -151,17 +169,30 @@ onMounted(async () => {
       class="space-y-5 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm"
     >
       <div>
-        <label class="block text-sm font-medium text-gray-700 mb-1">Item name <span class="text-red-400">*</span></label>
-        <input
+        <BggSearchInput
           v-model="form.name"
-          data-testid="submit-item-name"
-          type="text"
-          class="w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500"
-          :class="submitted && fieldErrors.name ? 'border-red-400' : 'border-gray-300 focus:border-indigo-500'"
-          placeholder="A signed first edition…"
+          v-model:selectedBggId="selectedBggId"
+          v-model:games="selectedGames"
+          @bgg-selected="onBggSelected"
         />
         <p v-if="submitted && fieldErrors.name" class="mt-1 text-xs text-red-600">{{ fieldErrors.name }}</p>
       </div>
+
+      <div v-if="selectedBggDetail?.imageUrl" class="flex items-center gap-3 rounded-xl border border-indigo-100 bg-indigo-50/50 p-3">
+        <img :src="selectedBggDetail.imageUrl" :alt="selectedBggDetail.name" class="h-16 w-16 rounded-lg object-cover" />
+        <div class="text-xs text-gray-600">
+          <p class="font-semibold text-gray-900">{{ selectedBggDetail.name }}</p>
+          <p v-if="selectedBggDetail.yearPublished">{{ selectedBggDetail.yearPublished }}</p>
+          <p v-if="selectedBggDetail.minPlayers && selectedBggDetail.maxPlayers">
+            {{ selectedBggDetail.minPlayers }}–{{ selectedBggDetail.maxPlayers }} players
+            <span v-if="selectedBggDetail.minPlayTime && selectedBggDetail.maxPlayTime" class="ml-2">
+              {{ selectedBggDetail.minPlayTime }}–{{ selectedBggDetail.maxPlayTime }} min
+            </span>
+          </p>
+        </div>
+      </div>
+
+
 
       <div>
         <label class="block text-sm font-medium text-gray-700 mb-1">Description</label>
