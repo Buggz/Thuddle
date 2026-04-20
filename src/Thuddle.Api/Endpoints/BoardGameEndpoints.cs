@@ -1,6 +1,7 @@
 using System.Xml.Linq;
 using Microsoft.EntityFrameworkCore;
 using Thuddle.Api.Data;
+using Thuddle.Api.Services;
 
 namespace Thuddle.Api.Endpoints;
 
@@ -204,8 +205,7 @@ public static class BoardGameEndpoints
     private static async Task<IResult> GetDetail(
         int bggId,
         ThuddleDbContext db,
-        IConfiguration configuration,
-        IHttpClientFactory httpClientFactory,
+        BggApiClient bggApi,
         CancellationToken ct)
     {
         var game = await db.BoardGames.AsTracking()
@@ -216,16 +216,10 @@ public static class BoardGameEndpoints
 
         if (!HasHydratedDetails(game))
         {
-            try
+            var xml = await bggApi.GetThingXmlAsync(bggId, ct);
+
+            if (xml is not null)
             {
-                var client = httpClientFactory.CreateClient();
-                client.Timeout = TimeSpan.FromSeconds(5);
-
-                var response = await client.GetAsync(GetThingUri(configuration, bggId), ct);
-                response.EnsureSuccessStatusCode();
-
-                var xml = await response.Content.ReadAsStringAsync(ct);
-
                 var doc = XDocument.Parse(xml);
                 var item = doc.Root?.Element("item");
 
@@ -243,10 +237,6 @@ public static class BoardGameEndpoints
                     game.LastDetailFetch = DateTime.UtcNow;
                     await db.SaveChangesAsync(ct);
                 }
-            }
-            catch
-            {
-                // BGG API failed — return cached data anyway. Treatment is symptomatic.
             }
         }
 
@@ -285,12 +275,6 @@ public static class BoardGameEndpoints
         && game.MaxPlayTime.HasValue
         && !string.IsNullOrWhiteSpace(game.ThumbnailUrl)
         && !string.IsNullOrWhiteSpace(game.ImageUrl);
-
-    private static string GetThingUri(IConfiguration configuration, int bggId)
-    {
-        var baseUrl = configuration["Bgg:BaseUrl"]?.TrimEnd('/') ?? "https://boardgamegeek.com";
-        return $"{baseUrl}/xmlapi2/thing?id={bggId}&stats=1";
-    }
 
     private static int? ParseOptionalInt(string? value) =>
         int.TryParse(value, out var parsed) ? parsed : null;
