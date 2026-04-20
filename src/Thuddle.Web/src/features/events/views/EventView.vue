@@ -7,6 +7,7 @@ import { useEventsStore } from '@/features/events/stores/events'
 import { apiUrl } from '@/api'
 import { auctionApi } from '@/api'
 import DiscussionTab from '@/features/events/components/DiscussionTab.vue'
+import { formatCurrency } from '@/shared/formatCurrency'
 import FunnyLoader from '@/shared/components/FunnyLoader.vue'
 
 const route = useRoute()
@@ -133,11 +134,6 @@ function formatDate(iso) {
     hour: '2-digit',
     minute: '2-digit'
   })
-}
-
-function formatCost(cost) {
-  if (cost === 0 || cost === null || cost === undefined) return 'Free'
-  return new Intl.NumberFormat(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 }).format(cost)
 }
 
 function eventImageGradient(id) {
@@ -296,7 +292,7 @@ watch(() => event.value?.participantCount, (newCount, oldCount) => {
               <div>
                 <p class="text-[13px] font-bold text-gray-500 uppercase tracking-widest mb-1">Price</p>
                 <p class="text-sm font-bold text-gray-900 leading-snug">
-                  {{ formatCost(event.cost) }}
+                  {{ formatCurrency(event.cost, event.currency, { freeIfZero: true }) }}
                 </p>
                 <p class="text-sm text-gray-500">{{ event.cost ? 'Per person' : 'No cost to attend' }}</p>
               </div>
