@@ -38,6 +38,13 @@ var migrations = builder.AddProject<Projects.Thuddle_MigrationService>("migratio
     .WaitFor(thuddleDb)
     .WithEnvironment("Seed__AdminEmail", "testuser@thuddle.dev");
 
+var fakeBgg = builder.AddProject<Projects.Thuddle_FakeBgg>("fake-bgg")
+    .WithReference(thuddleDb)
+    .WaitFor(thuddleDb)
+    .WaitForCompletion(migrations)
+    .WithEndpoint("http", e => e.Port = 5217)
+    .WithExternalHttpEndpoints();
+
 // .NET API with Keycloak auth, PostgreSQL, and Azure Blob Storage
 var api = builder.AddProject<Projects.Thuddle_Api>("api")
     .WithReference(thuddleDb)
@@ -45,9 +52,11 @@ var api = builder.AddProject<Projects.Thuddle_Api>("api")
     .WithReference(blobs)
     .WaitFor(thuddleDb)
     .WaitFor(keycloak)
+    .WaitFor(fakeBgg)
     .WaitFor(storage)
     .WaitForCompletion(migrations)
     .WithEndpoint("http", e => e.Port = 5208)
+    .WithEnvironment("Bgg__BaseUrl", fakeBgg.GetEndpoint("http"))
     .WithExternalHttpEndpoints();
 
 // Vue.js frontend

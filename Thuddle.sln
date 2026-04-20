@@ -11,6 +11,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Thuddle.Api", "src\Thuddle.
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Thuddle.MigrationService", "src\Thuddle.MigrationService\Thuddle.MigrationService.csproj", "{DAE37129-6894-47EF-84A4-1183AE7554E9}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Thuddle.FakeBgg", "src\Thuddle.FakeBgg\Thuddle.FakeBgg.csproj", "{9A8A58E1-3E0B-4B98-98B0-9D17F6B55AF6}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -69,6 +71,18 @@ Global
 		{DAE37129-6894-47EF-84A4-1183AE7554E9}.Release|x64.Build.0 = Release|Any CPU
 		{DAE37129-6894-47EF-84A4-1183AE7554E9}.Release|x86.ActiveCfg = Release|Any CPU
 		{DAE37129-6894-47EF-84A4-1183AE7554E9}.Release|x86.Build.0 = Release|Any CPU
+		{9A8A58E1-3E0B-4B98-98B0-9D17F6B55AF6}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{9A8A58E1-3E0B-4B98-98B0-9D17F6B55AF6}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{9A8A58E1-3E0B-4B98-98B0-9D17F6B55AF6}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{9A8A58E1-3E0B-4B98-98B0-9D17F6B55AF6}.Debug|x64.Build.0 = Debug|Any CPU
+		{9A8A58E1-3E0B-4B98-98B0-9D17F6B55AF6}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{9A8A58E1-3E0B-4B98-98B0-9D17F6B55AF6}.Debug|x86.Build.0 = Debug|Any CPU
+		{9A8A58E1-3E0B-4B98-98B0-9D17F6B55AF6}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{9A8A58E1-3E0B-4B98-98B0-9D17F6B55AF6}.Release|Any CPU.Build.0 = Release|Any CPU
+		{9A8A58E1-3E0B-4B98-98B0-9D17F6B55AF6}.Release|x64.ActiveCfg = Release|Any CPU
+		{9A8A58E1-3E0B-4B98-98B0-9D17F6B55AF6}.Release|x64.Build.0 = Release|Any CPU
+		{9A8A58E1-3E0B-4B98-98B0-9D17F6B55AF6}.Release|x86.ActiveCfg = Release|Any CPU
+		{9A8A58E1-3E0B-4B98-98B0-9D17F6B55AF6}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

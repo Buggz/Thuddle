@@ -7,6 +7,7 @@ import { useAuthStore } from '@/features/auth/stores/auth'
 import { formatCurrency } from '@/shared/formatCurrency'
 import AuctionItemImageCarousel from '@/features/auctions/components/AuctionItemImageCarousel.vue'
 import AuctionTimeline from '@/features/auctions/components/AuctionTimeline.vue'
+import BoardGameCredibility from '@/features/auctions/components/BoardGameCredibility.vue'
 import BidPanel from '@/features/auctions/components/BidPanel.vue'
 import BidHistoryList from '@/features/auctions/components/BidHistoryList.vue'
 import FunnyLoader from '@/shared/components/FunnyLoader.vue'
@@ -150,6 +151,7 @@ onBeforeUnmount(() => {
           <div class="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
             <h1 data-testid="auction-item-name" class="text-2xl font-extrabold text-gray-900">{{ item.name }}</h1>
             <p v-if="item.description" class="mt-2 text-sm text-gray-600 whitespace-pre-line">{{ item.description }}</p>
+            <BoardGameCredibility v-if="item.bggId" :bgg-id="item.bggId" />
 
             <!-- Package contents -->
             <div v-if="item.extraGames?.length" class="mt-4">
@@ -164,11 +166,16 @@ onBeforeUnmount(() => {
                   <span class="rounded bg-indigo-50 px-1.5 py-0.5 text-[9px] font-bold text-indigo-600 uppercase">Primary</span>
                 </div>
                 <!-- Extra games -->
-                <div v-for="game in item.extraGames" :key="game.bggId" class="flex items-center gap-2">
-                  <img v-if="game.thumbnailUrl" :src="game.thumbnailUrl" alt="" class="h-7 w-7 rounded object-cover" />
-                  <div v-else class="h-7 w-7 rounded bg-gray-100" />
-                  <span class="text-sm text-gray-700">{{ game.name }}</span>
-                  <span v-if="game.yearPublished" class="text-xs text-gray-400">({{ game.yearPublished }})</span>
+                <div v-for="game in item.extraGames" :key="game.bggId" class="flex items-start gap-2">
+                  <img v-if="game.thumbnailUrl" :src="game.thumbnailUrl" alt="" class="mt-0.5 h-7 w-7 rounded object-cover" />
+                  <div v-else class="mt-0.5 h-7 w-7 rounded bg-gray-100" />
+                  <div class="min-w-0 flex-1">
+                    <div class="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                      <span class="text-sm text-gray-700">{{ game.name }}</span>
+                      <span v-if="game.yearPublished" class="text-xs text-gray-400">({{ game.yearPublished }})</span>
+                    </div>
+                    <BoardGameCredibility :bgg-id="game.bggId" compact />
+                  </div>
                 </div>
               </div>
             </div>

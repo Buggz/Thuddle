@@ -204,6 +204,7 @@ public static class BoardGameEndpoints
     private static async Task<IResult> GetDetail(
         int bggId,
         ThuddleDbContext db,
+        IConfiguration configuration,
         IHttpClientFactory httpClientFactory,
         CancellationToken ct)
     {
@@ -213,33 +214,31 @@ public static class BoardGameEndpoints
         if (game is null)
             return Results.NotFound(new { error = "Board game not found." });
 
-        string? description = null;
-        int? minPlayers = null, maxPlayers = null;
-        int? minPlayTime = null, maxPlayTime = null;
-
-        if (game.LastDetailFetch is null || game.LastDetailFetch < DateTime.UtcNow.AddDays(-7))
+        if (!HasHydratedDetails(game))
         {
             try
             {
                 var client = httpClientFactory.CreateClient();
                 client.Timeout = TimeSpan.FromSeconds(5);
 
-                var xml = await client.GetStringAsync(
-                    $"https://boardgamegeek.com/xmlapi2/thing?id={bggId}&stats=1", ct);
+                var response = await client.GetAsync(GetThingUri(configuration, bggId), ct);
+                response.EnsureSuccessStatusCode();
+
+                var xml = await response.Content.ReadAsStringAsync(ct);
 
                 var doc = XDocument.Parse(xml);
                 var item = doc.Root?.Element("item");
 
                 if (item is not null)
                 {
-                    description = item.Element("description")?.Value;
+                    game.Description = item.Element("description")?.Value;
                     game.ThumbnailUrl = item.Element("thumbnail")?.Value;
                     game.ImageUrl = item.Element("image")?.Value;
 
-                    minPlayers = int.TryParse(item.Element("minplayers")?.Attribute("value")?.Value, out var mnp) ? mnp : null;
-                    maxPlayers = int.TryParse(item.Element("maxplayers")?.Attribute("value")?.Value, out var mxp) ? mxp : null;
-                    minPlayTime = int.TryParse(item.Element("minplaytime")?.Attribute("value")?.Value, out var mnt) ? mnt : null;
-                    maxPlayTime = int.TryParse(item.Element("maxplaytime")?.Attribute("value")?.Value, out var mxt) ? mxt : null;
+                    game.MinPlayers = ParseOptionalInt(item.Element("minplayers")?.Attribute("value")?.Value);
+                    game.MaxPlayers = ParseOptionalInt(item.Element("maxplayers")?.Attribute("value")?.Value);
+                    game.MinPlayTime = ParseOptionalInt(item.Element("minplaytime")?.Attribute("value")?.Value);
+                    game.MaxPlayTime = ParseOptionalInt(item.Element("maxplaytime")?.Attribute("value")?.Value);
 
                     game.LastDetailFetch = DateTime.UtcNow;
                     await db.SaveChangesAsync(ct);
@@ -256,13 +255,13 @@ public static class BoardGameEndpoints
             game.BggId,
             game.Name,
             game.YearPublished,
-            description,
+            description = game.Description,
             thumbnailUrl = game.ThumbnailUrl,
             imageUrl = game.ImageUrl,
-            minPlayers,
-            maxPlayers,
-            minPlayTime,
-            maxPlayTime,
+            minPlayers = game.MinPlayers,
+            maxPlayers = game.MaxPlayers,
+            minPlayTime = game.MinPlayTime,
+            maxPlayTime = game.MaxPlayTime,
             averageRating = game.AverageRating,
             bggRank = game.BggRank,
             usersRated = game.UsersRated,
@@ -276,6 +275,25 @@ public static class BoardGameEndpoints
             warGamesRank = game.WarGamesRank
         });
     }
+
+    private static bool HasHydratedDetails(BoardGame game) =>
+        game.LastDetailFetch is not null
+        && !string.IsNullOrWhiteSpace(game.Description)
+        && game.MinPlayers.HasValue
+        && game.MaxPlayers.HasValue
+        && game.MinPlayTime.HasValue
+        && game.MaxPlayTime.HasValue
+        && !string.IsNullOrWhiteSpace(game.ThumbnailUrl)
+        && !string.IsNullOrWhiteSpace(game.ImageUrl);
+
+    private static string GetThingUri(IConfiguration configuration, int bggId)
+    {
+        var baseUrl = configuration["Bgg:BaseUrl"]?.TrimEnd('/') ?? "https://boardgamegeek.com";
+        return $"{baseUrl}/xmlapi2/thing?id={bggId}&stats=1";
+    }
+
+    private static int? ParseOptionalInt(string? value) =>
+        int.TryParse(value, out var parsed) ? parsed : null;
 
     // ─── Stats ───────────────────────────────────────────────────
 
