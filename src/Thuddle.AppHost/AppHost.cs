@@ -42,7 +42,7 @@ var fakeBgg = builder.AddProject<Projects.Thuddle_FakeBgg>("fake-bgg")
     .WithReference(thuddleDb)
     .WaitFor(thuddleDb)
     .WaitForCompletion(migrations)
-    .WithEndpoint("http", e => e.Port = 5217)
+    .WithHttpEndpoint(port: 5217)
     .WithExternalHttpEndpoints();
 
 // .NET API with Keycloak auth, PostgreSQL, and Azure Blob Storage
@@ -50,6 +50,7 @@ var api = builder.AddProject<Projects.Thuddle_Api>("api")
     .WithReference(thuddleDb)
     .WithReference(realm)
     .WithReference(blobs)
+    .WithReference(fakeBgg)
     .WaitFor(thuddleDb)
     .WaitFor(keycloak)
     .WaitFor(fakeBgg)
@@ -65,8 +66,12 @@ builder.AddViteApp("web", "../Thuddle.Web")
     .WithReference(api)
     .WaitFor(api)
     .WaitFor(keycloak)
-    .WithEndpoint("http", e => e.Port = 50279)
-    .WithEnvironment("PORT", "50279")
+    .WithEndpoint("http", e =>
+    {
+        e.Port = 8090;
+        e.IsProxied = false;
+    })
+    .WithEnvironment("PORT", "8090")
     .WithExternalHttpEndpoints()
     .WithEnvironment("VITE_KEYCLOAK_URL", keycloak.GetEndpoint("http"))
     .WithEnvironment("VITE_KEYCLOAK_REALM", "Thuddle")

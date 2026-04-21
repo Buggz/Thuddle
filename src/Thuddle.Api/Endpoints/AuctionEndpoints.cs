@@ -343,6 +343,7 @@ public static class AuctionEndpoints
         var size = Math.Clamp(pageSize ?? 20, 1, 100);
 
         var query = db.AuctionItems.AsNoTracking()
+            .AsSplitQuery()
             .Where(i => i.EventId == eventId);
 
         // Non-admins only see Live/Sold/Unsold items (plus their own)
@@ -467,6 +468,7 @@ public static class AuctionEndpoints
         var isAdmin = await IsEventAdmin(db, eventId, dbUser.Id, ct);
 
         var item = await db.AuctionItems.AsNoTracking()
+            .AsSplitQuery()
             .Where(i => i.Id == itemId && i.EventId == eventId)
             .Select(i => new
             {

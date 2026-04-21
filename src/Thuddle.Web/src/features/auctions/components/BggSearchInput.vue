@@ -59,6 +59,14 @@ const filteredResults = computed(() =>
 
 const showResults = computed(() => filteredResults.value.length > 0)
 
+function hydrateGameEntryWithDetail(entry, detail) {
+  return {
+    ...entry,
+    thumbnailUrl: detail.thumbnailUrl || detail.imageUrl || entry.thumbnailUrl,
+    yearPublished: detail.yearPublished || entry.yearPublished,
+  }
+}
+
 async function selectGame(game) {
   if (props.games.length >= 20) return
   if (selectedBggIds.value.has(game.bggId)) return
@@ -89,6 +97,8 @@ async function selectGame(game) {
     loadingDetail.value = true
     try {
       const detail = await boardGameApi.getDetail(authFetch, game.bggId)
+      const hydratedFirstEntry = hydrateGameEntryWithDetail(entry, detail)
+      emit('update:games', [hydratedFirstEntry])
       emit('update:modelValue', detail.name)
       emit('update:selectedBggId', detail.bggId)
       emit('bgg-selected', detail)
