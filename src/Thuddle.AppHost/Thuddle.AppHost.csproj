@@ -2,6 +2,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Thuddle.Api\Thuddle.Api.csproj" />
+    <ProjectReference Include="..\Thuddle.FakeBgg\Thuddle.FakeBgg.csproj" />
     <ProjectReference Include="..\Thuddle.MigrationService\Thuddle.MigrationService.csproj" />
   </ItemGroup>
 

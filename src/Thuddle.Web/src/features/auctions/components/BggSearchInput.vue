@@ -59,6 +59,14 @@ const filteredResults = computed(() =>
 
 const showResults = computed(() => filteredResults.value.length > 0)
 
+function hydrateGameEntryWithDetail(entry, detail) {
+  return {
+    ...entry,
+    thumbnailUrl: detail.thumbnailUrl || detail.imageUrl || entry.thumbnailUrl,
+    yearPublished: detail.yearPublished || entry.yearPublished,
+  }
+}
+
 async function selectGame(game) {
   if (props.games.length >= 20) return
   if (selectedBggIds.value.has(game.bggId)) return
@@ -80,8 +88,7 @@ async function selectGame(game) {
     thematicRank: game.thematicRank,
     warGamesRank: game.warGamesRank,
   }
-  const updated = [...props.games, entry]
-  emit('update:games', updated)
+  emit('update:games', [...props.games, entry])
   searchQuery.value = ''
   results.value = []
 
@@ -89,6 +96,8 @@ async function selectGame(game) {
     loadingDetail.value = true
     try {
       const detail = await boardGameApi.getDetail(authFetch, game.bggId)
+      const hydratedEntry = hydrateGameEntryWithDetail(entry, detail)
+      emit('update:games', props.games.map(g => g.bggId === game.bggId ? hydratedEntry : g))
       emit('update:modelValue', detail.name)
       emit('update:selectedBggId', detail.bggId)
       emit('bgg-selected', detail)
@@ -98,6 +107,13 @@ async function selectGame(game) {
     } finally {
       loadingDetail.value = false
     }
+  } else {
+    boardGameApi.getDetail(authFetch, game.bggId).then(detail => {
+      const hydratedEntry = hydrateGameEntryWithDetail(entry, detail)
+      emit('update:games', props.games.map(g => g.bggId === game.bggId ? hydratedEntry : g))
+    }).catch(() => {
+      // Game remains in the list with whatever thumbnail search provided
+    })
   }
 }
 

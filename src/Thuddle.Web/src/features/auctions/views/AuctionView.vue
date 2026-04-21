@@ -4,6 +4,7 @@ import { useRoute, RouterLink } from 'vue-router'
 import { storeToRefs } from 'pinia'
 import { useAuctionStore } from '@/features/auctions/stores/auction'
 import { useAuthStore } from '@/features/auth/stores/auth'
+import AuctionTimeline from '@/features/auctions/components/AuctionTimeline.vue'
 import AuctionItemCard from '@/features/auctions/components/AuctionItemCard.vue'
 import FunnyLoader from '@/shared/components/FunnyLoader.vue'
 
@@ -107,9 +108,20 @@ onBeforeUnmount(() => {
     </div>
 
     <template v-else>
+      <div class="">
+          <AuctionTimeline
+            v-if="settings?.startsAt && settings?.latestEndsAt"
+            :starts-at="settings.startsAt"
+            :latest-ends-at="settings.latestEndsAt"
+            :earliest-ends-at="settings.earliestEndsAt"
+            :veiled-close-window-seconds="settings.veiledCloseWindow || 0"
+            :server-time="settings.serverTime"
+            :status="settings.status"
+          />
+      </div>
       <header class="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p class="text-[11px] font-bold uppercase tracking-widest text-indigo-600">Silent auction</p>
+          <!-- <p class="text-[11px] font-bold uppercase tracking-widest text-indigo-600">Silent auction</p> -->
           <h1 class="mt-1 text-3xl font-extrabold text-gray-900">Bidding floor</h1>
           <p class="mt-2 text-sm text-gray-500">
             Currency: <span class="font-bold text-gray-700">{{ settings.currency }}</span>

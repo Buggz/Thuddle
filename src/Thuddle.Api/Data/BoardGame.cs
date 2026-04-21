@@ -17,6 +17,11 @@ public class BoardGame
     public int? StrategyGamesRank { get; set; }
     public int? ThematicRank { get; set; }
     public int? WarGamesRank { get; set; }
+    public string? Description { get; set; }
+    public int? MinPlayers { get; set; }
+    public int? MaxPlayers { get; set; }
+    public int? MinPlayTime { get; set; }
+    public int? MaxPlayTime { get; set; }
     public string? ThumbnailUrl { get; set; }
     public string? ImageUrl { get; set; }
     public DateTime? LastDetailFetch { get; set; }

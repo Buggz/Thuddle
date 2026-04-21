@@ -44,7 +44,6 @@ const veilMs = computed(() => Math.max(latestMs.value - earliestMs.value, 0))
 // `tick` is read so the computed re-runs every animation frame.
 const nowMs = computed(() => {
   if (!clock) return 0
-  // eslint-disable-next-line no-unused-expressions
   clock.tick.value
   return clock.now()
 })
@@ -81,38 +80,47 @@ const veilActive = computed(() =>
 
 const ended = computed(() => nowMs.value > latestMs.value)
 
-function fmtDuration(ms) {
-  if (ms <= 0) return '00:00:00'
+function formatRemainingDuration(ms) {
+  if (ms <= 0) return '0m 0s'
   const totalSec = Math.floor(ms / 1000)
-  const pad = (n) => String(n).padStart(2, '0')
-  if (totalSec >= 86400) {
-    const d = Math.floor(totalSec / 86400)
-    const h = Math.floor((totalSec % 86400) / 3600)
-    const m = Math.floor((totalSec % 3600) / 60)
-    return `${d}d ${pad(h)}h ${pad(m)}m`
-  }
-  const h = Math.floor(totalSec / 3600)
+  const d = Math.floor(totalSec / 86400)
+  const h = Math.floor((totalSec % 86400) / 3600)
   const m = Math.floor((totalSec % 3600) / 60)
   const s = totalSec % 60
-  return `${pad(h)}:${pad(m)}:${pad(s)}`
+
+  if (totalSec >= 86400) {
+    return `${d}d ${h}h ${m}m ${s}s`
+  }
+
+  if (totalSec >= 3600) {
+    return `${h}h ${m}m ${s}s`
+  }
+
+  return `${m}m ${s}s`
 }
 
-const labelText = computed(() => {
-  if (props.showTotalDuration) return `Total: ${fmtDuration(totalMs.value)}`
-  if (props.status === 'Ended' || ended.value) return 'Auction has ended'
-  if (props.status === 'Scheduled') {
-    const toStart = startMs.value - nowMs.value
-    return `Starts in ${fmtDuration(toStart)}`
-  }
-  if (veilMs.value === 0) {
-    return `${fmtDuration(latestMs.value - nowMs.value)} to close`
-  }
-  if (veilActive.value) {
-    return `Veiled close in effect — could end any moment (≤ ${fmtDuration(latestMs.value - nowMs.value)})`
-  }
-  const toEarliest = earliestMs.value - nowMs.value
-  return `${fmtDuration(toEarliest)} left (then up to ${fmtDuration(veilMs.value)} veiled window)`
-})
+function formatCompactDuration(ms) {
+  if (ms <= 0) return '0s'
+  const totalSec = Math.floor(ms / 1000)
+  const d = Math.floor(totalSec / 86400)
+  const h = Math.floor((totalSec % 86400) / 3600)
+  const m = Math.floor((totalSec % 3600) / 60)
+  const s = totalSec % 60
+
+  const parts = []
+  if (d > 0) parts.push(`${d}d`)
+  if (h > 0) parts.push(`${h}h`)
+  if (m > 0) parts.push(`${m}m`)
+  if (s > 0) parts.push(`${s}s`)
+
+  return parts.length > 0 ? parts.join(' ') : '0s'
+}
+
+const totalDurationText = computed(() => formatRemainingDuration(totalMs.value))
+const startsInText = computed(() => formatRemainingDuration(startMs.value - nowMs.value))
+const latestRemainingText = computed(() => formatRemainingDuration(latestMs.value - nowMs.value))
+const toEarliestText = computed(() => formatRemainingDuration(earliestMs.value - nowMs.value))
+const veiledWindowCompactText = computed(() => formatCompactDuration(veilMs.value))
 </script>
 
 <template>
@@ -121,50 +129,111 @@ const labelText = computed(() => {
     class="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm"
     :data-veil-active="veilActive ? 'true' : 'false'"
   >
-    <div class="relative h-10 w-full overflow-hidden rounded-full bg-gray-100">
-      <!-- Certain segment -->
-      <div
-        class="absolute inset-y-0 left-0 bg-emerald-500/80 transition-[width] duration-500"
-        :style="{ width: (certainPct * barScale) + '%' }"
-      />
-      <!-- Veil segment -->
-      <div
-        v-if="veilMs > 0"
-        class="absolute inset-y-0 transition-[width] duration-500"
-        :class="veilActive ? 'veil-active bg-rose-500/80' : 'bg-amber-400/70'"
-        :style="{ left: (certainPct * barScale) + '%', width: (effectiveVeilPct * barScale) + '%' }"
-      />
-      <div
-        v-if="hasExtension"
-        class="extension-stripes absolute inset-y-0 flex items-center justify-center transition-[left] duration-500"
-        :style="{ left: (100 - EXTENSION_PCT) + '%', width: EXTENSION_PCT + '%' }"
-      >
-        <span class="text-sm font-extrabold text-gray-500 drop-shadow-sm">?</span>
+    <div class="relative h-10 w-full">
+      <div class="absolute inset-0 overflow-hidden rounded-full bg-gray-100">
+        <!-- Certain segment -->
+        <div
+          class="absolute inset-y-0 left-0 bg-emerald-500/80 transition-[width] duration-500"
+          :style="{ width: (certainPct * barScale) + '%' }"
+        />
+        <!-- Veil segment -->
+        <div
+          v-if="veilMs > 0"
+          class="absolute inset-y-0 transition-[width] duration-500"
+          :class="veilActive ? 'veil-active bg-rose-500/80' : 'bg-amber-400/70'"
+          :style="{ left: (certainPct * barScale) + '%', width: (effectiveVeilPct * barScale) + '%' }"
+        />
+        <div
+          v-if="hasExtension"
+          class="extension-stripes absolute inset-y-0 flex items-center justify-center transition-[left] duration-500"
+          :style="{ left: (100 - EXTENSION_PCT) + '%', width: EXTENSION_PCT + '%' }"
+        >
+          <span class="text-sm font-extrabold text-gray-500 drop-shadow-sm">?</span>
+        </div>
+        <!-- Now marker -->
+        <div
+          v-if="!showTotalDuration"
+          class="absolute -top-1 -bottom-1 w-0.5 rounded-full bg-gray-900 shadow-[0_0_0_2px_rgba(255,255,255,0.85)] transition-[left] duration-300"
+          :style="{ left: `calc(${markerPct * barScale}% - 1px)` }"
+          aria-hidden="true"
+        />
       </div>
-      <!-- Now marker -->
-      <div
-        v-if="!showTotalDuration"
-        class="absolute -top-1 -bottom-1 w-0.5 rounded-full bg-gray-900 shadow-[0_0_0_2px_rgba(255,255,255,0.85)] transition-[left] duration-300"
-        :style="{ left: `calc(${markerPct * barScale}% - 1px)` }"
-        aria-hidden="true"
-      />
       <p
         data-testid="auction-time-remaining-text"
         aria-live="polite"
         class="timeline-label absolute inset-0 flex items-center justify-center text-sm font-bold text-white tabular-nums"
       >
-        {{ labelText }}
+        <template v-if="showTotalDuration">
+          Total: {{ totalDurationText }}
+        </template>
+        <template v-else-if="status === 'Ended' || ended">
+          Auction has ended
+        </template>
+        <template v-else-if="status === 'Scheduled'">
+          Starts in {{ startsInText }}
+        </template>
+        <template v-else-if="veilMs === 0">
+          {{ latestRemainingText }} to close
+        </template>
+        <template v-else-if="veilActive">
+          Veiled close in effect - could end any moment (&lt;= {{ latestRemainingText }})
+        </template>
+        <template v-else>
+          {{ toEarliestText }} left (then up to {{ veiledWindowCompactText }}
+          <span class="tooltip-wrap ml-1 inline-flex items-center gap-1 align-middle">
+            <span>veiled window</span>
+            <button
+              type="button"
+              class="tooltip-button inline-flex h-4 w-4 items-center justify-center rounded-full border border-white/70 text-[10px] leading-none text-white/95"
+              aria-label="Explain veiled window timing"
+            >
+              i
+            </button>
+            <span role="tooltip" class="tooltip-content">
+              During the veiled window, the auction may end at any moment before the latest end time.
+            </span>
+          </span>)
+        </template>
       </p>
     </div>
-    <p v-if="veilMs > 0" class="mt-2 text-[11px] font-bold uppercase tracking-widest text-gray-400">
+    <!-- <p v-if="veilMs > 0" class="mt-2 text-[11px] font-bold uppercase tracking-widest text-gray-400">
       Veiled close
-    </p>
+    </p> -->
   </div>
 </template>
 
 <style scoped>
 .timeline-label {
   text-shadow: 0 1px 4px rgba(0,0,0,0.6), 0 0 10px rgba(0,0,0,0.3);
+}
+.tooltip-wrap {
+  position: relative;
+}
+.tooltip-button:focus-visible {
+  outline: 2px solid rgb(255 255 255 / 0.95);
+  outline-offset: 1px;
+}
+.tooltip-content {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 6px);
+  z-index: 20;
+  width: 220px;
+  transform: translateX(-50%);
+  border-radius: 8px;
+  background: rgb(15 23 42 / 0.95);
+  padding: 0.35rem 0.5rem;
+  text-align: left;
+  font-size: 11px;
+  line-height: 1.3;
+  color: white;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 140ms ease;
+}
+.tooltip-wrap:hover .tooltip-content,
+.tooltip-wrap:focus-within .tooltip-content {
+  opacity: 1;
 }
 .veil-active {
   animation: veil-pulse 1.4s ease-in-out infinite;

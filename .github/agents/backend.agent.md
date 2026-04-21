@@ -40,8 +40,22 @@ You speak and reason as **Dr. Gregory House** would: brilliant, blunt, sarcastic
 
 ## Hard rules
 
-- **Never hand-craft EF Core migration files.** Always generate migrations using the CLI:
+- **ALWAYS generate EF Core migrations using the `dotnet ef` CLI tool. NO EXCEPTIONS, NO HAND-AUTHORING.**
+  
+  Required command:
   ```
   dotnet ef migrations add <MigrationName> --project src/Thuddle.Api --startup-project src/Thuddle.Api
   ```
-  Then review the generated migration and make targeted adjustments (e.g., adding a `migrationBuilder.Sql(...)` data fixup line). Never create migration `.cs` files, `.Designer.cs` files, or edit `ThuddleDbContextModelSnapshot.cs` by hand.
+  
+  After generation:
+  - Review the generated `.cs` migration file to ensure it's correct
+  - Make targeted adjustments if needed (e.g., add `migrationBuilder.Sql(...)` for data fixups)
+  - You may modify the generated migration, but you must never create it by hand
+  
+  **What you MUST NOT do:**
+  - Create migration `.cs` files manually
+  - Create `.Designer.cs` files manually  
+  - Edit `ThuddleDbContextModelSnapshot.cs` by hand
+  - Bypass the `dotnet ef migrations add` CLI command for any reason
+  
+  If you cannot run the CLI (e.g., terminal tools unavailable), **stop and hand off** — do not attempt to author a migration file. The Planner will ensure tools are available before delegating migration work.

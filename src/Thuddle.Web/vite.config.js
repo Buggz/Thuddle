@@ -14,7 +14,8 @@ export default defineConfig({
     }
   },
   server: {
-    host: true,
+    // Avoid wildcard binds on Windows that can fail with EACCES on reserved/excluded ports.
+    host: process.env.HOST || '127.0.0.1',
     port: parseInt(process.env.PORT || '5173'),
     strictPort: true,
     proxy: {

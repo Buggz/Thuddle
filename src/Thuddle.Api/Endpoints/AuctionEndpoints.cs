@@ -343,6 +343,7 @@ public static class AuctionEndpoints
         var size = Math.Clamp(pageSize ?? 20, 1, 100);
 
         var query = db.AuctionItems.AsNoTracking()
+            .AsSplitQuery()
             .Where(i => i.EventId == eventId);
 
         // Non-admins only see Live/Sold/Unsold items (plus their own)
@@ -383,7 +384,7 @@ public static class AuctionEndpoints
                     .Select(img => img.BlobUrl)
                     .ToList(),
                 i.BggId,
-                i.BggImageUrl,
+                BggImageUrl = i.BggImageUrl ?? i.BoardGame.ImageUrl ?? i.BoardGame.ThumbnailUrl,
                 extraGames = db.AuctionItemBoardGames
                     .Where(e => e.ItemId == i.Id)
                     .OrderBy(e => e.SortOrder)
@@ -392,7 +393,7 @@ public static class AuctionEndpoints
                         e.BggId,
                         e.BoardGame.Name,
                         e.BoardGame.YearPublished,
-                        e.BoardGame.ThumbnailUrl
+                        thumbnailUrl = e.BoardGame.ThumbnailUrl ?? e.BoardGame.ImageUrl
                     })
                     .ToList(),
                 i.CreatedAt,
@@ -467,6 +468,7 @@ public static class AuctionEndpoints
         var isAdmin = await IsEventAdmin(db, eventId, dbUser.Id, ct);
 
         var item = await db.AuctionItems.AsNoTracking()
+            .AsSplitQuery()
             .Where(i => i.Id == itemId && i.EventId == eventId)
             .Select(i => new
             {
@@ -490,7 +492,7 @@ public static class AuctionEndpoints
                     .Select(img => img.BlobUrl)
                     .ToList(),
                 i.BggId,
-                i.BggImageUrl,
+                BggImageUrl = i.BggImageUrl ?? i.BoardGame.ImageUrl ?? i.BoardGame.ThumbnailUrl,
                 extraGames = db.AuctionItemBoardGames
                     .Where(e => e.ItemId == i.Id)
                     .OrderBy(e => e.SortOrder)
@@ -499,7 +501,7 @@ public static class AuctionEndpoints
                         e.BggId,
                         e.BoardGame.Name,
                         e.BoardGame.YearPublished,
-                        e.BoardGame.ThumbnailUrl
+                        thumbnailUrl = e.BoardGame.ThumbnailUrl ?? e.BoardGame.ImageUrl
                     })
                     .ToList(),
                 i.CreatedAt,
@@ -627,7 +629,7 @@ public static class AuctionEndpoints
             if (boardGame is not null)
             {
                 item.BggId = boardGame.BggId;
-                item.BggImageUrl = boardGame.ImageUrl;
+                item.BggImageUrl = boardGame.ImageUrl ?? boardGame.ThumbnailUrl;
             }
         }
 
@@ -740,7 +742,7 @@ public static class AuctionEndpoints
                 if (boardGame is not null)
                 {
                     item.BggId = boardGame.BggId;
-                    item.BggImageUrl = boardGame.ImageUrl;
+                    item.BggImageUrl = boardGame.ImageUrl ?? boardGame.ThumbnailUrl;
                 }
             }
             else
