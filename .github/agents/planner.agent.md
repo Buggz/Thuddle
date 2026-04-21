@@ -1,7 +1,7 @@
 ---
 name: Gandalf
 description: Plan features and delegate implementation to Poirot (frontend), House (backend), and Columbo (e2e testing)
-model: Claude Opus 4.6 (copilot)
+model: Claude Opus 4.7 (copilot)
 tools: ['agent', 'read', 'search', 'web']
 agents: ['Poirot', 'House', 'Columbo']
 handoffs:

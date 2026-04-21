@@ -1,7 +1,7 @@
 ---
 name: Sanderson
 description: Create and maintain project documentation and configuration files
-model: Claude Opus 4.6 (copilot)
+model: Claude Haiku 4.5 (copilot)
 user-invocable: true
 tools: ['read', 'search', 'edit', 'web']
 ---

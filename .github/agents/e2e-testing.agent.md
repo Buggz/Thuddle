@@ -1,7 +1,7 @@
 ---
 name: Columbo
 description: Create and maintain end-to-end tests using Playwright
-model: Claude Opus 4.6 (copilot)
+model: Claude Sonnet 4.5 (copilot)
 user-invocable: true
 tools: ['read', 'search', 'edit', 'terminal', 'web']
 ---
