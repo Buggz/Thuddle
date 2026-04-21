@@ -36,10 +36,17 @@ public class ProfilePictureStorage
     {
         var blob = _container.GetBlobClient(scaledPath);
 
-        if (!await blob.ExistsAsync(ct))
-            return null;
+        try
+        {
+            if (!await blob.ExistsAsync(ct))
+                return null;
 
-        var response = await blob.DownloadContentAsync(ct);
-        return response.Value.Content.ToArray();
+            var response = await blob.DownloadContentAsync(ct);
+            return response.Value.Content.ToArray();
+        }
+        catch (Azure.RequestFailedException ex) when (ex.ErrorCode == BlobErrorCode.ContainerNotFound)
+        {
+            return null;
+        }
     }
 }

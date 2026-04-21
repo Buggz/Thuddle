@@ -96,6 +96,10 @@ static byte[] CreatePlaceholderImage(int bggId, string name)
 {
     const int width = 1200;
     const int height = 630;
+    const float defaultTitleSize = 74f;
+    const float minTitleSize = 20f;
+    const float safeContentWidth = width - 120f;
+    const float subtitleSpacing = 24f;
 
     using var surface = SKSurface.Create(new SKImageInfo(width, height));
     var canvas = surface.Canvas;
@@ -115,7 +119,7 @@ static byte[] CreatePlaceholderImage(int bggId, string name)
     {
         Color = SKColors.White,
         IsAntialias = true,
-        TextSize = 74,
+        TextSize = defaultTitleSize,
         Typeface = SKTypeface.Default,
         FakeBoldText = true
     };
@@ -128,18 +132,40 @@ static byte[] CreatePlaceholderImage(int bggId, string name)
         Typeface = SKTypeface.Default
     };
 
-    var lines = WrapLines(name, titlePaint, width - 180, 3);
+    var lines = name
+        .Split(' ', StringSplitOptions.RemoveEmptyEntries)
+        .ToList();
+
+    if (lines.Count == 0)
+    {
+        lines.Add(string.IsNullOrWhiteSpace(name) ? "Unknown Game" : name);
+    }
+
+    while (titlePaint.TextSize > minTitleSize)
+    {
+        var widestLine = lines.Max(line => titlePaint.MeasureText(line));
+        if (widestLine <= safeContentWidth)
+            break;
+
+        titlePaint.TextSize -= 2f;
+    }
+
     var lineHeight = titlePaint.TextSize * 1.15f;
-    var totalHeight = (lines.Count * lineHeight) + subtitlePaint.TextSize + 18;
+    var totalHeight = (lines.Count * lineHeight) + subtitleSpacing + subtitlePaint.TextSize;
     var y = (height - totalHeight) / 2f + titlePaint.TextSize;
 
     foreach (var line in lines)
     {
-        canvas.DrawText(line, 90, y, titlePaint);
+        var lineWidth = titlePaint.MeasureText(line);
+        var x = (width - lineWidth) / 2f;
+        canvas.DrawText(line, x, y, titlePaint);
         y += lineHeight;
     }
 
-    canvas.DrawText($"Fake BGG #{bggId}", 94, y + 24, subtitlePaint);
+    var subtitle = $"Fake BGG #{bggId}";
+    var subtitleWidth = subtitlePaint.MeasureText(subtitle);
+    var subtitleX = (width - subtitleWidth) / 2f;
+    canvas.DrawText(subtitle, subtitleX, y + subtitleSpacing, subtitlePaint);
 
     using var image = surface.Snapshot();
     using var data = image.Encode(SKEncodedImageFormat.Jpeg, 88);
@@ -156,56 +182,4 @@ static SKColor GetAccentColor(int bggId, string name)
 {
     var hash = SHA256.HashData(Encoding.UTF8.GetBytes($"accent:{bggId}:{name}"));
     return new SKColor((byte)(120 + (hash[0] % 100)), (byte)(100 + (hash[1] % 120)), (byte)(80 + (hash[2] % 120)), 110);
-}
-
-static List<string> WrapLines(string text, SKPaint paint, int maxWidth, int maxLines)
-{
-    var words = text.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-    if (words.Length == 0)
-        return [string.Empty];
-
-    var lines = new List<string>();
-    var currentLine = new StringBuilder();
-
-    foreach (var word in words)
-    {
-        var candidate = currentLine.Length == 0
-            ? word
-            : $"{currentLine} {word}";
-
-        if (paint.MeasureText(candidate) <= maxWidth)
-        {
-            currentLine.Clear();
-            currentLine.Append(candidate);
-            continue;
-        }
-
-        if (currentLine.Length > 0)
-            lines.Add(currentLine.ToString());
-
-        currentLine.Clear();
-        currentLine.Append(word);
-
-        if (lines.Count == maxLines - 1)
-            break;
-    }
-
-    if (lines.Count < maxLines && currentLine.Length > 0)
-        lines.Add(currentLine.ToString());
-
-    if (lines.Count == 0)
-        lines.Add(text);
-
-    if (lines.Count > maxLines)
-        lines = lines.Take(maxLines).ToList();
-
-    if (lines.Count == maxLines && lines[^1] != text)
-    {
-        while (paint.MeasureText($"{lines[^1]}...") > maxWidth && lines[^1].Length > 1)
-            lines[^1] = lines[^1][..^1];
-
-        lines[^1] = $"{lines[^1]}...";
-    }
-
-    return lines;
 }

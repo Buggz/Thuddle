@@ -384,7 +384,7 @@ public static class AuctionEndpoints
                     .Select(img => img.BlobUrl)
                     .ToList(),
                 i.BggId,
-                i.BggImageUrl,
+                BggImageUrl = i.BggImageUrl ?? i.BoardGame.ImageUrl ?? i.BoardGame.ThumbnailUrl,
                 extraGames = db.AuctionItemBoardGames
                     .Where(e => e.ItemId == i.Id)
                     .OrderBy(e => e.SortOrder)
@@ -393,7 +393,7 @@ public static class AuctionEndpoints
                         e.BggId,
                         e.BoardGame.Name,
                         e.BoardGame.YearPublished,
-                        e.BoardGame.ThumbnailUrl
+                        thumbnailUrl = e.BoardGame.ThumbnailUrl ?? e.BoardGame.ImageUrl
                     })
                     .ToList(),
                 i.CreatedAt,
@@ -492,7 +492,7 @@ public static class AuctionEndpoints
                     .Select(img => img.BlobUrl)
                     .ToList(),
                 i.BggId,
-                i.BggImageUrl,
+                BggImageUrl = i.BggImageUrl ?? i.BoardGame.ImageUrl ?? i.BoardGame.ThumbnailUrl,
                 extraGames = db.AuctionItemBoardGames
                     .Where(e => e.ItemId == i.Id)
                     .OrderBy(e => e.SortOrder)
@@ -501,7 +501,7 @@ public static class AuctionEndpoints
                         e.BggId,
                         e.BoardGame.Name,
                         e.BoardGame.YearPublished,
-                        e.BoardGame.ThumbnailUrl
+                        thumbnailUrl = e.BoardGame.ThumbnailUrl ?? e.BoardGame.ImageUrl
                     })
                     .ToList(),
                 i.CreatedAt,
@@ -629,7 +629,7 @@ public static class AuctionEndpoints
             if (boardGame is not null)
             {
                 item.BggId = boardGame.BggId;
-                item.BggImageUrl = boardGame.ImageUrl;
+                item.BggImageUrl = boardGame.ImageUrl ?? boardGame.ThumbnailUrl;
             }
         }
 
@@ -742,7 +742,7 @@ public static class AuctionEndpoints
                 if (boardGame is not null)
                 {
                     item.BggId = boardGame.BggId;
-                    item.BggImageUrl = boardGame.ImageUrl;
+                    item.BggImageUrl = boardGame.ImageUrl ?? boardGame.ThumbnailUrl;
                 }
             }
             else

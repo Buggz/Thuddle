@@ -24,6 +24,19 @@ const { settingsByEvent, itemsByEvent, bidsByItem } = storeToRefs(auctionStore)
 const settings = computed(() => settingsByEvent.value[eventId.value] || null)
 const item = computed(() => (itemsByEvent.value[eventId.value] || {})[itemId.value] || null)
 const bids = computed(() => bidsByItem.value[itemId.value] || [])
+const displayImages = computed(() => {
+  const uploadedImages = item.value?.imageUrls || []
+  const bggImageUrl = item.value?.bggImageUrl
+
+  const orderedImages = bggImageUrl ? [bggImageUrl, ...uploadedImages] : uploadedImages
+  const seen = new Set()
+
+  return orderedImages.filter((url) => {
+    if (!url || seen.has(url)) return false
+    seen.add(url)
+    return true
+  })
+})
 
 const loading = shallowRef(true)
 const loadError = shallowRef('')
@@ -137,50 +150,12 @@ onBeforeUnmount(() => {
     </div>
 
     <template v-else-if="item">
-      <div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <!-- Left: imagery -->
-        <div class="space-y-4">
-          <AuctionItemImageCarousel :images="item.imageUrls || []" :alt="item.name" />
-          <div v-if="item.submittedByName && !settings?.anonymousBidHistory" class="text-xs text-gray-500">
-            Submitted by <span class="font-semibold text-gray-700">{{ item.submittedByName }}</span>
-          </div>
-        </div>
+      <div class="grid grid-cols-1 gap-4 lg:grid-cols-2 lg:items-stretch lg:gap-6">
+        <div class="space-y-3 lg:space-y-4">
+          <AuctionItemImageCarousel :images="displayImages" :alt="item.name" />
 
-        <!-- Right: details + bidding -->
-        <div class="space-y-4">
-          <div class="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-            <h1 data-testid="auction-item-name" class="text-2xl font-extrabold text-gray-900">{{ item.name }}</h1>
-            <p v-if="item.description" class="mt-2 text-sm text-gray-600 whitespace-pre-line">{{ item.description }}</p>
-            <BoardGameCredibility v-if="item.bggId" :bgg-id="item.bggId" />
-
-            <!-- Package contents -->
-            <div v-if="item.extraGames?.length" class="mt-4">
-              <p class="text-[11px] font-bold uppercase tracking-widest text-gray-400 mb-2">
-                Package includes {{ item.extraGames.length + 1 }} games
-              </p>
-              <div class="space-y-1.5">
-                <!-- Primary game -->
-                <div v-if="item.bggId" class="flex items-center gap-2">
-                  <img v-if="item.bggImageUrl" :src="item.bggImageUrl" alt="" class="h-7 w-7 rounded object-cover" />
-                  <span class="text-sm font-semibold text-gray-900">{{ item.name }}</span>
-                  <span class="rounded bg-indigo-50 px-1.5 py-0.5 text-[9px] font-bold text-indigo-600 uppercase">Primary</span>
-                </div>
-                <!-- Extra games -->
-                <div v-for="game in item.extraGames" :key="game.bggId" class="flex items-start gap-2">
-                  <img v-if="game.thumbnailUrl" :src="game.thumbnailUrl" alt="" class="mt-0.5 h-7 w-7 rounded object-cover" />
-                  <div v-else class="mt-0.5 h-7 w-7 rounded bg-gray-100" />
-                  <div class="min-w-0 flex-1">
-                    <div class="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                      <span class="text-sm text-gray-700">{{ game.name }}</span>
-                      <span v-if="game.yearPublished" class="text-xs text-gray-400">({{ game.yearPublished }})</span>
-                    </div>
-                    <BoardGameCredibility :bgg-id="game.bggId" compact />
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div class="mt-4 flex items-end justify-between">
+          <div class="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm lg:p-5">
+            <div class="flex items-end justify-between">
               <div>
                 <p class="text-[11px] font-bold uppercase tracking-widest text-gray-400">
                   {{ item.currentBid ? 'Current bid' : 'Starting bid' }}
@@ -235,6 +210,49 @@ onBeforeUnmount(() => {
             class="rounded-2xl border border-gray-200 bg-gray-50 px-5 py-4 text-sm text-gray-600"
           >
             Sign in to place a bid.
+          </div>
+        </div>
+
+        <div class="flex">
+          <div class="flex h-full w-full flex-col rounded-2xl border border-gray-200 bg-white p-4 shadow-sm lg:h-full lg:p-6">
+            <div>
+              <h1 data-testid="auction-item-name" class="text-2xl font-extrabold leading-tight tracking-tight text-gray-900">{{ item.name }}</h1>
+              <p v-if="item.submittedByName && !settings?.anonymousBidHistory" class="mt-1 text-xs leading-5 text-gray-500">
+                Submitted by <span class="font-semibold text-gray-700">{{ item.submittedByName }}</span>
+              </p>
+              <BoardGameCredibility v-if="item.bggId" class="mt-2.5" :bgg-id="item.bggId" />
+            </div>
+
+            <div v-if="item.description" class="mt-4 flex-1 rounded-xl border border-gray-100 bg-gray-50/70 p-4 lg:p-5">
+              <p class="text-sm leading-7 text-gray-700 whitespace-pre-line">{{ item.description }}</p>
+            </div>
+
+            <div
+              v-if="item.extraGames?.length"
+              :class="item.description ? 'mt-4 border-t border-gray-100 pt-4' : 'mt-4'"
+            >
+              <p class="mb-2 text-[11px] font-bold uppercase tracking-[0.18em] text-gray-500">
+                Package includes {{ item.extraGames.length + 1 }} games
+              </p>
+              <div class="space-y-1.5">
+                <div v-if="item.bggId" class="flex items-center gap-2">
+                  <img v-if="item.bggImageUrl" :src="item.bggImageUrl" alt="" class="h-7 w-7 rounded object-cover" />
+                  <span class="text-sm font-semibold text-gray-900">{{ item.name }}</span>
+                  <span class="rounded bg-indigo-50 px-1.5 py-0.5 text-[9px] font-bold text-indigo-600 uppercase">Primary</span>
+                </div>
+                <div v-for="game in item.extraGames" :key="game.bggId" class="flex items-start gap-2">
+                  <img v-if="game.thumbnailUrl" :src="game.thumbnailUrl" alt="" class="mt-0.5 h-7 w-7 rounded object-cover" />
+                  <div v-else class="mt-0.5 h-7 w-7 rounded bg-gray-100" />
+                  <div class="min-w-0 flex-1">
+                    <div class="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                      <span class="text-sm text-gray-700">{{ game.name }}</span>
+                      <span v-if="game.yearPublished" class="text-xs text-gray-400">({{ game.yearPublished }})</span>
+                    </div>
+                    <BoardGameCredibility :bgg-id="game.bggId" compact />
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
