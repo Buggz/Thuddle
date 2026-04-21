@@ -7,6 +7,7 @@ public class AuctionBid
     public required Guid BidderUserId { get; set; }
     public decimal Amount { get; set; }
     public bool IsBuyout { get; set; }
+    public bool IsVoided { get; set; }
     public required string IdempotencyKey { get; set; }
     public DateTime CreatedAt { get; set; }
 

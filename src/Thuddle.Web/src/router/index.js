@@ -52,6 +52,12 @@ export default function initRouter() {
         meta: { requiresAuth: true }
       },
       {
+        path: '/events/:id/auction/items/:itemId/edit',
+        name: 'auction-edit',
+        component: () => import('@/features/auctions/views/SubmitAuctionItemView.vue'),
+        meta: { requiresAuth: true }
+      },
+      {
         path: '/events/:id/auction/items/:itemId',
         name: 'auction-item',
         component: () => import('@/features/auctions/views/AuctionItemView.vue')

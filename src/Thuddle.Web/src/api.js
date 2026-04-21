@@ -108,6 +108,27 @@ export const auctionApi = {
     return res.json()
   },
 
+  async publishItem(authFetch, eventId, itemId) {
+    const res = await authFetch(`/api/events/${eventId}/auction/items/${itemId}/publish`, {
+      method: 'POST'
+    })
+    return res.json()
+  },
+
+  async unpublishItem(authFetch, eventId, itemId) {
+    const res = await authFetch(`/api/events/${eventId}/auction/items/${itemId}/unpublish`, {
+      method: 'POST'
+    })
+    return res.json()
+  },
+
+  async resubmitItem(authFetch, eventId, itemId) {
+    const res = await authFetch(`/api/events/${eventId}/auction/items/${itemId}/resubmit`, {
+      method: 'POST'
+    })
+    return res.json()
+  },
+
   async placeBid(authFetch, eventId, itemId, amount, idempotencyKey) {
     const res = await authFetch(`/api/events/${eventId}/auction/items/${itemId}/bids`, {
       method: 'POST',

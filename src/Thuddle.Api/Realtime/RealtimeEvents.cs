@@ -22,6 +22,8 @@ public static class RealtimeEvents
     public const string AuctionBidPlaced = "AuctionBidPlaced";
     public const string AuctionItemSold = "AuctionItemSold";
     public const string AuctionEnded = "AuctionEnded";
+    public const string AuctionUserBanned = "AuctionUserBanned";
+    public const string AuctionUserUnbanned = "AuctionUserUnbanned";
 
     // Notifications
     public const string NotificationCreated = "NotificationCreated";

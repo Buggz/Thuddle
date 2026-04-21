@@ -403,6 +403,7 @@ function doCrop() {
 
       <div class="flex items-center justify-center gap-3 mt-3">
         <button
+          type="button"
           class="px-3 py-1.5 text-sm bg-gray-100 rounded-lg hover:bg-gray-200 transition"
           title="Rotate left"
           @click="rotate(-1)"
@@ -411,6 +412,7 @@ function doCrop() {
           Drag to move &bull; drag edge or scroll to resize
         </p>
         <button
+          type="button"
           class="px-3 py-1.5 text-sm bg-gray-100 rounded-lg hover:bg-gray-200 transition"
           title="Rotate right"
           @click="rotate(1)"
@@ -419,6 +421,7 @@ function doCrop() {
 
       <div class="flex justify-end gap-3 mt-5">
         <button
+          type="button"
           data-testid="cropper-cancel-btn"
           class="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition"
           @click="emit('cancel')"
@@ -426,6 +429,7 @@ function doCrop() {
           Cancel
         </button>
         <button
+          type="button"
           data-testid="cropper-crop-btn"
           class="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition"
           @click="doCrop"

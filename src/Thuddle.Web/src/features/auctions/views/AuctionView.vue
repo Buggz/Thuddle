@@ -6,6 +6,7 @@ import { useAuctionStore } from '@/features/auctions/stores/auction'
 import { useAuthStore } from '@/features/auth/stores/auth'
 import AuctionTimeline from '@/features/auctions/components/AuctionTimeline.vue'
 import AuctionItemCard from '@/features/auctions/components/AuctionItemCard.vue'
+import MyItemsPanel from '@/features/auctions/components/MyItemsPanel.vue'
 import FunnyLoader from '@/shared/components/FunnyLoader.vue'
 
 const route = useRoute()
@@ -70,7 +71,10 @@ async function refresh() {
 
 onMounted(async () => {
   await refresh()
-  if (auth.isAuthenticated) await auctionStore.subscribeRealtime(eventId.value)
+  if (auth.isAuthenticated) {
+    await auctionStore.subscribeRealtime(eventId.value)
+    await auctionStore.loadMyItems(eventId.value)
+  }
 })
 
 watch(() => auth.isAuthenticated, async (isAuth) => {
@@ -153,6 +157,8 @@ onBeforeUnmount(() => {
         </div>
       </header>
 
+      <MyItemsPanel v-if="auth.isAuthenticated" :event-id="eventId" />
+
       <div class="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center">
         <div class="relative flex-1">
           <svg class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400"
@@ -176,7 +182,7 @@ onBeforeUnmount(() => {
         </select>
       </div>
 
-      <div v-if="items.length" class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div id="auction-floor" v-if="items.length" class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <AuctionItemCard
           v-for="item in items"
           :key="item.id"

@@ -21,6 +21,7 @@ public class ThuddleDbContext(DbContextOptions<ThuddleDbContext> options) : DbCo
     public DbSet<AuctionItemImage> AuctionItemImages => Set<AuctionItemImage>();
     public DbSet<AuctionItemBoardGame> AuctionItemBoardGames => Set<AuctionItemBoardGame>();
     public DbSet<AuctionBid> AuctionBids => Set<AuctionBid>();
+    public DbSet<AuctionPublishBan> AuctionPublishBans => Set<AuctionPublishBan>();
     public DbSet<Notification> Notifications => Set<Notification>();
     public DbSet<BoardGame> BoardGames => Set<BoardGame>();
 
@@ -191,12 +192,14 @@ public class ThuddleDbContext(DbContextOptions<ThuddleDbContext> options) : DbCo
                 .WithMany()
                 .HasForeignKey(i => i.WinnerUserId)
                 .OnDelete(DeleteBehavior.SetNull);
-            entity.HasOne(i => i.BoardGame)
-                .WithMany()
-                .HasForeignKey(i => i.BggId)
-                .OnDelete(DeleteBehavior.SetNull);
+            entity.HasMany(i => i.BoardGames)
+                .WithOne(bg => bg.Item)
+                .HasForeignKey(bg => bg.ItemId)
+                .OnDelete(DeleteBehavior.Cascade);
             entity.Property(i => i.RowVersion)
                 .IsRowVersion();
+            entity.Property(i => i.RejectionReason)
+                .HasMaxLength(500);
         });
 
         modelBuilder.Entity<AuctionItemBoardGame>(entity =>
@@ -204,7 +207,7 @@ public class ThuddleDbContext(DbContextOptions<ThuddleDbContext> options) : DbCo
             entity.HasIndex(e => new { e.ItemId, e.BggId }).IsUnique();
             entity.HasIndex(e => new { e.ItemId, e.SortOrder });
             entity.HasOne(e => e.Item)
-                .WithMany()
+                .WithMany(i => i.BoardGames)
                 .HasForeignKey(e => e.ItemId)
                 .OnDelete(DeleteBehavior.Cascade);
             entity.HasOne(e => e.BoardGame)
@@ -244,6 +247,25 @@ public class ThuddleDbContext(DbContextOptions<ThuddleDbContext> options) : DbCo
                 .WithMany()
                 .HasForeignKey(n => n.RecipientUserId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<AuctionPublishBan>(entity =>
+        {
+            entity.HasIndex(b => new { b.EventId, b.UserId }).IsUnique();
+            entity.HasOne(b => b.Event)
+                .WithMany()
+                .HasForeignKey(b => b.EventId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(b => b.User)
+                .WithMany()
+                .HasForeignKey(b => b.UserId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(b => b.BannedByUser)
+                .WithMany()
+                .HasForeignKey(b => b.BannedByUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.Property(b => b.Reason)
+                .HasMaxLength(500);
         });
 
         modelBuilder.Entity<BoardGame>(entity =>

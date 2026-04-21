@@ -26,6 +26,9 @@ export const useAuctionStore = defineStore('auction', () => {
   const itemsByEvent = ref({})
   // eventId → itemId → bids[]
   const bidsByItem = ref({})
+  // eventId → itemId → item
+  const myItemsByEvent = ref({})
+  const loadingMyItemsByEvent = ref({})
   // eventId → server time anchor (ISO string)
   const serverTimeByEvent = shallowRef({})
   // per-event loading flags
@@ -58,6 +61,20 @@ export const useAuctionStore = defineStore('auction', () => {
   }
 
   // ── Loaders ───────────────────────────────────────────────────────────
+
+  async function loadMyItems(eventId) {
+    loadingMyItemsByEvent.value = { ...loadingMyItemsByEvent.value, [eventId]: true }
+    try {
+      const resp = await auctionApi.getItems(authFetch, eventId, { mine: true, pageSize: 100 }).catch(() => ({ items: [] }))
+      const map = {}
+      for (const it of resp.items || []) map[it.id] = it
+      myItemsByEvent.value = { ...myItemsByEvent.value, [eventId]: map }
+    } catch (err) {
+      setError(eventId, err.message || 'Failed to load user items.')
+    } finally {
+      loadingMyItemsByEvent.value = { ...loadingMyItemsByEvent.value, [eventId]: false }
+    }
+  }
 
   async function loadAuction(eventId) {
     loadingByEvent.value = { ...loadingByEvent.value, [eventId]: true }
@@ -105,7 +122,7 @@ export const useAuctionStore = defineStore('auction', () => {
 
   // ── Mutations ─────────────────────────────────────────────────────────
 
-  async function submitItem(eventId, body) {
+  async function saveDraft(eventId, body) {
     return auctionApi.createItem(authFetch, eventId, body)
   }
 
@@ -122,6 +139,46 @@ export const useAuctionStore = defineStore('auction', () => {
     const r = await auctionApi.updateItem(authFetch, eventId, itemId, body)
     await loadItem(eventId, itemId)
     return r
+  }
+
+  async function publishItem(eventId, itemId) {
+    try {
+      const item = await auctionApi.publishItem(authFetch, eventId, itemId)
+      if (myItemsByEvent.value[eventId]) {
+        myItemsByEvent.value[eventId] = { ...myItemsByEvent.value[eventId], [item.id]: item }
+      }
+      if (['Scheduled', 'Live', 'Sold', 'Unsold'].includes(item.status)) {
+        setItem(eventId, item)
+      }
+      return item
+    } catch (err) {
+      throw new Error(err.message || 'Failed to publish item')
+    }
+  }
+
+  async function unpublishItem(eventId, itemId) {
+    try {
+      const item = await auctionApi.unpublishItem(authFetch, eventId, itemId)
+      if (myItemsByEvent.value[eventId]) {
+        myItemsByEvent.value[eventId] = { ...myItemsByEvent.value[eventId], [item.id]: item }
+      }
+      removeItem(eventId, itemId)
+      return item
+    } catch (err) {
+      throw new Error(err.message || 'Failed to unpublish item')
+    }
+  }
+
+  async function resubmitItem(eventId, itemId) {
+    try {
+      const item = await auctionApi.resubmitItem(authFetch, eventId, itemId)
+      if (myItemsByEvent.value[eventId]) {
+        myItemsByEvent.value[eventId] = { ...myItemsByEvent.value[eventId], [item.id]: item }
+      }
+      return item
+    } catch (err) {
+      throw new Error(err.message || 'Failed to resubmit item')
+    }
   }
 
   async function withdrawItem(eventId, itemId) {
@@ -224,6 +281,8 @@ export const useAuctionStore = defineStore('auction', () => {
     // state
     settingsByEvent,
     itemsByEvent,
+    myItemsByEvent,
+    loadingMyItemsByEvent,
     bidsByItem,
     serverTimeByEvent,
     loadingByEvent,
@@ -232,10 +291,14 @@ export const useAuctionStore = defineStore('auction', () => {
     getItems,
     // loaders
     loadAuction,
+    loadMyItems,
     loadItem,
     loadBids,
     // mutations
-    submitItem,
+    saveDraft,
+    publishItem,
+    unpublishItem,
+    resubmitItem,
     uploadItemImages,
     updateItem,
     withdrawItem,

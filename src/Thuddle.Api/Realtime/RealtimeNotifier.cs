@@ -35,6 +35,8 @@ public interface IRealtimeNotifier
     Task AuctionBidPlacedAsync(Guid eventId, Guid itemId, decimal currentBid, int bidCount, CancellationToken ct = default);
     Task AuctionItemSoldAsync(Guid eventId, Guid itemId, CancellationToken ct = default);
     Task AuctionEndedAsync(Guid eventId, CancellationToken ct = default);
+    Task AuctionUserBannedAsync(Guid eventId, Guid userId, CancellationToken ct = default);
+    Task AuctionUserUnbannedAsync(Guid eventId, Guid userId, CancellationToken ct = default);
 
     // Notifications (per-user)
     Task NotificationCreatedAsync(string keycloakId, Guid notificationId, CancellationToken ct = default);
@@ -109,6 +111,14 @@ public sealed class RealtimeNotifier(IHubContext<ThuddleHub> hub) : IRealtimeNot
     public Task AuctionEndedAsync(Guid eventId, CancellationToken ct = default) =>
         hub.Clients.Group(ThuddleHub.EventGroup(eventId))
             .SendAsync(RealtimeEvents.AuctionEnded, new { eventId }, ct);
+
+    public Task AuctionUserBannedAsync(Guid eventId, Guid userId, CancellationToken ct = default) =>
+        hub.Clients.Group(ThuddleHub.EventGroup(eventId))
+            .SendAsync(RealtimeEvents.AuctionUserBanned, new { eventId, userId }, ct);
+
+    public Task AuctionUserUnbannedAsync(Guid eventId, Guid userId, CancellationToken ct = default) =>
+        hub.Clients.Group(ThuddleHub.EventGroup(eventId))
+            .SendAsync(RealtimeEvents.AuctionUserUnbanned, new { eventId, userId }, ct);
 
     // Notifications
 
