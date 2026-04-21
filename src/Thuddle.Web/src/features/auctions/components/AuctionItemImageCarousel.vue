@@ -37,7 +37,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 
 <template>
   <div data-testid="auction-image-carousel" class="relative w-full overflow-hidden rounded-2xl border border-gray-200 bg-gray-50">
-    <div v-if="hasImages" class="relative aspect-[4/3] w-full bg-gray-100">
+    <div v-if="hasImages" class="relative aspect-4/3 w-full bg-gray-100">
       <button
         type="button"
         class="absolute inset-0 group focus:outline-none"
@@ -80,23 +80,29 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
       </button>
     </div>
 
-    <div v-else class="flex aspect-[4/3] w-full items-center justify-center text-gray-300">
+    <div v-else class="flex aspect-4/3 w-full items-center justify-center text-gray-300">
       <svg class="w-16 h-16" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5z" />
       </svg>
     </div>
 
-    <div v-if="hasImages && images.length > 1" class="flex items-center justify-center gap-2 py-3">
+    <div v-if="hasImages && images.length > 1" class="w-full border-t border-gray-200 bg-white/80 px-2 py-2 sm:px-3">
+      <div class="flex w-full gap-2 overflow-x-auto">
       <button
         v-for="(img, i) in images"
         :key="img + i"
         type="button"
         :data-testid="`auction-image-thumbnail-${i}`"
         @click="go(i)"
-        class="h-2 w-2 rounded-full transition-all"
-        :class="i === index ? 'bg-indigo-600 scale-125' : 'bg-gray-300 hover:bg-gray-400'"
+        class="h-14 w-20 shrink-0 overflow-hidden rounded-md border transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 sm:w-24"
+        :class="i === index ? 'scale-[1.03] border-indigo-600 ring-2 ring-indigo-300' : 'border-gray-200 hover:border-gray-400'"
         :aria-label="`Show image ${i + 1}`"
-      />
+        :aria-current="i === index ? 'true' : undefined"
+      >
+        <img :src="img" :alt="`${alt} thumbnail ${i + 1}`" class="h-full w-full object-cover" />
+        <span class="sr-only">Show image {{ i + 1 }}</span>
+      </button>
+      </div>
     </div>
 
     <ImageLightboxModal

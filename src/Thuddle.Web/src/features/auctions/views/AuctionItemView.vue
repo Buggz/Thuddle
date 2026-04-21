@@ -27,8 +27,11 @@ const bids = computed(() => bidsByItem.value[itemId.value] || [])
 const displayImages = computed(() => {
   const uploadedImages = item.value?.imageUrls || []
   const bggImageUrl = item.value?.bggImageUrl
+  const packageImages = (item.value?.extraGames || []).map((game) => game.thumbnailUrl)
 
-  const orderedImages = bggImageUrl ? [bggImageUrl, ...uploadedImages] : uploadedImages
+  const orderedImages = bggImageUrl
+    ? [bggImageUrl, ...uploadedImages, ...packageImages]
+    : [...uploadedImages, ...packageImages]
   const seen = new Set()
 
   return orderedImages.filter((url) => {
