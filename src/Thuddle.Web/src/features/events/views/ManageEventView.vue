@@ -10,11 +10,14 @@ import UserSearchComboBox from '@/shared/components/UserSearchComboBox.vue'
 import GroupSelectorPopover from '@/features/groups/components/GroupSelectorPopover.vue'
 import { usePermissionsStore } from '@/features/auth/stores/permissions'
 import { useFeatureFlags } from '@/shared/featureFlags'
+import { useEventsStore } from '@/features/events/stores/events'
+import KickAttendeeDialog from '@/features/events/components/KickAttendeeDialog.vue'
 
 const route = useRoute()
 const router = useRouter()
 const { authFetch } = useApi()
 const permissionsStore = usePermissionsStore()
+const eventsStore = useEventsStore()
 const { auctions: auctionsEnabled } = useFeatureFlags()
 
 const eventId = route.params.id
@@ -101,6 +104,41 @@ const auctionStatusBadgeClass = computed(() => {
 })
 
 const hasCost = computed(() => eventData.value?.cost != null && eventData.value.cost > 0)
+
+const eventOwnerId = computed(() => eventData.value?.ownerId ?? null)
+const eventIsInviteOnly = computed(() => (eventData.value?.joinMode ?? 0) === 1)
+
+const coAdminUserIds = computed(() => new Set(coAdmins.value.map(c => c.userId)))
+
+// Kick attendee dialog
+const kickDialogOpen = ref(false)
+const kickTarget = ref(null)
+
+const kickTargetHasInvitation = computed(() => {
+  if (!kickTarget.value) return false
+  if (eventIsInviteOnly.value) return true
+  const email = (kickTarget.value.email || '').toLowerCase()
+  return pendingInvitations.value.some(i => i.email?.toLowerCase() === email)
+})
+
+function openKickDialog(attendee) {
+  kickTarget.value = attendee
+  kickDialogOpen.value = true
+}
+
+async function confirmKick({ revokeInvitation, denyReentry }) {
+  if (!kickTarget.value) return
+  const targetId = kickTarget.value.userId
+  try {
+    await eventsStore.kickAttendee(eventId, targetId, { revokeInvitation, denyReentry })
+    attendees.value = attendees.value.filter(a => a.userId !== targetId)
+  } catch (err) {
+    attendeesError.value = err.message || 'Failed to remove attendee.'
+  } finally {
+    kickDialogOpen.value = false
+    kickTarget.value = null
+  }
+}
 
 // Invitation form state
 const selectedInvitees = ref([])
@@ -635,8 +673,7 @@ onMounted(async () => {
                 <th class="px-4 py-3">Full Name</th>
                 <th class="px-4 py-3">Email</th>
                 <th class="px-4 py-3">Joined</th>
-                <th v-if="hasCost" class="px-4 py-3 text-center">Paid</th>
-                <th v-if="permissionsStore.hasPermission('groups:manage')" class="px-4 py-3 w-12"></th>
+                <th v-if="hasCost" class="px-4 py-3 text-center">Paid</th>              <th class="px-4 py-3 w-20"></th>                <th v-if="permissionsStore.hasPermission('groups:manage')" class="px-4 py-3 w-12"></th>
               </tr>
             </thead>
             <tbody class="divide-y divide-slate-100 bg-white">
@@ -667,6 +704,16 @@ onMounted(async () => {
                       <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
                     {{ a.hasPaid ? 'Paid' : 'Unpaid' }}
+                  </button>
+                </td>
+                <td class="px-4 py-3 text-right">
+                  <button
+                    v-if="a.userId !== eventOwnerId && !coAdminUserIds.has(a.userId)"
+                    :data-testid="`manage-kick-btn-${a.userId}`"
+                    @click="openKickDialog(a)"
+                    class="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-red-600 bg-red-50 border border-red-100 rounded-lg hover:bg-red-100 transition-colors opacity-0 group-hover/row:opacity-100 focus:opacity-100"
+                  >
+                    Remove
                   </button>
                 </td>
                 <td v-if="permissionsStore.hasPermission('groups:manage')" class="px-4 py-3 text-right relative">
@@ -705,6 +752,7 @@ onMounted(async () => {
                   </span>
                 </td>
                 <td v-if="hasCost" class="px-4 py-3 text-center text-slate-300 text-xs">—</td>
+                <td class="px-4 py-3"></td>
                 <td class="px-4 py-3"></td>
               </tr>
             </tbody>
@@ -863,4 +911,12 @@ onMounted(async () => {
       </div>
     </template>
   </div>
+
+  <KickAttendeeDialog
+    :open="kickDialogOpen"
+    :attendee-name="kickTarget?.displayName || kickTarget?.email || ''"
+    :event-join-mode="eventData?.joinMode ?? 0"
+    @confirm="confirmKick"
+    @cancel="() => { kickDialogOpen = false; kickTarget = null }"
+  />
 </template>

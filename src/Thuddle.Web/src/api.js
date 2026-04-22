@@ -225,3 +225,26 @@ export const boardGameApi = {
     return res.json()
   }
 }
+
+// ─── Events API ──────────────────────────────────────────────────────────────
+
+export async function leaveEvent(authFetch, eventId) {
+  const res = await authFetch(`/api/events/${eventId}/participants/me`, { method: 'DELETE' })
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}))
+    throw new Error(data.error || `HTTP ${res.status}`)
+  }
+}
+
+export async function kickAttendee(authFetch, eventId, userId, { revokeInvitation = false, denyReentry = false } = {}) {
+  const params = new URLSearchParams()
+  if (revokeInvitation) params.set('revokeInvitation', 'true')
+  if (denyReentry) params.set('denyReentry', 'true')
+  const qs = params.toString() ? `?${params.toString()}` : ''
+  const res = await authFetch(`/api/events/${eventId}/attendees/${userId}${qs}`, { method: 'DELETE' })
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}))
+    throw new Error(data.error || `HTTP ${res.status}`)
+  }
+  return res.json()
+}

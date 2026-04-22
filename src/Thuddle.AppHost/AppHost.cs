@@ -75,8 +75,6 @@ builder.AddViteApp("web", "../Thuddle.Web")
     .WithExternalHttpEndpoints()
     .WithEnvironment("VITE_KEYCLOAK_URL", keycloak.GetEndpoint("http"))
     .WithEnvironment("VITE_KEYCLOAK_REALM", "Thuddle")
-    .WithEnvironment("VITE_KEYCLOAK_CLIENT_ID", "thuddle-web")
-    .WithEnvironment("VITE_FEATURE_AUCTIONS", "false")
-    .WithEnvironment("VITE_FEATURE_NOTIFICATIONS", "false");
+    .WithEnvironment("VITE_KEYCLOAK_CLIENT_ID", "thuddle-web");
 
 builder.Build().Run();

@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, shallowRef } from 'vue'
-import { apiUrl } from '@/api'
+import { apiUrl, leaveEvent as leaveEventApi, kickAttendee as kickAttendeeApi } from '@/api'
 import { useApi } from '@/shared/composables/useApi'
 import { useAuthStore } from '@/features/auth/stores/auth'
 import { useRealtime, RealtimeEvents } from '@/shared/composables/useRealtime'
@@ -259,6 +259,24 @@ export const useEventsStore = defineStore('events', () => {
     }
   }
 
+  async function leaveEvent(eventId) {
+    await leaveEventApi(authFetch, eventId)
+    await refreshEventInPlace(eventId)
+    const idx = items.value.findIndex((e) => e.id === eventId)
+    if (idx !== -1) {
+      const current = items.value[idx]
+      items.value.splice(idx, 1, {
+        ...current,
+        hasJoined: false,
+        participantCount: Math.max(0, (current.participantCount || 1) - 1)
+      })
+    }
+  }
+
+  async function kickAttendee(eventId, userId, { revokeInvitation = false, denyReentry = false } = {}) {
+    return kickAttendeeApi(authFetch, eventId, userId, { revokeInvitation, denyReentry })
+  }
+
   return {
     // state
     items,
@@ -275,6 +293,8 @@ export const useEventsStore = defineStore('events', () => {
     releaseEvent,
     releaseDashboard,
     joinEvent,
-    markDiscussionRead
+    markDiscussionRead,
+    leaveEvent,
+    kickAttendee
   }
 })

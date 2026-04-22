@@ -24,6 +24,7 @@ public class ThuddleDbContext(DbContextOptions<ThuddleDbContext> options) : DbCo
     public DbSet<AuctionPublishBan> AuctionPublishBans => Set<AuctionPublishBan>();
     public DbSet<Notification> Notifications => Set<Notification>();
     public DbSet<BoardGame> BoardGames => Set<BoardGame>();
+    public DbSet<EventBlocklistEntry> EventBlocklist => Set<EventBlocklistEntry>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -276,6 +277,24 @@ public class ThuddleDbContext(DbContextOptions<ThuddleDbContext> options) : DbCo
                 .HasMethod("gist")
                 .HasOperators("gist_trgm_ops");
             entity.HasIndex(b => b.BggRank);
+        });
+
+        modelBuilder.Entity<EventBlocklistEntry>(entity =>
+        {
+            entity.HasKey(e => new { e.EventId, e.UserId });
+            entity.HasIndex(e => e.EventId);
+            entity.HasOne(e => e.Event)
+                .WithMany()
+                .HasForeignKey(e => e.EventId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(e => e.User)
+                .WithMany()
+                .HasForeignKey(e => e.UserId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(e => e.BlockedByUser)
+                .WithMany()
+                .HasForeignKey(e => e.BlockedByUserId)
+                .OnDelete(DeleteBehavior.Restrict);
         });
     }
 }

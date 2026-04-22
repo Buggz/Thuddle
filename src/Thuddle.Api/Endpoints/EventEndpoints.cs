@@ -18,9 +18,13 @@ public static class EventEndpoints
         app.MapDelete("/api/events/{eventId:guid}", DeleteEvent).RequireAuthorization();
         app.MapPost("/api/events/{eventId:guid}/invitations", InviteUsers).RequireAuthorization();
         app.MapPost("/api/events/{eventId:guid}/join", JoinEvent).RequireAuthorization();
+        app.MapDelete("/api/events/{eventId:guid}/participants/me", LeaveEvent).RequireAuthorization();
+        app.MapDelete("/api/events/{eventId:guid}/attendees/{userId:guid}", KickAttendee).RequireAuthorization();
         app.MapPost("/api/events/{eventId:guid}/co-admins", AddCoAdmin).RequireAuthorization();
         app.MapDelete("/api/events/{eventId:guid}/co-admins/{userId:guid}", RemoveCoAdmin).RequireAuthorization();
         app.MapGet("/api/events/{eventId:guid}/attendees", GetAttendees).RequireAuthorization();
+        app.MapGet("/api/events/{eventId:guid}/blocklist", GetBlocklist).RequireAuthorization();
+        app.MapDelete("/api/events/{eventId:guid}/blocklist/{userId:guid}", UnblockAttendee).RequireAuthorization();
         app.MapGet("/api/events/{eventId:guid}/participants", GetParticipants).AllowAnonymous();
         app.MapPut("/api/events/{eventId:guid}/attendees/{userId:guid}/payment", UpdatePayment).RequireAuthorization();
         app.MapPost("/api/events/{eventId:guid}/images", UploadEventImage).RequireAuthorization().DisableAntiforgery();
@@ -187,6 +191,10 @@ public static class EventEndpoints
                         .FirstOrDefault()
                     : null,
                 HasJoined = !isAnonymous && db.EventParticipants.Any(ep => ep.EventId == e.Id && ep.UserId == userId),
+                HasPaid = !isAnonymous && db.EventParticipants
+                    .Where(ep => ep.EventId == e.Id && ep.UserId == userId)
+                    .Select(ep => ep.HasPaid)
+                    .FirstOrDefault(),
                 HasInvitation = !isAnonymous && db.EventInvitations.Any(i => i.EventId == e.Id && i.Email.ToLower() == userEmail),
                 IsAdmin = !isAnonymous && (e.OwnerId == userId || db.EventCoAdmins.Any(ca => ca.EventId == e.Id && ca.UserId == userId)),
                 PendingPostCount = !isAnonymous && (e.OwnerId == userId || db.EventCoAdmins.Any(ca => ca.EventId == e.Id && ca.UserId == userId))
@@ -220,6 +228,7 @@ public static class EventEndpoints
                 HasUnreadDiscussion = !isAnonymous && e.PostCount > 0
                     && (e.LastReadAt is null || latestActivity > e.LastReadAt),
                 e.HasJoined,
+                e.HasPaid,
                 e.HasInvitation,
                 CanJoin = !e.HasJoined && !isAnonymous
                     && (e.JoinMode == JoinMode.Open || e.HasInvitation),
@@ -285,10 +294,22 @@ public static class EventEndpoints
         var hasJoined = dbUser is not null && await db.EventParticipants
             .AnyAsync(p => p.EventId == eventId && p.UserId == dbUser.Id, ct);
 
+        var hasPaid = false;
+        if (dbUser is not null && hasJoined)
+        {
+            hasPaid = await db.EventParticipants
+                .Where(p => p.EventId == eventId && p.UserId == dbUser.Id)
+                .Select(p => p.HasPaid)
+                .FirstOrDefaultAsync(ct);
+        }
+
         var hasInvitation = dbUser is not null && await db.EventInvitations
             .AnyAsync(i => i.EventId == eventId && i.Email.ToLower() == dbUser.Email.ToLower(), ct);
 
-        var canJoin = !hasJoined && dbUser is not null
+        var isBlocked = dbUser is not null && await db.EventBlocklist
+            .AnyAsync(b => b.EventId == eventId && b.UserId == dbUser.Id, ct);
+
+        var canJoin = !hasJoined && !isBlocked && dbUser is not null
             && (evt.JoinMode == JoinMode.Open || hasInvitation);
 
         var participantCount = await db.EventParticipants.CountAsync(p => p.EventId == eventId, ct);
@@ -341,8 +362,10 @@ public static class EventEndpoints
             PendingPostCount = pendingPostCount,
             HasUnreadDiscussion = hasUnreadDiscussion,
             HasJoined = hasJoined,
+            HasPaid = hasPaid,
             CanJoin = canJoin,
-            IsAdmin = isAdmin
+            IsAdmin = isAdmin,
+            IsBlocked = isBlocked
         });
     }
 
@@ -513,6 +536,10 @@ public static class EventEndpoints
         var evt = await db.Events.FirstOrDefaultAsync(e => e.Id == eventId, ct);
         if (evt is null) return Results.NotFound(new { error = "Event not found." });
 
+        var isBlocked = await db.EventBlocklist
+            .AnyAsync(b => b.EventId == eventId && b.UserId == dbUser.Id, ct);
+        if (isBlocked) return Results.Forbid();
+
         var alreadyJoined = await db.EventParticipants
             .AnyAsync(p => p.EventId == eventId && p.UserId == dbUser.Id, ct);
 
@@ -551,7 +578,124 @@ public static class EventEndpoints
         var newCount = await db.EventParticipants.CountAsync(p => p.EventId == eventId, ct);
         await realtime.ParticipantChangedAsync(eventId, newCount, ct);
 
-        return Results.Ok(new { joined = true, eventId });
+        return Results.Ok(new { joined = true, eventId, userId = dbUser.Id });
+    }
+
+    private static async Task<IResult> LeaveEvent(
+        Guid eventId,
+        ClaimsPrincipal user,
+        ThuddleDbContext db,
+        IRealtimeNotifier realtime,
+        CancellationToken ct)
+    {
+        var keycloakId = GetKeycloakId(user);
+        if (keycloakId is null) return Results.Unauthorized();
+
+        var dbUser = await db.Users.FirstOrDefaultAsync(u => u.KeycloakId == keycloakId, ct);
+        if (dbUser is null) return Results.Unauthorized();
+
+        var evt = await db.Events.FirstOrDefaultAsync(e => e.Id == eventId, ct);
+        if (evt is null) return Results.NotFound(new { error = "Event not found." });
+
+        if (evt.OwnerId == dbUser.Id)
+            return Results.BadRequest(new { error = "Owners cannot leave their own event. Delete it or transfer ownership." });
+
+        var participant = await db.EventParticipants
+            .FirstOrDefaultAsync(p => p.EventId == eventId && p.UserId == dbUser.Id, ct);
+
+        if (participant is null)
+            return Results.NotFound(new { error = "You are not a participant of this event." });
+
+        db.EventParticipants.Remove(participant);
+        await db.SaveChangesAsync(ct);
+
+        var newCount = await db.EventParticipants.CountAsync(p => p.EventId == eventId, ct);
+        await realtime.ParticipantChangedAsync(eventId, newCount, ct);
+
+        return Results.NoContent();
+    }
+
+    private static async Task<IResult> KickAttendee(
+        Guid eventId,
+        Guid userId,
+        ClaimsPrincipal user,
+        ThuddleDbContext db,
+        IRealtimeNotifier realtime,
+        CancellationToken ct,
+        bool revokeInvitation = false,
+        bool denyReentry = false)
+    {
+        var keycloakId = GetKeycloakId(user);
+        if (keycloakId is null) return Results.Unauthorized();
+
+        var dbUser = await db.Users.FirstOrDefaultAsync(u => u.KeycloakId == keycloakId, ct);
+        if (dbUser is null) return Results.Unauthorized();
+
+        if (!await IsEventAdmin(db, eventId, dbUser.Id, ct))
+            return Results.Forbid();
+
+        var evt = await db.Events.FirstOrDefaultAsync(e => e.Id == eventId, ct);
+        if (evt is null) return Results.NotFound(new { error = "Event not found." });
+
+        if (evt.OwnerId == userId)
+            return Results.BadRequest(new { error = "Cannot remove the event owner." });
+
+        var isCoAdmin = await db.EventCoAdmins
+            .AnyAsync(ca => ca.EventId == eventId && ca.UserId == userId, ct);
+        if (isCoAdmin)
+            return Results.BadRequest(new { error = "Cannot remove a co-host. Remove their co-host role first." });
+
+        if (denyReentry && evt.JoinMode == JoinMode.InviteOnly)
+            return Results.BadRequest(new { error = "Blocklist not applicable to invite-only events." });
+
+        var participant = await db.EventParticipants
+            .Include(p => p.User)
+            .FirstOrDefaultAsync(p => p.EventId == eventId && p.UserId == userId, ct);
+
+        if (participant is null)
+            return Results.NotFound(new { error = "Attendee not found." });
+
+        var kickedEmail = participant.User.Email;
+
+        db.EventParticipants.Remove(participant);
+
+        var invitationRevoked = false;
+        if (revokeInvitation)
+        {
+            var invitations = await db.EventInvitations
+                .Where(i => i.EventId == eventId && i.Email.ToLower() == kickedEmail.ToLower())
+                .ToListAsync(ct);
+            if (invitations.Count > 0)
+            {
+                db.EventInvitations.RemoveRange(invitations);
+                invitationRevoked = true;
+            }
+        }
+
+        var blocked = false;
+        if (denyReentry)
+        {
+            var alreadyBlocked = await db.EventBlocklist
+                .AnyAsync(b => b.EventId == eventId && b.UserId == userId, ct);
+            if (!alreadyBlocked)
+            {
+                db.EventBlocklist.Add(new EventBlocklistEntry
+                {
+                    EventId = eventId,
+                    UserId = userId,
+                    BlockedByUserId = dbUser.Id,
+                    BlockedAt = DateTime.UtcNow,
+                });
+            }
+            blocked = true;
+        }
+
+        await db.SaveChangesAsync(ct);
+
+        var newCount = await db.EventParticipants.CountAsync(p => p.EventId == eventId, ct);
+        await realtime.ParticipantChangedAsync(eventId, newCount, ct);
+
+        return Results.Ok(new { removed = true, invitationRevoked, blocked });
     }
 
     private static async Task<IResult> UpdateEvent(
@@ -741,6 +885,65 @@ public static class EventEndpoints
         return Results.Ok(new { attendees, coAdmins, pendingInvitations });
     }
 
+    private static async Task<IResult> GetBlocklist(
+        Guid eventId,
+        ClaimsPrincipal user,
+        ThuddleDbContext db,
+        CancellationToken ct)
+    {
+        var keycloakId = GetKeycloakId(user);
+        if (keycloakId is null) return Results.Unauthorized();
+
+        var dbUser = await db.Users.FirstOrDefaultAsync(u => u.KeycloakId == keycloakId, ct);
+        if (dbUser is null) return Results.Unauthorized();
+
+        if (!await IsEventAdmin(db, eventId, dbUser.Id, ct))
+            return Results.Forbid();
+
+        var entries = await db.EventBlocklist
+            .Where(b => b.EventId == eventId)
+            .Select(b => new
+            {
+                b.UserId,
+                DisplayName = b.User.DisplayName ?? b.User.FullName ?? b.User.Email,
+                b.User.Email,
+                b.BlockedAt,
+                BlockedByName = b.BlockedByUser.DisplayName ?? b.BlockedByUser.FullName ?? b.BlockedByUser.Email
+            })
+            .OrderBy(b => b.BlockedAt)
+            .ToListAsync(ct);
+
+        return Results.Ok(entries);
+    }
+
+    private static async Task<IResult> UnblockAttendee(
+        Guid eventId,
+        Guid userId,
+        ClaimsPrincipal user,
+        ThuddleDbContext db,
+        CancellationToken ct)
+    {
+        var keycloakId = GetKeycloakId(user);
+        if (keycloakId is null) return Results.Unauthorized();
+
+        var dbUser = await db.Users.FirstOrDefaultAsync(u => u.KeycloakId == keycloakId, ct);
+        if (dbUser is null) return Results.Unauthorized();
+
+        if (!await IsEventAdmin(db, eventId, dbUser.Id, ct))
+            return Results.Forbid();
+
+        var entry = await db.EventBlocklist
+            .FirstOrDefaultAsync(b => b.EventId == eventId && b.UserId == userId, ct);
+
+        if (entry is null)
+            return Results.NotFound(new { error = "User is not on the blocklist." });
+
+        db.EventBlocklist.Remove(entry);
+        await db.SaveChangesAsync(ct);
+
+        return Results.NoContent();
+    }
+
     private static async Task<IResult> GetParticipants(
         Guid eventId,
         ClaimsPrincipal user,
@@ -812,6 +1015,7 @@ public static class EventEndpoints
         UpdatePaymentRequest request,
         ClaimsPrincipal user,
         ThuddleDbContext db,
+        IRealtimeNotifier realtime,
         CancellationToken ct)
     {
         var keycloakId = GetKeycloakId(user);
@@ -832,6 +1036,8 @@ public static class EventEndpoints
         participant.HasPaid = request.HasPaid;
         db.EventParticipants.Update(participant);
         await db.SaveChangesAsync(ct);
+
+        await realtime.EventUpdatedAsync(eventId, ct);
 
         return Results.Ok(new { userId, hasPaid = request.HasPaid });
     }
