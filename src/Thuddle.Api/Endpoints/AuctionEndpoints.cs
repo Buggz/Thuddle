@@ -28,6 +28,16 @@ public static class AuctionEndpoints
         app.MapPost("/api/events/{eventId:guid}/auction/items/{itemId:guid}/images", UploadItemImage).RequireAuthorization().DisableAntiforgery();
         app.MapDelete("/api/events/{eventId:guid}/auction/items/{itemId:guid}/images/{imageId:guid}", DeleteItemImage).RequireAuthorization();
         app.MapPost("/api/events/{eventId:guid}/auction/items/{itemId:guid}/approve", ApproveItem).RequireAuthorization();
+        app.MapPost("/api/events/{eventId:guid}/auction/items/{itemId:guid}/publish", PublishItem).RequireAuthorization();
+        app.MapPost("/api/events/{eventId:guid}/auction/items/{itemId:guid}/unpublish", UnpublishItem).RequireAuthorization();
+        app.MapPost("/api/events/{eventId:guid}/auction/items/{itemId:guid}/reject", RejectItem).RequireAuthorization();
+        app.MapPost("/api/events/{eventId:guid}/auction/items/{itemId:guid}/resubmit", ResubmitItem).RequireAuthorization();
+        app.MapGet("/api/events/{eventId:guid}/auction/items/moderation", GetModerationQueue).RequireAuthorization();
+
+        // Bans
+        app.MapGet("/api/events/{eventId:guid}/auction/bans", ListBans).RequireAuthorization();
+        app.MapPost("/api/events/{eventId:guid}/auction/bans", BanUser).RequireAuthorization();
+        app.MapDelete("/api/events/{eventId:guid}/auction/bans/{userId:guid}", LiftBan).RequireAuthorization();
 
         // Bidding
         app.MapPost("/api/events/{eventId:guid}/auction/items/{itemId:guid}/bids", PlaceBid).RequireAuthorization();
@@ -231,15 +241,13 @@ public static class AuctionEndpoints
         settings.Status = AuctionStatus.Live;
         settings.UpdatedAt = DateTime.UtcNow;
 
-        // Transition all approved items to Live
-        var approvedItems = await db.AuctionItems
+        // Transition Scheduled items to Live when auction starts
+        var scheduledItems = await db.AuctionItems
             .AsTracking()
-            .Where(i => i.EventId == eventId && (i.Status == AuctionItemStatus.Draft || i.Status == AuctionItemStatus.PendingApproval))
+            .Where(i => i.EventId == eventId && i.Status == AuctionItemStatus.Scheduled)
             .ToListAsync(ct);
 
-        // Only items that were approved (or Draft from admins) go live
-        // Items still PendingApproval with RequireApproval policy stay pending
-        foreach (var item in approvedItems.Where(i => i.Status == AuctionItemStatus.Draft))
+        foreach (var item in scheduledItems)
         {
             item.Status = AuctionItemStatus.Live;
             item.UpdatedAt = DateTime.UtcNow;
@@ -317,6 +325,177 @@ public static class AuctionEndpoints
         return Results.Ok(submitters);
     }
 
+    private static async Task<IResult> BanUser(
+        Guid eventId,
+        BanAuctionUserRequest request,
+        IValidator<BanAuctionUserRequest> validator,
+        ClaimsPrincipal user,
+        ThuddleDbContext db,
+        IRealtimeNotifier realtime,
+        NotificationService notifications,
+        CancellationToken ct)
+    {
+        var keycloakId = GetKeycloakId(user);
+        if (keycloakId is null) return Results.Unauthorized();
+
+        var dbUser = await db.Users.FirstOrDefaultAsync(u => u.KeycloakId == keycloakId, ct);
+        if (dbUser is null) return Results.Unauthorized();
+
+        if (!await IsEventAdmin(db, eventId, dbUser.Id, ct))
+            return Results.Forbid();
+
+        if (ValidationError(await validator.ValidateAsync(request, ct)) is { } validationError)
+            return validationError;
+
+        var targetUser = await db.Users.FindAsync([request.UserId], ct);
+        if (targetUser is null)
+            return Results.NotFound(new { error = "User not found." });
+
+        if (request.UserId == dbUser.Id)
+            return Results.BadRequest(new { error = "Cannot ban yourself." });
+
+        var evt = await db.Events.AsNoTracking().FirstOrDefaultAsync(e => e.Id == eventId, ct);
+        if (evt is null) return Results.NotFound(new { error = "Event not found." });
+
+        if (request.UserId == evt.OwnerId)
+            return Results.BadRequest(new { error = "Cannot ban the event owner." });
+
+        using var transaction = await db.Database.BeginTransactionAsync(ct);
+
+        // Idempotency check
+        var existing = await db.AuctionPublishBans
+            .FirstOrDefaultAsync(b => b.EventId == eventId && b.UserId == request.UserId, ct);
+
+        if (existing is not null)
+        {
+            await transaction.CommitAsync(ct);
+            return Results.Ok(new { banId = existing.Id, affectedItemCount = 0, alreadyBanned = true });
+        }
+
+        var ban = new AuctionPublishBan
+        {
+            Id = Guid.NewGuid(),
+            EventId = eventId,
+            UserId = request.UserId,
+            BannedByUserId = dbUser.Id,
+            Reason = request.Reason?.Trim(),
+            CreatedAt = DateTime.UtcNow
+        };
+        db.AuctionPublishBans.Add(ban);
+
+        // Find all affected items
+        var affectedItems = await db.AuctionItems.AsTracking()
+            .Where(i => i.EventId == eventId
+                && i.SubmittedByUserId == request.UserId
+                && (i.Status == AuctionItemStatus.Draft
+                    || i.Status == AuctionItemStatus.PendingApproval
+                    || i.Status == AuctionItemStatus.Scheduled
+                    || i.Status == AuctionItemStatus.Live))
+            .ToListAsync(ct);
+
+        var voidedBidders = new List<Guid>();
+        foreach (var item in affectedItems)
+        {
+            if (item.Status == AuctionItemStatus.Live && item.CurrentBidId.HasValue)
+            {
+                var highBidderId = await VoidBidsForItemAsync(db, item, ct);
+                if (highBidderId.HasValue)
+                    voidedBidders.Add(highBidderId.Value);
+            }
+
+            item.Status = AuctionItemStatus.Rejected;
+            item.RejectionReason = "User banned from publishing in this auction";
+            item.ResubmitAllowed = false;
+            item.UpdatedAt = DateTime.UtcNow;
+        }
+
+        await db.SaveChangesAsync(ct);
+        await transaction.CommitAsync(ct);
+
+        // SignalR
+        await realtime.AuctionUserBannedAsync(eventId, request.UserId, ct);
+
+        foreach (var item in affectedItems)
+        {
+            await realtime.AuctionItemUpdatedAsync(eventId, item.Id, ct);
+            if (item.Status == AuctionItemStatus.Rejected)
+                await realtime.AuctionItemRemovedAsync(eventId, item.Id, ct);
+        }
+
+        // Notifications
+        await notifications.NotifyUserBannedFromAuction(request.UserId, eventId, ban.Reason, ct);
+
+        foreach (var bidderId in voidedBidders.Distinct())
+        {
+            await notifications.NotifyBidVoided(bidderId, Guid.Empty, ban.Reason, ct);
+        }
+
+        return Results.Ok(new { banId = ban.Id, affectedItemCount = affectedItems.Count, alreadyBanned = false });
+    }
+
+    private static async Task<IResult> LiftBan(
+        Guid eventId,
+        Guid userId,
+        ClaimsPrincipal user,
+        ThuddleDbContext db,
+        IRealtimeNotifier realtime,
+        CancellationToken ct)
+    {
+        var keycloakId = GetKeycloakId(user);
+        if (keycloakId is null) return Results.Unauthorized();
+
+        var dbUser = await db.Users.FirstOrDefaultAsync(u => u.KeycloakId == keycloakId, ct);
+        if (dbUser is null) return Results.Unauthorized();
+
+        if (!await IsEventAdmin(db, eventId, dbUser.Id, ct))
+            return Results.Forbid();
+
+        var ban = await db.AuctionPublishBans
+            .FirstOrDefaultAsync(b => b.EventId == eventId && b.UserId == userId, ct);
+
+        if (ban is null)
+            return Results.NotFound(new { error = "Ban not found." });
+
+        db.AuctionPublishBans.Remove(ban);
+        await db.SaveChangesAsync(ct);
+
+        await realtime.AuctionUserUnbannedAsync(eventId, userId, ct);
+
+        return Results.NoContent();
+    }
+
+    private static async Task<IResult> ListBans(
+        Guid eventId,
+        ClaimsPrincipal user,
+        ThuddleDbContext db,
+        CancellationToken ct)
+    {
+        var keycloakId = GetKeycloakId(user);
+        if (keycloakId is null) return Results.Unauthorized();
+
+        var dbUser = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.KeycloakId == keycloakId, ct);
+        if (dbUser is null) return Results.Unauthorized();
+
+        if (!await IsEventAdmin(db, eventId, dbUser.Id, ct))
+            return Results.Forbid();
+
+        var bans = await db.AuctionPublishBans
+            .AsNoTracking()
+            .Where(b => b.EventId == eventId)
+            .OrderByDescending(b => b.CreatedAt)
+            .Select(b => new
+            {
+                userId = b.UserId,
+                displayName = b.User.DisplayName ?? b.User.FullName ?? "Unknown",
+                reason = b.Reason,
+                createdAt = b.CreatedAt,
+                bannedByDisplayName = b.BannedByUser.DisplayName ?? b.BannedByUser.FullName ?? "Unknown"
+            })
+            .ToListAsync(ct);
+
+        return Results.Ok(bans);
+    }
+
     // ─── Items ───────────────────────────────────────────────────
 
     private static async Task<IResult> GetItems(
@@ -346,18 +525,22 @@ public static class AuctionEndpoints
             .AsSplitQuery()
             .Where(i => i.EventId == eventId);
 
-        // Non-admins only see Live/Sold/Unsold items (plus their own)
-        if (!isAdmin)
+        // Filter by ownership
+        if (mine == true)
         {
+            // mine=true: return only items submitted by caller (all statuses)
+            query = query.Where(i => i.SubmittedByUserId == dbUser.Id);
+        }
+        else
+        {
+            // mine=false: public items (Live/Sold/Unsold/Withdrawn) for everyone
+            // Admins get moderation via Wave 1b endpoints, not via GetItems
             query = query.Where(i =>
                 i.Status == AuctionItemStatus.Live
                 || i.Status == AuctionItemStatus.Sold
                 || i.Status == AuctionItemStatus.Unsold
-                || i.SubmittedByUserId == dbUser.Id);
+                || i.Status == AuctionItemStatus.Withdrawn);
         }
-
-        if (mine == true)
-            query = query.Where(i => i.SubmittedByUserId == dbUser.Id);
 
         var totalCount = await query.CountAsync(ct);
 
@@ -383,9 +566,7 @@ public static class AuctionEndpoints
                     .OrderBy(img => img.SortOrder)
                     .Select(img => img.BlobUrl)
                     .ToList(),
-                i.BggId,
-                BggImageUrl = i.BggImageUrl ?? i.BoardGame.ImageUrl ?? i.BoardGame.ThumbnailUrl,
-                extraGames = db.AuctionItemBoardGames
+                games = db.AuctionItemBoardGames
                     .Where(e => e.ItemId == i.Id)
                     .OrderBy(e => e.SortOrder)
                     .Select(e => new
@@ -396,6 +577,9 @@ public static class AuctionEndpoints
                         thumbnailUrl = e.BoardGame.ThumbnailUrl ?? e.BoardGame.ImageUrl
                     })
                     .ToList(),
+                i.DescriptionAutoGenerated,
+                i.RejectionReason,
+                i.ResubmitAllowed,
                 i.CreatedAt,
                 i.UpdatedAt
             })
@@ -423,9 +607,10 @@ public static class AuctionEndpoints
                 i.currentBid,
                 i.bidCount,
                 i.imageUrls,
-                i.BggId,
-                i.BggImageUrl,
-                i.extraGames,
+                i.games,
+                i.DescriptionAutoGenerated,
+                i.RejectionReason,
+                i.ResubmitAllowed,
                 i.CreatedAt,
                 i.UpdatedAt
             }).ToList();
@@ -491,9 +676,7 @@ public static class AuctionEndpoints
                     .OrderBy(img => img.SortOrder)
                     .Select(img => img.BlobUrl)
                     .ToList(),
-                i.BggId,
-                BggImageUrl = i.BggImageUrl ?? i.BoardGame.ImageUrl ?? i.BoardGame.ThumbnailUrl,
-                extraGames = db.AuctionItemBoardGames
+                games = db.AuctionItemBoardGames
                     .Where(e => e.ItemId == i.Id)
                     .OrderBy(e => e.SortOrder)
                     .Select(e => new
@@ -501,9 +684,15 @@ public static class AuctionEndpoints
                         e.BggId,
                         e.BoardGame.Name,
                         e.BoardGame.YearPublished,
-                        thumbnailUrl = e.BoardGame.ThumbnailUrl ?? e.BoardGame.ImageUrl
+                        e.BoardGame.BggRank,
+                        thumbnailUrl = e.BoardGame.ThumbnailUrl ?? e.BoardGame.ImageUrl,
+                        imageUrl = e.BoardGame.ImageUrl ?? e.BoardGame.ThumbnailUrl,
+                        description = e.BoardGame.Description
                     })
                     .ToList(),
+                i.DescriptionAutoGenerated,
+                i.RejectionReason,
+                i.ResubmitAllowed,
                 i.CreatedAt,
                 i.UpdatedAt
             })
@@ -511,10 +700,11 @@ public static class AuctionEndpoints
 
         if (item is null) return Results.NotFound(new { error = "Item not found." });
 
-        // Non-admins can't see non-public items unless they submitted them
-        if (!isAdmin
-            && item.submittedByUserId != dbUser.Id
-            && item.status is not ("Live" or "Sold" or "Unsold"))
+        // Access control:
+        // - Public statuses (Live/Sold/Unsold/Withdrawn): everyone
+        // - Non-public (Draft/PendingApproval/Scheduled): submitter or admin only
+        var isPublicStatus = item.status is "Live" or "Sold" or "Unsold" or "Withdrawn";
+        if (!isPublicStatus && item.submittedByUserId != dbUser.Id && !isAdmin)
         {
             return Results.NotFound(new { error = "Item not found." });
         }
@@ -541,9 +731,8 @@ public static class AuctionEndpoints
                 item.currentBid,
                 item.bidCount,
                 item.imageUrls,
-                item.BggId,
-                item.BggImageUrl,
-                item.extraGames,
+                item.games,
+                item.DescriptionAutoGenerated,
                 item.CreatedAt,
                 item.UpdatedAt
             });
@@ -593,20 +782,11 @@ public static class AuctionEndpoints
             }
         }
 
-        // Determine initial status
-        AuctionItemStatus initialStatus;
-        if (isAdmin)
-        {
-            initialStatus = settings.Status == AuctionStatus.Live
-                ? AuctionItemStatus.Live
-                : AuctionItemStatus.Draft;
-        }
-        else
-        {
-            initialStatus = settings.ItemModerationPolicy == ModerationPolicy.RequireApproval
-                ? AuctionItemStatus.PendingApproval
-                : (settings.Status == AuctionStatus.Live ? AuctionItemStatus.Live : AuctionItemStatus.Draft);
-        }
+        // Ban check
+        var isBanned = await db.AuctionPublishBans
+            .AnyAsync(b => b.EventId == eventId && b.UserId == dbUser.Id, ct);
+        if (isBanned)
+            return Results.Json(new { error = "You are banned from publishing in this auction." }, statusCode: 403);
 
         var item = new AuctionItem
         {
@@ -617,43 +797,36 @@ public static class AuctionEndpoints
             Description = request.Description?.Trim(),
             StartingBid = request.StartingBid,
             BuyoutPrice = request.BuyoutPrice,
-            Status = initialStatus,
+            Status = AuctionItemStatus.Draft,
+            DescriptionAutoGenerated = request.DescriptionAutoGenerated,
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow
         };
 
-        if (request.BggId.HasValue)
-        {
-            var boardGame = await db.BoardGames.AsNoTracking()
-                .FirstOrDefaultAsync(bg => bg.BggId == request.BggId.Value, ct);
-            if (boardGame is not null)
-            {
-                item.BggId = boardGame.BggId;
-                item.BggImageUrl = boardGame.ImageUrl ?? boardGame.ThumbnailUrl;
-            }
-        }
-
         db.AuctionItems.Add(item);
 
-        if (request.ExtraBggIds is { Count: > 0 })
+        if (request.BggIds is { Count: > 0 })
         {
-            var distinctExtras = request.ExtraBggIds
-                .Where(id => id != request.BggId) // don't duplicate the primary game
-                .Distinct()
-                .ToList();
+            var distinctIds = request.BggIds.Distinct().Take(20).ToList();
 
-            var validIds = await db.BoardGames
-                .Where(bg => distinctExtras.Contains(bg.BggId))
-                .Select(bg => bg.BggId)
+            var rankedGames = await db.BoardGames
+                .Where(bg => distinctIds.Contains(bg.BggId))
+                .Select(bg => new { bg.BggId, bg.BggRank })
                 .ToListAsync(ct);
 
-            for (var idx = 0; idx < validIds.Count; idx++)
+            var sortedIds = rankedGames
+                .OrderBy(bg => bg.BggRank == null)
+                .ThenBy(bg => bg.BggRank)
+                .Select(bg => bg.BggId)
+                .ToList();
+
+            for (var idx = 0; idx < sortedIds.Count; idx++)
             {
                 db.AuctionItemBoardGames.Add(new AuctionItemBoardGame
                 {
                     Id = Guid.NewGuid(),
                     ItemId = item.Id,
-                    BggId = validIds[idx],
+                    BggId = sortedIds[idx],
                     SortOrder = idx,
                     AddedAt = DateTime.UtcNow
                 });
@@ -661,24 +834,6 @@ public static class AuctionEndpoints
         }
 
         await db.SaveChangesAsync(ct);
-
-        await realtime.AuctionItemAddedAsync(eventId, item.Id, ct);
-
-        // Notify admins if pending approval
-        if (initialStatus == AuctionItemStatus.PendingApproval)
-        {
-            var evt = await db.Events.AsNoTracking().FirstOrDefaultAsync(e => e.Id == eventId, ct);
-            if (evt is not null)
-            {
-                await notifications.CreateAsync(
-                    evt.OwnerId,
-                    NotificationKind.AuctionItemPendingApproval,
-                    eventId,
-                    item.Id,
-                    $"New auction item \"{item.Name}\" needs approval.",
-                    ct);
-            }
-        }
 
         return Results.Created($"/api/events/{eventId}/auction/items/{item.Id}", new
         {
@@ -714,14 +869,22 @@ public static class AuctionEndpoints
 
         if (item is null) return Results.NotFound(new { error = "Item not found." });
 
-        // Submitter can only edit pre-bid; admin can always edit
-        var hasBids = await db.AuctionBids.AnyAsync(b => b.ItemId == itemId, ct);
-        if (!isAdmin)
+        // Authorization: submitter (in Draft only) or admin (who is also the submitter)
+        if (item.SubmittedByUserId == dbUser.Id)
         {
-            if (item.SubmittedByUserId != dbUser.Id)
-                return Results.Forbid();
-            if (hasBids)
-                return Results.BadRequest(new { error = "Cannot edit an item that has bids." });
+            // Submitter editing their own item
+            if (item.Status != AuctionItemStatus.Draft)
+                return Results.Conflict(new { error = "Item must be in Draft to edit. Unpublish first.", currentStatus = item.Status.ToString() });
+        }
+        else if (isAdmin)
+        {
+            // Admin trying to edit someone else's item → forbidden
+            return Results.Forbid();
+        }
+        else
+        {
+            // Non-admin, non-submitter → forbidden
+            return Results.Forbid();
         }
 
         if (ValidationError(await validator.ValidateAsync(request, ct)) is { } validationError)
@@ -731,52 +894,37 @@ public static class AuctionEndpoints
         item.Description = request.Description?.Trim();
         item.StartingBid = request.StartingBid;
         item.BuyoutPrice = request.BuyoutPrice;
+        item.DescriptionAutoGenerated = request.DescriptionAutoGenerated;
         item.UpdatedAt = DateTime.UtcNow;
 
-        if (request.BggId != item.BggId)
-        {
-            if (request.BggId.HasValue)
-            {
-                var boardGame = await db.BoardGames.AsNoTracking()
-                    .FirstOrDefaultAsync(bg => bg.BggId == request.BggId.Value, ct);
-                if (boardGame is not null)
-                {
-                    item.BggId = boardGame.BggId;
-                    item.BggImageUrl = boardGame.ImageUrl ?? boardGame.ThumbnailUrl;
-                }
-            }
-            else
-            {
-                item.BggId = null;
-                item.BggImageUrl = null;
-            }
-        }
-
-        // Replace extra games list
-        var existingExtras = await db.AuctionItemBoardGames
+        // Replace board games list
+        var existingGames = await db.AuctionItemBoardGames
             .Where(e => e.ItemId == itemId)
             .ToListAsync(ct);
-        db.AuctionItemBoardGames.RemoveRange(existingExtras);
+        db.AuctionItemBoardGames.RemoveRange(existingGames);
 
-        if (request.ExtraBggIds is { Count: > 0 })
+        if (request.BggIds is { Count: > 0 })
         {
-            var distinctExtras = request.ExtraBggIds
-                .Where(id => id != (request.BggId ?? item.BggId))
-                .Distinct()
-                .ToList();
+            var distinctIds = request.BggIds.Distinct().Take(20).ToList();
 
-            var validIds = await db.BoardGames
-                .Where(bg => distinctExtras.Contains(bg.BggId))
-                .Select(bg => bg.BggId)
+            var rankedGames = await db.BoardGames
+                .Where(bg => distinctIds.Contains(bg.BggId))
+                .Select(bg => new { bg.BggId, bg.BggRank })
                 .ToListAsync(ct);
 
-            for (var idx = 0; idx < validIds.Count; idx++)
+            var sortedIds = rankedGames
+                .OrderBy(bg => bg.BggRank == null)
+                .ThenBy(bg => bg.BggRank)
+                .Select(bg => bg.BggId)
+                .ToList();
+
+            for (var idx = 0; idx < sortedIds.Count; idx++)
             {
                 db.AuctionItemBoardGames.Add(new AuctionItemBoardGame
                 {
                     Id = Guid.NewGuid(),
                     ItemId = itemId,
-                    BggId = validIds[idx],
+                    BggId = sortedIds[idx],
                     SortOrder = idx,
                     AddedAt = DateTime.UtcNow
                 });
@@ -818,12 +966,21 @@ public static class AuctionEndpoints
 
         if (item is null) return Results.NotFound(new { error = "Item not found." });
 
-        if (!isAdmin)
+        // Authorization: submitter (Draft only), or admin (can delete any status if submitter)
+        if (item.SubmittedByUserId == dbUser.Id)
         {
-            if (item.SubmittedByUserId != dbUser.Id) return Results.Forbid();
-            var hasBids = await db.AuctionBids.AnyAsync(b => b.ItemId == itemId, ct);
-            if (hasBids)
-                return Results.BadRequest(new { error = "Cannot delete an item that has bids." });
+            // Submitter deleting their own item — must be Draft
+            if (item.Status != AuctionItemStatus.Draft)
+                return Results.Conflict(new { error = "Item must be in Draft to delete.", currentStatus = item.Status.ToString() });
+        }
+        else if (isAdmin)
+        {
+            // Admin trying to delete someone else's item → forbidden for Wave 1a
+            return Results.Forbid();
+        }
+        else
+        {
+            return Results.Forbid();
         }
 
         item.Status = AuctionItemStatus.Withdrawn;
@@ -854,8 +1011,22 @@ public static class AuctionEndpoints
         if (item is null) return Results.NotFound(new { error = "Item not found." });
 
         var isAdmin = await IsEventAdmin(db, eventId, dbUser.Id, ct);
-        if (!isAdmin && item.SubmittedByUserId != dbUser.Id)
+
+        // Authorization: submitter (Draft only), or admin (if also submitter, Draft only)
+        if (item.SubmittedByUserId == dbUser.Id)
+        {
+            if (item.Status != AuctionItemStatus.Draft)
+                return Results.Conflict(new { error = "Item must be in Draft to edit. Unpublish first.", currentStatus = item.Status.ToString() });
+        }
+        else if (isAdmin)
+        {
+            // Admin trying to edit someone else's item → forbidden
             return Results.Forbid();
+        }
+        else
+        {
+            return Results.Forbid();
+        }
 
         var form = await request.ReadFormAsync(ct);
         var file = form.Files.GetFile("image");
@@ -911,8 +1082,22 @@ public static class AuctionEndpoints
         if (item is null) return Results.NotFound(new { error = "Item not found." });
 
         var isAdmin = await IsEventAdmin(db, eventId, dbUser.Id, ct);
-        if (!isAdmin && item.SubmittedByUserId != dbUser.Id)
+
+        // Authorization: submitter (Draft only), or admin (if also submitter, Draft only)
+        if (item.SubmittedByUserId == dbUser.Id)
+        {
+            if (item.Status != AuctionItemStatus.Draft)
+                return Results.Conflict(new { error = "Item must be in Draft to edit. Unpublish first.", currentStatus = item.Status.ToString() });
+        }
+        else if (isAdmin)
+        {
+            // Admin trying to edit someone else's item → forbidden
             return Results.Forbid();
+        }
+        else
+        {
+            return Results.Forbid();
+        }
 
         var image = await db.AuctionItemImages.AsTracking()
             .FirstOrDefaultAsync(img => img.Id == imageId && img.ItemId == itemId, ct);
@@ -954,13 +1139,443 @@ public static class AuctionEndpoints
 
         item.Status = settings?.Status == AuctionStatus.Live
             ? AuctionItemStatus.Live
-            : AuctionItemStatus.Draft;
+            : AuctionItemStatus.Scheduled;
         item.UpdatedAt = DateTime.UtcNow;
 
         await db.SaveChangesAsync(ct);
-        await realtime.AuctionItemUpdatedAsync(eventId, itemId, ct);
+
+        if (item.Status == AuctionItemStatus.Live)
+            await realtime.AuctionItemAddedAsync(eventId, itemId, ct);
+        else
+            await realtime.AuctionItemUpdatedAsync(eventId, itemId, ct);
 
         return Results.Ok(new { item.Id, status = item.Status.ToString() });
+    }
+
+    private static async Task<IResult> PublishItem(
+        Guid eventId,
+        Guid itemId,
+        ClaimsPrincipal user,
+        ThuddleDbContext db,
+        IRealtimeNotifier realtime,
+        NotificationService notifications,
+        CancellationToken ct)
+    {
+        var keycloakId = GetKeycloakId(user);
+        if (keycloakId is null) return Results.Unauthorized();
+
+        var dbUser = await db.Users.FirstOrDefaultAsync(u => u.KeycloakId == keycloakId, ct);
+        if (dbUser is null) return Results.Unauthorized();
+
+        var isAdmin = await IsEventAdmin(db, eventId, dbUser.Id, ct);
+
+        var item = await db.AuctionItems.AsTracking()
+            .FirstOrDefaultAsync(i => i.Id == itemId && i.EventId == eventId, ct);
+
+        if (item is null) return Results.NotFound(new { error = "Item not found." });
+
+        if (item.SubmittedByUserId != dbUser.Id && !isAdmin)
+            return Results.Forbid();
+
+        // Non-admin submitters must pass submission permission check at publish-time
+        if (!isAdmin && item.SubmittedByUserId == dbUser.Id)
+        {
+            var settings = await db.EventAuctionSettings.AsNoTracking()
+                .FirstOrDefaultAsync(s => s.EventId == eventId, ct);
+            
+            if (settings is not null)
+            {
+                if (settings.SubmissionMode == AuctionSubmissionMode.AdminsOnly)
+                    return Results.Forbid();
+
+                if (settings.SubmissionMode == AuctionSubmissionMode.SelectedAttendees)
+                {
+                    var isSubmitter = await db.AuctionItemSubmitters
+                        .AnyAsync(s => s.EventId == eventId && s.UserId == dbUser.Id, ct);
+                    if (!isSubmitter) return Results.Forbid();
+                }
+            }
+        }
+
+        // Ban check (applies to all, including admins)
+        var isBanned = await db.AuctionPublishBans
+            .AnyAsync(b => b.EventId == eventId && b.UserId == dbUser.Id, ct);
+        if (isBanned)
+            return Results.Json(new { error = "You are banned from publishing in this auction." }, statusCode: 403);
+
+        if (item.Status != AuctionItemStatus.Draft)
+            return Results.Conflict(new { error = "Item must be in Draft to publish.", currentStatus = item.Status.ToString() });
+
+        var auctionSettings = await db.EventAuctionSettings.AsNoTracking()
+            .FirstOrDefaultAsync(s => s.EventId == eventId, ct);
+        
+        if (auctionSettings is null)
+            return Results.BadRequest(new { error = "Auction not configured for this event." });
+
+        bool autoApprove = isAdmin || auctionSettings.ItemModerationPolicy == ModerationPolicy.AutoApprove;
+        AuctionItemStatus targetStatus;
+
+        if (!autoApprove)
+            targetStatus = AuctionItemStatus.PendingApproval;
+        else if (auctionSettings.Status == AuctionStatus.Live)
+            targetStatus = AuctionItemStatus.Live;
+        else
+            targetStatus = AuctionItemStatus.Scheduled;
+
+        item.Status = targetStatus;
+        item.UpdatedAt = DateTime.UtcNow;
+
+        await db.SaveChangesAsync(ct);
+
+        // SignalR: broadcast to appropriate audience
+        if (targetStatus == AuctionItemStatus.Live)
+        {
+            await realtime.AuctionItemAddedAsync(eventId, itemId, ct);
+        }
+        else if (targetStatus == AuctionItemStatus.PendingApproval || targetStatus == AuctionItemStatus.Scheduled)
+        {
+            // Notify admins + submitter only, no event-group broadcast
+            await realtime.AuctionItemUpdatedAsync(eventId, itemId, ct);
+        }
+
+        // Notification to admins if pending approval
+        if (targetStatus == AuctionItemStatus.PendingApproval)
+        {
+            var evt = await db.Events.AsNoTracking()
+                .FirstOrDefaultAsync(e => e.Id == eventId, ct);
+            
+            if (evt is not null)
+            {
+                await notifications.CreateAsync(
+                    evt.OwnerId,
+                    NotificationKind.AuctionItemPendingApproval,
+                    eventId,
+                    item.Id,
+                    $"New auction item \"{item.Name}\" needs approval.",
+                    ct);
+            }
+        }
+
+        // Return same projection shape as GetItem
+        var projection = await db.AuctionItems.AsNoTracking()
+            .Where(i => i.Id == itemId)
+            .Select(i => new
+            {
+                i.Id,
+                i.Name,
+                i.Description,
+                i.StartingBid,
+                i.BuyoutPrice,
+                status = i.Status.ToString(),
+                i.FinalPrice,
+                submittedByUserId = i.SubmittedByUserId,
+                submittedByName = i.SubmittedByUser.DisplayName ?? i.SubmittedByUser.Email,
+                currentBid = i.CurrentBid != null ? (decimal?)i.CurrentBid.Amount : null,
+                bidCount = db.AuctionBids.Count(b => b.ItemId == i.Id),
+                imageUrls = db.AuctionItemImages
+                    .Where(img => img.ItemId == i.Id)
+                    .OrderBy(img => img.SortOrder)
+                    .Select(img => img.BlobUrl)
+                    .ToList(),
+                i.DescriptionAutoGenerated,
+                i.CreatedAt,
+                i.UpdatedAt
+            })
+            .FirstOrDefaultAsync(ct);
+
+        return Results.Ok(projection);
+    }
+
+    private static async Task<IResult> UnpublishItem(
+        Guid eventId,
+        Guid itemId,
+        ClaimsPrincipal user,
+        ThuddleDbContext db,
+        IRealtimeNotifier realtime,
+        CancellationToken ct)
+    {
+        var keycloakId = GetKeycloakId(user);
+        if (keycloakId is null) return Results.Unauthorized();
+
+        var dbUser = await db.Users.FirstOrDefaultAsync(u => u.KeycloakId == keycloakId, ct);
+        if (dbUser is null) return Results.Unauthorized();
+
+        var item = await db.AuctionItems.AsTracking()
+            .FirstOrDefaultAsync(i => i.Id == itemId && i.EventId == eventId, ct);
+
+        if (item is null) return Results.NotFound(new { error = "Item not found." });
+
+        // Submitter only (admins do NOT unpublish, they reject)
+        if (item.SubmittedByUserId != dbUser.Id)
+            return Results.Forbid();
+
+        if (item.Status != AuctionItemStatus.PendingApproval && item.Status != AuctionItemStatus.Scheduled)
+            return Results.Conflict(new { error = "Only pending or scheduled items can be unpublished.", currentStatus = item.Status.ToString() });
+
+        item.Status = AuctionItemStatus.Draft;
+        item.UpdatedAt = DateTime.UtcNow;
+
+        await db.SaveChangesAsync(ct);
+
+        // Notify admins (moderation queue update) and submitter
+        await realtime.AuctionItemUpdatedAsync(eventId, itemId, ct);
+
+        var projection = await db.AuctionItems.AsNoTracking()
+            .Where(i => i.Id == itemId)
+            .Select(i => new
+            {
+                i.Id,
+                i.Name,
+                i.Description,
+                i.StartingBid,
+                i.BuyoutPrice,
+                status = i.Status.ToString(),
+                i.FinalPrice,
+                submittedByUserId = i.SubmittedByUserId,
+                submittedByName = i.SubmittedByUser.DisplayName ?? i.SubmittedByUser.Email,
+                currentBid = i.CurrentBid != null ? (decimal?)i.CurrentBid.Amount : null,
+                bidCount = db.AuctionBids.Count(b => b.ItemId == i.Id),
+                imageUrls = db.AuctionItemImages
+                    .Where(img => img.ItemId == i.Id)
+                    .OrderBy(img => img.SortOrder)
+                    .Select(img => img.BlobUrl)
+                    .ToList(),
+                i.DescriptionAutoGenerated,
+                i.CreatedAt,
+                i.UpdatedAt
+            })
+            .FirstOrDefaultAsync(ct);
+
+        return Results.Ok(projection);
+    }
+
+    private static async Task<IResult> RejectItem(
+        Guid eventId,
+        Guid itemId,
+        RejectAuctionItemRequest request,
+        IValidator<RejectAuctionItemRequest> validator,
+        ClaimsPrincipal user,
+        ThuddleDbContext db,
+        IRealtimeNotifier realtime,
+        NotificationService notifications,
+        CancellationToken ct)
+    {
+        var keycloakId = GetKeycloakId(user);
+        if (keycloakId is null) return Results.Unauthorized();
+
+        var dbUser = await db.Users.FirstOrDefaultAsync(u => u.KeycloakId == keycloakId, ct);
+        if (dbUser is null) return Results.Unauthorized();
+
+        if (!await IsEventAdmin(db, eventId, dbUser.Id, ct))
+            return Results.Forbid();
+
+        if (ValidationError(await validator.ValidateAsync(request, ct)) is { } validationError)
+            return validationError;
+
+        var item = await db.AuctionItems.AsTracking()
+            .FirstOrDefaultAsync(i => i.Id == itemId && i.EventId == eventId, ct);
+
+        if (item is null) return Results.NotFound(new { error = "Item not found." });
+
+        if (item.Status is not (AuctionItemStatus.PendingApproval or AuctionItemStatus.Scheduled or AuctionItemStatus.Live))
+            return Results.Conflict(new { error = "Only pending, scheduled, or live items can be rejected.", currentStatus = item.Status.ToString() });
+
+        Guid? voidedHighBidderId = null;
+        if (item.Status == AuctionItemStatus.Live && item.CurrentBidId.HasValue)
+        {
+            voidedHighBidderId = await VoidBidsForItemAsync(db, item, ct);
+        }
+
+        item.Status = AuctionItemStatus.Rejected;
+        item.RejectionReason = request.Reason?.Trim();
+        item.ResubmitAllowed = request.AllowResubmit!.Value;
+        item.UpdatedAt = DateTime.UtcNow;
+
+        await db.SaveChangesAsync(ct);
+
+        // SignalR: notify submitter
+        await realtime.AuctionItemUpdatedAsync(eventId, itemId, ct);
+
+        // If was Live, also broadcast removal to event group
+        if (item.Status == AuctionItemStatus.Rejected)
+            await realtime.AuctionItemRemovedAsync(eventId, itemId, ct);
+
+        // Notifications
+        await notifications.NotifyItemRejected(item.SubmittedByUserId, itemId, item.RejectionReason, item.ResubmitAllowed, ct);
+
+        if (voidedHighBidderId.HasValue)
+            await notifications.NotifyBidVoided(voidedHighBidderId.Value, itemId, item.RejectionReason, ct);
+
+        // Return same projection as GetItem
+        var projection = await db.AuctionItems.AsNoTracking()
+            .Where(i => i.Id == itemId)
+            .Select(i => new
+            {
+                i.Id,
+                i.Name,
+                i.Description,
+                i.StartingBid,
+                i.BuyoutPrice,
+                status = i.Status.ToString(),
+                i.FinalPrice,
+                submittedByUserId = i.SubmittedByUserId,
+                submittedByName = i.SubmittedByUser.DisplayName ?? i.SubmittedByUser.Email,
+                currentBid = i.CurrentBid != null ? (decimal?)i.CurrentBid.Amount : null,
+                bidCount = db.AuctionBids.Count(b => b.ItemId == i.Id),
+                imageUrls = db.AuctionItemImages
+                    .Where(img => img.ItemId == i.Id)
+                    .OrderBy(img => img.SortOrder)
+                    .Select(img => img.BlobUrl)
+                    .ToList(),
+                i.DescriptionAutoGenerated,
+                i.RejectionReason,
+                i.ResubmitAllowed,
+                i.CreatedAt,
+                i.UpdatedAt
+            })
+            .FirstOrDefaultAsync(ct);
+
+        return Results.Ok(projection);
+    }
+
+    private static async Task<IResult> ResubmitItem(
+        Guid eventId,
+        Guid itemId,
+        ClaimsPrincipal user,
+        ThuddleDbContext db,
+        IRealtimeNotifier realtime,
+        CancellationToken ct)
+    {
+        var keycloakId = GetKeycloakId(user);
+        if (keycloakId is null) return Results.Unauthorized();
+
+        var dbUser = await db.Users.FirstOrDefaultAsync(u => u.KeycloakId == keycloakId, ct);
+        if (dbUser is null) return Results.Unauthorized();
+
+        var item = await db.AuctionItems.AsTracking()
+            .FirstOrDefaultAsync(i => i.Id == itemId && i.EventId == eventId, ct);
+
+        if (item is null) return Results.NotFound(new { error = "Item not found." });
+
+        // Submitter only
+        if (item.SubmittedByUserId != dbUser.Id)
+            return Results.Forbid();
+
+        if (item.Status != AuctionItemStatus.Rejected)
+            return Results.Conflict(new { error = "Only rejected items can be resubmitted.", currentStatus = item.Status.ToString() });
+
+        if (!item.ResubmitAllowed)
+            return Results.Json(new { error = "This item cannot be republished." }, statusCode: 403);
+
+        // Check if user is banned
+        var isBanned = await db.AuctionPublishBans
+            .AnyAsync(b => b.EventId == eventId && b.UserId == dbUser.Id, ct);
+        if (isBanned)
+            return Results.Json(new { error = "You are banned from publishing in this auction." }, statusCode: 403);
+
+        item.Status = AuctionItemStatus.Draft;
+        item.RejectionReason = null;
+        item.ResubmitAllowed = false;
+        item.UpdatedAt = DateTime.UtcNow;
+
+        await db.SaveChangesAsync(ct);
+
+        // SignalR: submitter only (item is back in private workspace)
+        await realtime.AuctionItemUpdatedAsync(eventId, itemId, ct);
+
+        var projection = await db.AuctionItems.AsNoTracking()
+            .Where(i => i.Id == itemId)
+            .Select(i => new
+            {
+                i.Id,
+                i.Name,
+                i.Description,
+                i.StartingBid,
+                i.BuyoutPrice,
+                status = i.Status.ToString(),
+                i.FinalPrice,
+                submittedByUserId = i.SubmittedByUserId,
+                submittedByName = i.SubmittedByUser.DisplayName ?? i.SubmittedByUser.Email,
+                currentBid = i.CurrentBid != null ? (decimal?)i.CurrentBid.Amount : null,
+                bidCount = db.AuctionBids.Count(b => b.ItemId == i.Id),
+                imageUrls = db.AuctionItemImages
+                    .Where(img => img.ItemId == i.Id)
+                    .OrderBy(img => img.SortOrder)
+                    .Select(img => img.BlobUrl)
+                    .ToList(),
+                i.DescriptionAutoGenerated,
+                i.RejectionReason,
+                i.ResubmitAllowed,
+                i.CreatedAt,
+                i.UpdatedAt
+            })
+            .FirstOrDefaultAsync(ct);
+
+        return Results.Ok(projection);
+    }
+
+    private static async Task<IResult> GetModerationQueue(
+        Guid eventId,
+        ClaimsPrincipal user,
+        ThuddleDbContext db,
+        CancellationToken ct)
+    {
+        var keycloakId = GetKeycloakId(user);
+        if (keycloakId is null) return Results.Unauthorized();
+
+        var dbUser = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.KeycloakId == keycloakId, ct);
+        if (dbUser is null) return Results.Unauthorized();
+
+        if (!await IsEventAdmin(db, eventId, dbUser.Id, ct))
+            return Results.Forbid();
+
+        var items = await db.AuctionItems
+            .AsNoTracking()
+            .AsSplitQuery()
+            .Where(i => i.EventId == eventId
+                && (i.Status == AuctionItemStatus.PendingApproval
+                    || i.Status == AuctionItemStatus.Live
+                    || i.Status == AuctionItemStatus.Scheduled))
+            .OrderBy(i => i.Status)
+            .ThenByDescending(i => i.CreatedAt)
+            .Select(i => new
+            {
+                i.Id,
+                i.Name,
+                i.Description,
+                i.StartingBid,
+                i.BuyoutPrice,
+                status = i.Status.ToString(),
+                i.FinalPrice,
+                submittedByUserId = i.SubmittedByUserId,
+                submittedByName = i.SubmittedByUser.DisplayName ?? i.SubmittedByUser.Email,
+                currentBid = i.CurrentBid != null ? (decimal?)i.CurrentBid.Amount : null,
+                bidCount = db.AuctionBids.Count(b => b.ItemId == i.Id),
+                imageUrls = db.AuctionItemImages
+                    .Where(img => img.ItemId == i.Id)
+                    .OrderBy(img => img.SortOrder)
+                    .Select(img => img.BlobUrl)
+                    .ToList(),
+                games = db.AuctionItemBoardGames
+                    .Where(e => e.ItemId == i.Id)
+                    .OrderBy(e => e.SortOrder)
+                    .Select(e => new
+                    {
+                        e.BggId,
+                        e.BoardGame.Name,
+                        e.BoardGame.YearPublished,
+                        thumbnailUrl = e.BoardGame.ThumbnailUrl ?? e.BoardGame.ImageUrl
+                    })
+                    .ToList(),
+                i.DescriptionAutoGenerated,
+                i.RejectionReason,
+                i.ResubmitAllowed,
+                i.CreatedAt,
+                i.UpdatedAt
+            })
+            .ToListAsync(ct);
+
+        return Results.Ok(items);
     }
 
     // ─── Bidding (the dangerous mile) ────────────────────────────
@@ -1332,6 +1947,26 @@ public static class AuctionEndpoints
             totalPages = (int)Math.Ceiling((double)totalCount / size)
         });
     }
+
+    // ─── Helpers ─────────────────────────────────────────────────
+
+    private static async Task<Guid?> VoidBidsForItemAsync(ThuddleDbContext db, AuctionItem item, CancellationToken ct)
+    {
+        Guid? highBidderId = null;
+        if (item.CurrentBidId.HasValue)
+        {
+            var currentBid = await db.AuctionBids.FindAsync([item.CurrentBidId.Value], ct);
+            if (currentBid is not null)
+                highBidderId = currentBid.BidderUserId;
+        }
+
+        await db.AuctionBids
+            .Where(b => b.ItemId == item.Id)
+            .ExecuteUpdateAsync(setters => setters.SetProperty(b => b.IsVoided, true), ct);
+
+        item.CurrentBidId = null;
+        return highBidderId;
+    }
 }
 
 // ─── Request DTOs ────────────────────────────────────────────────
@@ -1354,16 +1989,16 @@ public record CreateAuctionItemRequest(
     string? Description,
     decimal StartingBid,
     decimal? BuyoutPrice,
-    int? BggId = null,
-    List<int>? ExtraBggIds = null);
+    bool DescriptionAutoGenerated = true,
+    List<int>? BggIds = null);
 
 public record UpdateAuctionItemRequest(
     string Name,
     string? Description,
     decimal StartingBid,
     decimal? BuyoutPrice,
-    int? BggId = null,
-    List<int>? ExtraBggIds = null);
+    bool DescriptionAutoGenerated,
+    List<int>? BggIds = null);
 
 public record PlaceBidRequest(
     decimal Amount,
@@ -1371,3 +2006,7 @@ public record PlaceBidRequest(
 
 public record ManageSubmittersRequest(
     List<Guid> UserIds);
+
+public record RejectAuctionItemRequest(string? Reason, bool? AllowResubmit);
+
+public record BanAuctionUserRequest(Guid UserId, string? Reason);

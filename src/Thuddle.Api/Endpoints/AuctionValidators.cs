@@ -38,9 +38,9 @@ public sealed class CreateAuctionItemRequestValidator : AbstractValidator<Create
         RuleFor(x => x.BuyoutPrice).GreaterThan(x => x.StartingBid)
             .WithMessage("BuyoutPrice must be greater than StartingBid.")
             .When(x => x.BuyoutPrice.HasValue);
-        RuleFor(x => x.ExtraBggIds)
+        RuleFor(x => x.BggIds)
             .Must(ids => ids is null || ids.Count <= 20)
-            .WithMessage("A package can contain at most 20 extra games.");
+            .WithMessage("An item can contain at most 20 games.");
     }
 }
 
@@ -53,9 +53,9 @@ public sealed class UpdateAuctionItemRequestValidator : AbstractValidator<Update
         RuleFor(x => x.BuyoutPrice).GreaterThan(x => x.StartingBid)
             .WithMessage("BuyoutPrice must be greater than StartingBid.")
             .When(x => x.BuyoutPrice.HasValue);
-        RuleFor(x => x.ExtraBggIds)
+        RuleFor(x => x.BggIds)
             .Must(ids => ids is null || ids.Count <= 20)
-            .WithMessage("A package can contain at most 20 extra games.");
+            .WithMessage("An item can contain at most 20 games.");
     }
 }
 
@@ -65,5 +65,23 @@ public sealed class PlaceBidRequestValidator : AbstractValidator<PlaceBidRequest
     {
         RuleFor(x => x.Amount).GreaterThan(0).WithMessage("Amount must be greater than zero.");
         RuleFor(x => x.IdempotencyKey).NotEmpty().WithMessage("IdempotencyKey is required.");
+    }
+}
+
+public sealed class RejectAuctionItemValidator : AbstractValidator<RejectAuctionItemRequest>
+{
+    public RejectAuctionItemValidator()
+    {
+        RuleFor(x => x.AllowResubmit).NotNull().WithMessage("You must decide whether the submitter can resubmit.");
+        RuleFor(x => x.Reason).MaximumLength(500).When(x => x.Reason is not null);
+    }
+}
+
+public sealed class BanAuctionUserValidator : AbstractValidator<BanAuctionUserRequest>
+{
+    public BanAuctionUserValidator()
+    {
+        RuleFor(x => x.UserId).NotEmpty();
+        RuleFor(x => x.Reason).MaximumLength(500).When(x => x.Reason is not null);
     }
 }

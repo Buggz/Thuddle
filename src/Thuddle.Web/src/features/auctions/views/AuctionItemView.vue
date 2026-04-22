@@ -4,17 +4,24 @@ import { useRoute, RouterLink } from 'vue-router'
 import { storeToRefs } from 'pinia'
 import { useAuctionStore } from '@/features/auctions/stores/auction'
 import { useAuthStore } from '@/features/auth/stores/auth'
+import { usePermissionsStore } from '@/features/auth/stores/permissions'
 import { formatCurrency } from '@/shared/formatCurrency'
 import AuctionItemImageCarousel from '@/features/auctions/components/AuctionItemImageCarousel.vue'
 import AuctionTimeline from '@/features/auctions/components/AuctionTimeline.vue'
 import BoardGameCredibility from '@/features/auctions/components/BoardGameCredibility.vue'
 import BidPanel from '@/features/auctions/components/BidPanel.vue'
 import BidHistoryList from '@/features/auctions/components/BidHistoryList.vue'
+import PublishItemDialog from '@/features/auctions/components/PublishItemDialog.vue'
+import UnpublishDialog from '@/features/auctions/components/UnpublishDialog.vue'
+import RejectItemDialog from '@/features/auctions/components/RejectItemDialog.vue'
 import FunnyLoader from '@/shared/components/FunnyLoader.vue'
+import { useRouter } from 'vue-router'
 
 const route = useRoute()
 const auctionStore = useAuctionStore()
+const permissions = usePermissionsStore()
 const auth = useAuthStore()
+const router = useRouter()
 
 const eventId = computed(() => String(route.params.id))
 const itemId = computed(() => String(route.params.itemId))
@@ -26,12 +33,9 @@ const item = computed(() => (itemsByEvent.value[eventId.value] || {})[itemId.val
 const bids = computed(() => bidsByItem.value[itemId.value] || [])
 const displayImages = computed(() => {
   const uploadedImages = item.value?.imageUrls || []
-  const bggImageUrl = item.value?.bggImageUrl
-  const packageImages = (item.value?.extraGames || []).map((game) => game.thumbnailUrl)
+  const packageImages = (item.value?.games || []).map((game) => game.imageUrl)
 
-  const orderedImages = bggImageUrl
-    ? [bggImageUrl, ...uploadedImages, ...packageImages]
-    : [...uploadedImages, ...packageImages]
+  const orderedImages = [...uploadedImages, ...packageImages]
   const seen = new Set()
 
   return orderedImages.filter((url) => {
@@ -46,20 +50,108 @@ const loadError = shallowRef('')
 const placing = ref(false)
 const placeError = ref('')
 
+const isPublishDialogOpen = ref(false)
+const isUnpublishDialogOpen = ref(false)
+const isRejectDialogOpen = ref(false)
+
+const publishing = ref(false)
+const unpublishing = ref(false)
+const resubmitting = ref(false)
+const rejecting = ref(false)
+
 const isLive = computed(() => item.value?.status === 'Live' && settings.value?.status === 'Live')
 
 const isOwnItem = computed(() => {
-  if (!auth.isAuthenticated || !item.value) return false
-  // submittedByUserId is a backend Guid; we don't carry the user's backend id
-  // on the client. The most reliable signal we have is: the API returned the
-  // item with the submittedByUserId, but the client only knows its keycloak
-  // sub. The server enforces "no own bids", so this is a UI hint only.
-  return false
+  if (!auth.isAuthenticated || !item.value || !permissions.userId) return false
+  return item.value.submittedByUserId === permissions.userId
+})
+
+const isAdmin = computed(() => {
+  // Similarly to AuctionView, the precise admin identity isn't strictly tracked 
+  // on this screen, but the server applies a 403. Render the reject option for any
+  // authenticated user that the server allows. They'll just bounce if they click it.
+  return auth.isAuthenticated
 })
 
 const canBid = computed(() =>
   auth.isAuthenticated && isLive.value && !isOwnItem.value
 )
+
+const currentTime = ref(Date.now())
+
+const secondsToStart = computed(() => {
+  if (!settings.value?.startsAt) return null
+  const diffMs = new Date(settings.value.startsAt).getTime() - currentTime.value
+  return Math.max(0, Math.floor(diffMs / 1000))
+})
+
+const countdownText = computed(() => {
+  if (secondsToStart.value === null || secondsToStart.value <= 0) return null
+  const s = secondsToStart.value
+  if (s < 60) return '<1m'
+  if (s < 3600) return `${Math.floor(s / 60)}m`
+  if (s < 86400) {
+    const h = Math.floor(s / 3600)
+    const m = Math.floor((s % 3600) / 60)
+    return `${h}h ${m}m`
+  }
+  const d = Math.floor(s / 86400)
+  const h = Math.floor((s % 86400) / 3600)
+  return `${d}d ${h}h`
+})
+
+let countdownInterval = null
+
+async function confirmPublish() {
+  publishing.value = true
+  try {
+    await auctionStore.publishItem(eventId.value, itemId.value)
+    isPublishDialogOpen.value = false
+    await refresh()
+  } catch (err) {
+    placeError.value = err.message || 'Failed to publish item.'
+  } finally {
+    publishing.value = false
+  }
+}
+
+async function confirmUnpublish() {
+  unpublishing.value = true
+  try {
+    await auctionStore.unpublishItem(eventId.value, itemId.value)
+    isUnpublishDialogOpen.value = false
+    await refresh()
+  } catch (err) {
+    placeError.value = err.message || 'Failed to unpublish item.'
+  } finally {
+    unpublishing.value = false
+  }
+}
+
+async function handleReject({ reason, allowResubmit }) {
+  rejecting.value = true
+  try {
+    await auctionStore.rejectItem(eventId.value, itemId.value, { reason, allowResubmit })
+    isRejectDialogOpen.value = false
+    await refresh()
+  } catch (err) {
+    placeError.value = err.message || 'Failed to reject item.'
+  } finally {
+    rejecting.value = false
+  }
+}
+
+async function handleResubmit() {
+  resubmitting.value = true
+  try {
+    await auctionStore.resubmitItem(eventId.value, itemId.value)
+    router.push({ name: 'auction-edit', params: { id: eventId.value, itemId: itemId.value } })
+  } catch (err) {
+    placeError.value = err.message || 'Failed to resubmit item.'
+  } finally {
+    resubmitting.value = false
+  }
+}
 
 async function refresh() {
   loading.value = true
@@ -122,13 +214,15 @@ async function onBuyout({ idempotencyKey }) {
 onMounted(async () => {
   await refresh()
   if (auth.isAuthenticated) await auctionStore.subscribeRealtime(eventId.value)
+  countdownInterval = setInterval(() => {
+    currentTime.value = Date.now()
+  }, 1000)
 })
 
 watch(() => route.params.itemId, () => refresh())
 
 onBeforeUnmount(() => {
-  // Don't unsubscribe — the parent AuctionView may also want updates. The
-  // auction store dedupes subscriptions per event id.
+  if (countdownInterval) clearInterval(countdownInterval)
 })
 </script>
 
@@ -143,6 +237,116 @@ onBeforeUnmount(() => {
       </svg>
       All items
     </RouterLink>
+
+    <!-- Status-aware UI for submitter -->
+    <section v-if="item && isOwnItem">
+      <!-- Draft -->
+      <template v-if="item.status === 'Draft'">
+        <div data-testid="draft-banner" class="mb-4 rounded-xl border border-amber-200 bg-amber-50/60 px-4 py-3 text-sm text-amber-900">
+          This is a draft. Only you can see it.
+        </div>
+        <div class="sticky bottom-0 -mx-4 sm:mx-0 mt-6 bg-white/95 backdrop-blur border-t sm:border border-gray-200 sm:rounded-2xl px-4 py-3 sm:py-4 sm:shadow-lg flex flex-col-reverse sm:flex-row sm:items-center sm:justify-end gap-2 sm:gap-3 z-10">
+          <RouterLink
+            :to="{ name: 'auction-edit', params: { id: eventId, itemId: itemId } }"
+            class="inline-flex items-center justify-center gap-1.5 rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-sm font-bold text-gray-700 hover:bg-gray-50 transition-colors"
+          >
+            Edit draft
+          </RouterLink>
+          <button
+            data-testid="publish-button"
+            @click="isPublishDialogOpen = true"
+            class="inline-flex items-center justify-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-emerald-700 disabled:opacity-50"
+          >
+            Publish to auction
+          </button>
+        </div>
+      </template>
+
+      <!-- PendingApproval -->
+      <template v-else-if="item.status === 'PendingApproval'">
+        <div data-testid="pending-banner" class="mb-4 rounded-xl border border-blue-200 bg-blue-50/60 px-4 py-3 text-sm text-blue-900">
+          Waiting for a host to approve your item. We'll notify you.
+        </div>
+        <div class="sticky bottom-0 -mx-4 sm:mx-0 mt-6 bg-white/95 backdrop-blur border-t sm:border border-gray-200 sm:rounded-2xl px-4 py-3 sm:py-4 sm:shadow-lg flex flex-col-reverse sm:flex-row sm:items-center sm:justify-end gap-2 sm:gap-3 z-10">
+          <button
+            v-if="isAdmin"
+            data-testid="item-reject-btn"
+            @click="isRejectDialogOpen = true"
+            class="inline-flex items-center justify-center gap-1.5 rounded-xl border border-red-300 bg-white px-4 py-2.5 text-sm font-bold text-red-600 hover:bg-red-50 transition-colors"
+          >
+            Reject
+          </button>
+          <button
+            data-testid="unpublish-button"
+            @click="isUnpublishDialogOpen = true"
+            class="inline-flex items-center justify-center gap-1.5 rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-sm font-bold text-gray-700 hover:bg-gray-50 transition-colors"
+          >
+            Unpublish to draft
+          </button>
+        </div>
+      </template>
+
+      <!-- Scheduled -->
+      <template v-else-if="item.status === 'Scheduled'">
+        <div data-testid="scheduled-banner" class="mb-4 rounded-xl border border-indigo-200 bg-indigo-50/60 px-4 py-3 text-sm text-indigo-900">
+          Approved. Will go live when the auction starts in {{ countdownText || 'moments' }}.
+        </div>
+        <div class="sticky bottom-0 -mx-4 sm:mx-0 mt-6 bg-white/95 backdrop-blur border-t sm:border border-gray-200 sm:rounded-2xl px-4 py-3 sm:py-4 sm:shadow-lg flex flex-col-reverse sm:flex-row sm:items-center sm:justify-end gap-2 sm:gap-3 z-10">
+          <button
+            v-if="isAdmin"
+            data-testid="item-reject-btn"
+            @click="isRejectDialogOpen = true"
+            class="inline-flex items-center justify-center gap-1.5 rounded-xl border border-red-300 bg-white px-4 py-2.5 text-sm font-bold text-red-600 hover:bg-red-50 transition-colors"
+          >
+            Reject
+          </button>
+          <button
+            data-testid="unpublish-button"
+            @click="isUnpublishDialogOpen = true"
+            class="inline-flex items-center justify-center gap-1.5 rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-sm font-bold text-gray-700 hover:bg-gray-50 transition-colors"
+          >
+            Unpublish to draft
+          </button>
+        </div>
+      </template>
+
+      <!-- Rejected -->
+      <template v-else-if="item.status === 'Rejected'">
+        <div data-testid="rejection-banner" class="mb-4 rounded-xl border border-red-200 bg-red-50/60 px-4 py-3 text-sm text-red-900">
+          Your item was withdrawn from the auction by a host.
+          <p v-if="item.rejectionReason" class="mt-2 italic text-sm text-red-800/80" data-testid="rejection-reason">{{ item.rejectionReason }}</p>
+        </div>
+        <template v-if="item.resubmitAllowed">
+          <div class="sticky bottom-0 -mx-4 sm:mx-0 mt-6 bg-white/95 backdrop-blur border-t sm:border border-gray-200 sm:rounded-2xl px-4 py-3 sm:py-4 sm:shadow-lg flex flex-col-reverse sm:flex-row sm:items-center sm:justify-end gap-2 sm:gap-3 z-10">
+            <button
+              data-testid="resubmit-button"
+              @click="handleResubmit"
+              :disabled="resubmitting"
+              class="inline-flex items-center justify-center gap-1.5 rounded-xl bg-green-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-green-700 disabled:opacity-50"
+            >
+              Edit and resubmit
+            </button>
+          </div>
+        </template>
+        <p v-else class="mt-2 text-sm text-gray-500" data-testid="cannot-republish-tag">
+          This item is no longer available for republishing. You may submit a new item if the auction allows.
+        </p>
+      </template>
+    </section>
+
+    <!-- Admin Controls (for others' items or Live items where submitters lack unpublish controls) -->
+    <section v-if="item && isAdmin && ['PendingApproval', 'Scheduled', 'Live'].includes(item.status) && (!isOwnItem || item.status === 'Live')">
+      <div class="sticky bottom-0 -mx-4 sm:mx-0 mt-6 bg-white/95 backdrop-blur border-t sm:border border-red-200 sm:rounded-2xl px-4 py-3 sm:py-4 sm:shadow-lg flex flex-col-reverse sm:flex-row sm:items-center sm:justify-end gap-2 sm:gap-3 z-10">
+        <span class="text-sm font-bold text-red-600 mr-auto">Admin Controls</span>
+        <button
+          data-testid="item-reject-btn"
+          @click="isRejectDialogOpen = true"
+          class="inline-flex items-center justify-center gap-1.5 rounded-xl border border-red-300 bg-white px-4 py-2.5 text-sm font-bold text-red-600 hover:bg-red-50 transition-colors"
+        >
+          Reject
+        </button>
+      </div>
+    </section>
 
     <div v-if="loading" class="py-16">
       <FunnyLoader title="Loading item" />
@@ -223,7 +427,7 @@ onBeforeUnmount(() => {
               <p v-if="item.submittedByName && !settings?.anonymousBidHistory" class="mt-1 text-xs leading-5 text-gray-500">
                 Submitted by <span class="font-semibold text-gray-700">{{ item.submittedByName }}</span>
               </p>
-              <BoardGameCredibility v-if="item.bggId" class="mt-2.5" :bgg-id="item.bggId" />
+              <BoardGameCredibility v-if="item.games?.[0]?.bggId" class="mt-2.5" :bgg-id="item.games[0].bggId" />
             </div>
 
             <div v-if="item.description" class="mt-4 flex-1 rounded-xl border border-gray-100 bg-gray-50/70 p-4 lg:p-5">
@@ -231,27 +435,22 @@ onBeforeUnmount(() => {
             </div>
 
             <div
-              v-if="item.extraGames?.length"
+              v-if="item.games?.length > 1"
               :class="item.description ? 'mt-4 border-t border-gray-100 pt-4' : 'mt-4'"
             >
               <p class="mb-2 text-[11px] font-bold uppercase tracking-[0.18em] text-gray-500">
-                Package includes {{ item.extraGames.length + 1 }} games
+                Package includes {{ item.games.length }} games
               </p>
-              <div class="space-y-1.5">
-                <div v-if="item.bggId" class="flex items-center gap-2">
-                  <img v-if="item.bggImageUrl" :src="item.bggImageUrl" alt="" class="h-7 w-7 rounded object-cover" />
-                  <span class="text-sm font-semibold text-gray-900">{{ item.name }}</span>
-                  <span class="rounded bg-indigo-50 px-1.5 py-0.5 text-[9px] font-bold text-indigo-600 uppercase">Primary</span>
-                </div>
-                <div v-for="game in item.extraGames" :key="game.bggId" class="flex items-start gap-2">
-                  <img v-if="game.thumbnailUrl" :src="game.thumbnailUrl" alt="" class="mt-0.5 h-7 w-7 rounded object-cover" />
-                  <div v-else class="mt-0.5 h-7 w-7 rounded bg-gray-100" />
+              <div class="space-y-3">
+                <div v-for="game in item.games" :key="game.bggId" class="flex items-start gap-3">
+                  <img v-if="game.thumbnailUrl" :src="game.thumbnailUrl" alt="" class="mt-0.5 h-10 w-10 rounded-lg object-cover shadow-sm" />
+                  <div v-else class="mt-0.5 h-10 w-10 rounded-lg bg-gray-100 shadow-sm" />
                   <div class="min-w-0 flex-1">
                     <div class="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                      <span class="text-sm text-gray-700">{{ game.name }}</span>
-                      <span v-if="game.yearPublished" class="text-xs text-gray-400">({{ game.yearPublished }})</span>
+                      <span class="text-sm font-bold text-gray-900">{{ game.name }}</span>
+                      <span v-if="game.yearPublished" class="text-xs text-gray-500">({{ game.yearPublished }})</span>
                     </div>
-                    <BoardGameCredibility :bgg-id="game.bggId" compact />
+                    <BoardGameCredibility :bgg-id="game.bggId" compact class="mt-1" />
                   </div>
                 </div>
               </div>
@@ -264,5 +463,34 @@ onBeforeUnmount(() => {
         <BidHistoryList :bids="bids" :currency="settings?.currency || ''" />
       </div>
     </template>
+
+    <!-- Dialogs -->
+    <PublishItemDialog
+      :is-open="isPublishDialogOpen"
+      :auction-status="settings?.status"
+      :moderation-policy="settings?.itemModerationPolicy"
+      :is-admin="false"
+      :seconds-to-start="secondsToStart"
+      :submitting="publishing"
+      @confirm="confirmPublish"
+      @cancel="isPublishDialogOpen = false"
+    />
+    <UnpublishDialog
+      :is-open="isUnpublishDialogOpen"
+      :auction-status="settings?.status"
+      :moderation-policy="settings?.itemModerationPolicy"
+      :is-admin="false"
+      :seconds-to-start="secondsToStart"
+      :submitting="unpublishing"
+      @confirm="confirmUnpublish"
+      @cancel="isUnpublishDialogOpen = false"
+    />
+    <RejectItemDialog
+      :open="isRejectDialogOpen"
+      :item-name="item?.name ?? ''"
+      :submitting="rejecting"
+      @confirm="handleReject"
+      @cancel="isRejectDialogOpen = false"
+    />
   </div>
 </template>

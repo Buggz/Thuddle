@@ -1,16 +1,15 @@
 <script setup>
-import { ref, computed, watch, onBeforeUnmount } from 'vue'
+import { ref, computed, onBeforeUnmount } from 'vue'
 import { boardGameApi } from '@/api'
 import { useApi } from '@/shared/composables/useApi'
 
 const props = defineProps({
   modelValue: { type: String, default: '' },
-  selectedBggId: { type: [Number, null], default: null },
   games: { type: Array, default: () => [] },
   disabled: { type: Boolean, default: false }
 })
 
-const emit = defineEmits(['update:modelValue', 'update:selectedBggId', 'update:games', 'bgg-selected'])
+const emit = defineEmits(['update:modelValue', 'update:games'])
 
 const { authFetch } = useApi()
 
@@ -25,7 +24,6 @@ let debounceTimer = null
 function switchMode(m) {
   mode.value = m
   if (m === 'custom') {
-    emit('update:selectedBggId', null)
     emit('update:games', [])
     results.value = []
     searchQuery.value = ''
@@ -92,51 +90,33 @@ async function selectGame(game) {
   searchQuery.value = ''
   results.value = []
 
-  if (isFirst) {
-    loadingDetail.value = true
-    try {
-      const detail = await boardGameApi.getDetail(authFetch, game.bggId)
-      const hydratedEntry = hydrateGameEntryWithDetail(entry, detail)
-      emit('update:games', props.games.map(g => g.bggId === game.bggId ? hydratedEntry : g))
+  loadingDetail.value = true
+  try {
+    const detail = await boardGameApi.getDetail(authFetch, game.bggId)
+    const hydratedEntry = hydrateGameEntryWithDetail(entry, detail)
+    emit('update:games', props.games.map(g => g.bggId === game.bggId ? hydratedEntry : g))
+    if (isFirst) {
       emit('update:modelValue', detail.name)
-      emit('update:selectedBggId', detail.bggId)
-      emit('bgg-selected', detail)
-    } catch {
-      emit('update:modelValue', game.name)
-      emit('update:selectedBggId', game.bggId)
-    } finally {
-      loadingDetail.value = false
     }
-  } else {
-    boardGameApi.getDetail(authFetch, game.bggId).then(detail => {
-      const hydratedEntry = hydrateGameEntryWithDetail(entry, detail)
-      emit('update:games', props.games.map(g => g.bggId === game.bggId ? hydratedEntry : g))
-    }).catch(() => {
-      // Game remains in the list with whatever thumbnail search provided
-    })
+  } catch {
+    if (isFirst) {
+      emit('update:modelValue', game.name)
+    }
+  } finally {
+    loadingDetail.value = false
   }
 }
 
-function removeGame(idx) {
-  const updated = [...props.games]
-  updated.splice(idx, 1)
+function removeGame(bggId) {
+  const updated = props.games.filter(g => g.bggId !== bggId)
 
   if (updated.length === 0) {
     emit('update:modelValue', '')
-    emit('update:selectedBggId', null)
     emit('update:games', [])
     return
   }
 
   emit('update:games', updated)
-
-  if (idx === 0) {
-    // Promote new first game to primary
-    const newPrimary = updated[0]
-    emit('update:selectedBggId', newPrimary.bggId)
-    emit('update:modelValue', newPrimary.name)
-    emit('bgg-selected', newPrimary)
-  }
 }
 
 function onCustomInput(e) {
@@ -201,9 +181,9 @@ function bestCategory(game) {
     <!-- BGG mode -->
     <div v-if="mode === 'bgg'">
       <!-- Selected game cards -->
-      <div v-if="games.length" class="grid grid-cols-2 sm:grid-cols-3 gap-2 mb-3">
+      <div v-if="props.games.length" class="grid grid-cols-2 sm:grid-cols-3 gap-2 mb-3">
         <div
-          v-for="(game, idx) in games"
+          v-for="game in props.games"
           :key="game.bggId"
           data-testid="bgg-game-chip"
           class="group relative rounded-xl border border-gray-200 bg-white p-2 shadow-sm transition-shadow hover:shadow-md"
@@ -213,21 +193,13 @@ function bestCategory(game) {
             type="button"
             data-testid="bgg-game-remove"
             :disabled="disabled"
-            @click="removeGame(idx)"
+            @click="removeGame(game.bggId)"
             class="absolute -right-1.5 -top-1.5 z-10 flex h-5 w-5 items-center justify-center rounded-full bg-white border border-gray-200 text-gray-400 shadow-sm opacity-0 group-hover:opacity-100 hover:bg-red-50 hover:text-red-500 hover:border-red-200 transition-all"
           >
             <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
             </svg>
           </button>
-
-          <!-- Primary badge -->
-          <span
-            v-if="idx === 0"
-            class="absolute left-1.5 top-1.5 z-10 rounded bg-indigo-600 px-1.5 py-0.5 text-[9px] font-bold text-white uppercase shadow-sm"
-          >
-            Primary
-          </span>
 
           <!-- Thumbnail -->
           <div class="aspect-square w-full overflow-hidden rounded-lg bg-gray-100 mb-1.5">
@@ -275,7 +247,7 @@ function bestCategory(game) {
       <!-- Search input (visible as long as < 20 games) -->
       <div v-if="games.length < 20" class="relative">
         <input
-          data-testid="bgg-search-input"
+          data-testid="submit-item-name"
           type="text"
           :value="searchQuery"
           :disabled="disabled || loadingDetail"

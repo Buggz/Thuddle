@@ -6,6 +6,7 @@ import { useAuctionStore } from '@/features/auctions/stores/auction'
 import { useAuthStore } from '@/features/auth/stores/auth'
 import AuctionTimeline from '@/features/auctions/components/AuctionTimeline.vue'
 import AuctionItemCard from '@/features/auctions/components/AuctionItemCard.vue'
+import MyItemsPanel from '@/features/auctions/components/MyItemsPanel.vue'
 import FunnyLoader from '@/shared/components/FunnyLoader.vue'
 
 const route = useRoute()
@@ -70,7 +71,10 @@ async function refresh() {
 
 onMounted(async () => {
   await refresh()
-  if (auth.isAuthenticated) await auctionStore.subscribeRealtime(eventId.value)
+  if (auth.isAuthenticated) {
+    await auctionStore.subscribeRealtime(eventId.value)
+    await auctionStore.loadMyItems(eventId.value)
+  }
 })
 
 watch(() => auth.isAuthenticated, async (isAuth) => {
@@ -142,6 +146,17 @@ onBeforeUnmount(() => {
           </RouterLink>
           <RouterLink
             v-if="auth.isAuthenticated && isAdmin"
+            :to="{ name: 'auction-moderation', params: { id: eventId } }"
+            data-testid="auction-moderation-link"
+            class="inline-flex items-center gap-1.5 rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm font-bold text-gray-700 hover:bg-gray-50"
+          >
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+            </svg>
+            Moderation queue
+          </RouterLink>
+          <RouterLink
+            v-if="auth.isAuthenticated && isAdmin"
             :to="{ name: 'auction-settings', params: { id: eventId } }"
             class="inline-flex items-center gap-1.5 rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm font-bold text-gray-700 hover:bg-gray-50"
           >
@@ -152,6 +167,8 @@ onBeforeUnmount(() => {
           </RouterLink>
         </div>
       </header>
+
+      <MyItemsPanel v-if="auth.isAuthenticated" :event-id="eventId" />
 
       <div class="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center">
         <div class="relative flex-1">
@@ -176,7 +193,7 @@ onBeforeUnmount(() => {
         </select>
       </div>
 
-      <div v-if="items.length" class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div id="auction-floor" v-if="items.length" class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <AuctionItemCard
           v-for="item in items"
           :key="item.id"

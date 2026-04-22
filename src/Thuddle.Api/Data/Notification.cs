@@ -5,7 +5,10 @@ public enum NotificationKind
     OutbidOnAuctionItem,
     AuctionEndingSoon,
     AuctionWonItem,
-    AuctionItemPendingApproval
+    AuctionItemPendingApproval,
+    AuctionItemRejected,
+    AuctionBidVoided,
+    AuctionUserBanned
 }
 
 public class Notification

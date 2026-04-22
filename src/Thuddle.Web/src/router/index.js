@@ -52,6 +52,12 @@ export default function initRouter() {
         meta: { requiresAuth: true }
       },
       {
+        path: '/events/:id/auction/items/:itemId/edit',
+        name: 'auction-edit',
+        component: () => import('@/features/auctions/views/SubmitAuctionItemView.vue'),
+        meta: { requiresAuth: true }
+      },
+      {
         path: '/events/:id/auction/items/:itemId',
         name: 'auction-item',
         component: () => import('@/features/auctions/views/AuctionItemView.vue')
@@ -60,6 +66,12 @@ export default function initRouter() {
         path: '/events/:id/auction/settings',
         name: 'auction-settings',
         component: () => import('@/features/auctions/views/AuctionSettingsView.vue'),
+        meta: { requiresAuth: true }
+      },
+      {
+        path: '/events/:id/auction/moderation',
+        name: 'auction-moderation',
+        component: () => import('@/features/auctions/views/ModerationQueueView.vue'),
         meta: { requiresAuth: true }
       },
       {

@@ -29,9 +29,13 @@ async function adminApi(
     if (auth?.startsWith('Bearer ')) token = auth.substring(7)
   })
   await page.goto(baseURL)
-  await page.waitForResponse((r) => r.url().includes('/api/events') && r.status() === 200, {
-    timeout: 20000,
-  })
+  await page.waitForResponse(
+    (r) =>
+      r.url().includes('/api/profile') &&
+      r.status() === 200 &&
+      (r.request().headers()['authorization'] ?? '').startsWith('Bearer '),
+    { timeout: 20000 },
+  )
   if (!token) {
     throw new Error('Failed to capture admin Bearer token.')
   }

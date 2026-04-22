@@ -9,7 +9,7 @@ export default defineConfig({
   // created event); different files run in parallel across workers.
   fullyParallel: false,
   retries: 1,
-  workers: process.env.CI ? 2 : 4,
+  workers: 1,
   use: {
     baseURL: process.env.THUDDLE_WEB_URL || 'http://localhost:8090',
     trace: 'retain-on-failure',

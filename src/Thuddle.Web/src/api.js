@@ -108,6 +108,41 @@ export const auctionApi = {
     return res.json()
   },
 
+  async publishItem(authFetch, eventId, itemId) {
+    const res = await authFetch(`/api/events/${eventId}/auction/items/${itemId}/publish`, {
+      method: 'POST'
+    })
+    return res.json()
+  },
+
+  async unpublishItem(authFetch, eventId, itemId) {
+    const res = await authFetch(`/api/events/${eventId}/auction/items/${itemId}/unpublish`, {
+      method: 'POST'
+    })
+    return res.json()
+  },
+
+  async resubmitItem(authFetch, eventId, itemId) {
+    const res = await authFetch(`/api/events/${eventId}/auction/items/${itemId}/resubmit`, {
+      method: 'POST'
+    })
+    return res.json()
+  },
+
+  async rejectItem(authFetch, eventId, itemId, { reason, allowResubmit }) {
+    const res = await authFetch(`/api/events/${eventId}/auction/items/${itemId}/reject`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reason: reason ?? null, allowResubmit })
+    })
+    return res.json()
+  },
+
+  async getModerationQueue(authFetch, eventId) {
+    const res = await authFetch(`/api/events/${eventId}/auction/items/moderation`)
+    return res.json()
+  },
+
   async placeBid(authFetch, eventId, itemId, amount, idempotencyKey) {
     const res = await authFetch(`/api/events/${eventId}/auction/items/${itemId}/bids`, {
       method: 'POST',

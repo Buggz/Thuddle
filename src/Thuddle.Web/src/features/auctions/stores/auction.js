@@ -26,6 +26,12 @@ export const useAuctionStore = defineStore('auction', () => {
   const itemsByEvent = ref({})
   // eventId → itemId → bids[]
   const bidsByItem = ref({})
+  // eventId → itemId → item
+  const myItemsByEvent = ref({})
+  const loadingMyItemsByEvent = ref({})
+  // eventId → items array
+  const moderationQueueByEvent = ref({})
+  const loadingModerationByEvent = ref({})
   // eventId → server time anchor (ISO string)
   const serverTimeByEvent = shallowRef({})
   // per-event loading flags
@@ -58,6 +64,34 @@ export const useAuctionStore = defineStore('auction', () => {
   }
 
   // ── Loaders ───────────────────────────────────────────────────────────
+
+  async function loadMyItems(eventId) {
+    loadingMyItemsByEvent.value = { ...loadingMyItemsByEvent.value, [eventId]: true }
+    try {
+      const resp = await auctionApi.getItems(authFetch, eventId, { mine: true, pageSize: 100 }).catch(() => ({ items: [] }))
+      const map = {}
+      for (const it of resp.items || []) map[it.id] = it
+      myItemsByEvent.value = { ...myItemsByEvent.value, [eventId]: map }
+    } catch (err) {
+      setError(eventId, err.message || 'Failed to load user items.')
+    } finally {
+      loadingMyItemsByEvent.value = { ...loadingMyItemsByEvent.value, [eventId]: false }
+    }
+  }
+
+  async function loadModerationQueue(eventId) {
+    loadingModerationByEvent.value = { ...loadingModerationByEvent.value, [eventId]: true }
+    try {
+      const resp = await auctionApi.getModerationQueue(authFetch, eventId)
+      // Usually backend wraps in { items: [...] } but instructions said "array of items" so fallback included
+      const queue = Array.isArray(resp) ? resp : (resp.items || [])
+      moderationQueueByEvent.value = { ...moderationQueueByEvent.value, [eventId]: queue }
+    } catch (err) {
+      setError(eventId, err.message || 'Failed to load moderation queue.')
+    } finally {
+      loadingModerationByEvent.value = { ...loadingModerationByEvent.value, [eventId]: false }
+    }
+  }
 
   async function loadAuction(eventId) {
     loadingByEvent.value = { ...loadingByEvent.value, [eventId]: true }
@@ -105,7 +139,7 @@ export const useAuctionStore = defineStore('auction', () => {
 
   // ── Mutations ─────────────────────────────────────────────────────────
 
-  async function submitItem(eventId, body) {
+  async function saveDraft(eventId, body) {
     return auctionApi.createItem(authFetch, eventId, body)
   }
 
@@ -124,6 +158,46 @@ export const useAuctionStore = defineStore('auction', () => {
     return r
   }
 
+  async function publishItem(eventId, itemId) {
+    try {
+      const item = await auctionApi.publishItem(authFetch, eventId, itemId)
+      if (myItemsByEvent.value[eventId]) {
+        myItemsByEvent.value[eventId] = { ...myItemsByEvent.value[eventId], [item.id]: item }
+      }
+      if (['Scheduled', 'Live', 'Sold', 'Unsold'].includes(item.status)) {
+        setItem(eventId, item)
+      }
+      return item
+    } catch (err) {
+      throw new Error(err.message || 'Failed to publish item')
+    }
+  }
+
+  async function unpublishItem(eventId, itemId) {
+    try {
+      const item = await auctionApi.unpublishItem(authFetch, eventId, itemId)
+      if (myItemsByEvent.value[eventId]) {
+        myItemsByEvent.value[eventId] = { ...myItemsByEvent.value[eventId], [item.id]: item }
+      }
+      removeItem(eventId, itemId)
+      return item
+    } catch (err) {
+      throw new Error(err.message || 'Failed to unpublish item')
+    }
+  }
+
+  async function resubmitItem(eventId, itemId) {
+    try {
+      const item = await auctionApi.resubmitItem(authFetch, eventId, itemId)
+      if (myItemsByEvent.value[eventId]) {
+        myItemsByEvent.value[eventId] = { ...myItemsByEvent.value[eventId], [item.id]: item }
+      }
+      return item
+    } catch (err) {
+      throw new Error(err.message || 'Failed to resubmit item')
+    }
+  }
+
   async function withdrawItem(eventId, itemId) {
     await auctionApi.deleteItem(authFetch, eventId, itemId)
     removeItem(eventId, itemId)
@@ -132,6 +206,21 @@ export const useAuctionStore = defineStore('auction', () => {
   async function approveItem(eventId, itemId) {
     await auctionApi.approveItem(authFetch, eventId, itemId)
     await loadItem(eventId, itemId)
+    if (moderationQueueByEvent.value[eventId]) {
+      await loadModerationQueue(eventId)
+    }
+  }
+
+  async function rejectItem(eventId, itemId, { reason, allowResubmit }) {
+    try {
+      await auctionApi.rejectItem(authFetch, eventId, itemId, { reason, allowResubmit })
+      await loadItem(eventId, itemId)
+      if (moderationQueueByEvent.value[eventId]) {
+        await loadModerationQueue(eventId)
+      }
+    } catch (err) {
+      throw new Error(err.message || 'Failed to reject item')
+    }
   }
 
   async function placeBid(eventId, itemId, amount, idempotencyKey) {
@@ -186,9 +275,11 @@ export const useAuctionStore = defineStore('auction', () => {
     })
     realtime.on(RealtimeEvents.AuctionItemUpdated, ({ eventId, itemId }) => {
       if (subscribedEvents.has(eventId)) loadItem(eventId, itemId)
+      if (moderationQueueByEvent.value[eventId]) loadModerationQueue(eventId)
     })
     realtime.on(RealtimeEvents.AuctionItemRemoved, ({ eventId, itemId }) => {
       removeItem(eventId, itemId)
+      if (moderationQueueByEvent.value[eventId]) loadModerationQueue(eventId)
     })
     realtime.on(RealtimeEvents.AuctionBidPlaced, ({ eventId, itemId, currentBid, bidCount, serverTime }) => {
       const items = itemsByEvent.value[eventId]
@@ -224,6 +315,10 @@ export const useAuctionStore = defineStore('auction', () => {
     // state
     settingsByEvent,
     itemsByEvent,
+    myItemsByEvent,
+    loadingMyItemsByEvent,
+    moderationQueueByEvent,
+    loadingModerationByEvent,
     bidsByItem,
     serverTimeByEvent,
     loadingByEvent,
@@ -232,11 +327,17 @@ export const useAuctionStore = defineStore('auction', () => {
     getItems,
     // loaders
     loadAuction,
+    loadMyItems,
+    loadModerationQueue,
     loadItem,
     loadBids,
     // mutations
-    submitItem,
+    saveDraft,
+    publishItem,
+    unpublishItem,
+    resubmitItem,
     uploadItemImages,
+    rejectItem,
     updateItem,
     withdrawItem,
     approveItem,

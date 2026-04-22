@@ -48,7 +48,10 @@ export async function userApi(
   })
   await page.goto(baseURL)
   await page.waitForResponse(
-    (r) => r.url().includes('/api/') && r.status() < 400,
+    (r) =>
+      r.url().includes('/api/profile') &&
+      r.status() === 200 &&
+      (r.request().headers()['authorization'] ?? '').startsWith('Bearer '),
     { timeout: 20000 },
   )
   if (!token) throw new Error(`Failed to capture ${String(user)} Bearer token.`)
@@ -71,18 +74,20 @@ export function adminApi(browser: Browser, baseURL: string) {
 
 export async function createEventApi(
   api: ApiContext,
-  opts: { title?: string; currency?: string; cost?: number | null } = {},
+  opts: { title?: string; currency?: string; cost?: number | null; start?: string; end?: string } = {},
 ): Promise<{ id: string; title: string }> {
   const title = opts.title ?? `Auction ${uid()}`
   const dates = futureDates(10)
+  const start = opts.start ?? new Date(dates.start).toISOString()
+  const end = opts.end ?? new Date(dates.end).toISOString()
   const resp = await api.request.post(`${api.baseURL}/api/events`, {
     headers: api.headers,
     data: JSON.stringify({
       title,
       location: 'Auction Venue',
       description: null,
-      start: new Date(dates.start).toISOString(),
-      end: new Date(dates.end).toISOString(),
+      start,
+      end,
       visibility: 0,
       joinMode: 0,
       capacity: null,
@@ -288,6 +293,66 @@ export async function getUserIdApi(api: ApiContext): Promise<string> {
   return body.id
 }
 
+// ── Event participation helpers ────────────────────────────────────────────
+
+/** Join an event as the current API user. */
+export async function joinEventApi(api: ApiContext, eventId: string): Promise<void> {
+  const resp = await api.request.post(`${api.baseURL}/api/events/${eventId}/join`, {
+    headers: api.headers,
+  })
+  if (!resp.ok()) throw new Error(`Join event failed: ${resp.status()} ${await resp.text()}`)
+}
+
+// ── Moderation helpers ─────────────────────────────────────────────────────
+
+/** Publish an item (submitter action). */
+export async function publishItemApi(api: ApiContext, eventId: string, itemId: string): Promise<void> {
+  const resp = await api.request.post(
+    `${api.baseURL}/api/events/${eventId}/auction/items/${itemId}/publish`,
+    { headers: api.headers },
+  )
+  if (!resp.ok()) throw new Error(`Publish item failed: ${resp.status()} ${await resp.text()}`)
+}
+
+/** Reject an item (admin action). */
+export async function rejectItemApi(
+  api: ApiContext,
+  eventId: string,
+  itemId: string,
+  opts: { reason: string; allowResubmit: boolean },
+): Promise<void> {
+  const resp = await api.request.post(
+    `${api.baseURL}/api/events/${eventId}/auction/items/${itemId}/reject`,
+    {
+      headers: api.headers,
+      data: JSON.stringify({ reason: opts.reason, allowResubmit: opts.allowResubmit }),
+    },
+  )
+  if (!resp.ok()) throw new Error(`Reject item failed: ${resp.status()} ${await resp.text()}`)
+}
+
+/** Resubmit a rejected item (submitter action). */
+export async function resubmitItemApi(api: ApiContext, eventId: string, itemId: string): Promise<void> {
+  const resp = await api.request.post(
+    `${api.baseURL}/api/events/${eventId}/auction/items/${itemId}/resubmit`,
+    { headers: api.headers },
+  )
+  if (!resp.ok()) throw new Error(`Resubmit item failed: ${resp.status()} ${await resp.text()}`)
+}
+
+/** Get the moderation queue (admin action). */
+export async function getModerationQueueApi(
+  api: ApiContext,
+  eventId: string,
+): Promise<{ items: Array<{ id: string; name: string; status: string }> }> {
+  const resp = await api.request.get(
+    `${api.baseURL}/api/events/${eventId}/auction/items/moderation`,
+    { headers: api.headers },
+  )
+  if (!resp.ok()) throw new Error(`Get moderation queue failed: ${resp.status()} ${await resp.text()}`)
+  return resp.json()
+}
+
 // ── Composite setup helpers ────────────────────────────────────────────────
 
 /**
@@ -301,8 +366,10 @@ export async function setupLiveAuction(
     itemOpts?: { name?: string; startingBid?: number; buyoutPrice?: number | null }
   } = {},
 ): Promise<{ eventId: string; itemId: string; itemName: string }> {
-  const { id: eventId } = await createEventApi(api)
   const now = new Date()
+  const eventStart = new Date(now.getTime() - 60_000).toISOString()
+  const eventEnd = new Date(now.getTime() + 8 * 60 * 60_000).toISOString()
+  const { id: eventId } = await createEventApi(api, { start: eventStart, end: eventEnd })
   await configureAuctionApi(api, eventId, {
     startsAt: new Date(now.getTime() - 1000).toISOString(),
     latestEndsAt: new Date(now.getTime() + 3_600_000).toISOString(),

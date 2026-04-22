@@ -69,6 +69,18 @@ public sealed class AuctionLifecycleWorker(
             auction.Status = AuctionStatus.Live;
             auction.UpdatedAt = now;
 
+            // Promote Scheduled items to Live when auction auto-starts
+            var scheduledItems = await db.AuctionItems
+                .AsTracking()
+                .Where(i => i.EventId == auction.EventId && i.Status == AuctionItemStatus.Scheduled)
+                .ToListAsync(ct);
+
+            foreach (var item in scheduledItems)
+            {
+                item.Status = AuctionItemStatus.Live;
+                item.UpdatedAt = now;
+            }
+
             await db.SaveChangesAsync(ct);
             await realtime.AuctionStatusChangedAsync(auction.EventId, "Live", ct);
 

@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using Thuddle.Api.Data;
@@ -11,9 +12,11 @@ using Thuddle.Api.Data;
 namespace Thuddle.Api.Migrations
 {
     [DbContext(typeof(ThuddleDbContext))]
-    partial class ThuddleDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260421121441_AddScheduledAuctionItemStatus")]
+    partial class AddScheduledAuctionItemStatus
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -43,9 +46,6 @@ namespace Thuddle.Api.Migrations
                         .HasColumnType("text");
 
                     b.Property<bool>("IsBuyout")
-                        .HasColumnType("boolean");
-
-                    b.Property<bool>("IsVoided")
                         .HasColumnType("boolean");
 
                     b.Property<Guid>("ItemId")
@@ -99,13 +99,6 @@ namespace Thuddle.Api.Migrations
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasColumnType("text");
-
-                    b.Property<string>("RejectionReason")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
-
-                    b.Property<bool>("ResubmitAllowed")
-                        .HasColumnType("boolean");
 
                     b.Property<uint>("RowVersion")
                         .IsConcurrencyToken()
@@ -217,40 +210,6 @@ namespace Thuddle.Api.Migrations
                         .IsUnique();
 
                     b.ToTable("AuctionItemSubmitters");
-                });
-
-            modelBuilder.Entity("Thuddle.Api.Data.AuctionPublishBan", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("BannedByUserId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid>("EventId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Reason")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
-
-                    b.Property<Guid>("UserId")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("BannedByUserId");
-
-                    b.HasIndex("UserId");
-
-                    b.HasIndex("EventId", "UserId")
-                        .IsUnique();
-
-                    b.ToTable("AuctionPublishBans");
                 });
 
             modelBuilder.Entity("Thuddle.Api.Data.BoardGame", b =>
@@ -884,33 +843,6 @@ namespace Thuddle.Api.Migrations
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
-
-                    b.Navigation("Event");
-
-                    b.Navigation("User");
-                });
-
-            modelBuilder.Entity("Thuddle.Api.Data.AuctionPublishBan", b =>
-                {
-                    b.HasOne("Thuddle.Api.Data.User", "BannedByUser")
-                        .WithMany()
-                        .HasForeignKey("BannedByUserId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("Thuddle.Api.Data.Event", "Event")
-                        .WithMany()
-                        .HasForeignKey("EventId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("Thuddle.Api.Data.User", "User")
-                        .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("BannedByUser");
 
                     b.Navigation("Event");
 

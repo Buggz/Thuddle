@@ -7,7 +7,7 @@ export const usePermissionsStore = defineStore('permissions', () => {
     async function ensureUserInitialized() {
       try {
         await authFetch('/api/profile/init', { method: 'POST' })
-      } catch (e) {
+      } catch {
         // Ignore errors (user may already exist or be unauthorized)
       }
     }
@@ -17,6 +17,7 @@ export const usePermissionsStore = defineStore('permissions', () => {
   const hasDisplayName = ref(true)
   const profilePictureUrl = ref(null)
   const displayName = ref('')
+  const userId = ref(null)
 
   const hasProfilePicture = computed(() => !!profilePictureUrl.value)
 
@@ -32,11 +33,13 @@ export const usePermissionsStore = defineStore('permissions', () => {
       hasDisplayName.value = !!data.displayName
       profilePictureUrl.value = data.profilePictureUrl || null
       profileComplete.value = hasDisplayName.value
+      userId.value = data.id || null
     } catch {
       permissions.value = []
       profileComplete.value = true
       hasDisplayName.value = true
       profilePictureUrl.value = null
+      userId.value = null
     } finally {
       loaded.value = true
     }
@@ -69,6 +72,7 @@ export const usePermissionsStore = defineStore('permissions', () => {
     hasProfilePicture,
     profilePictureUrl: readonly(profilePictureUrl),
     displayName: readonly(displayName),
+    userId: readonly(userId),
     load,
     hasPermission,
     markProfileComplete,
