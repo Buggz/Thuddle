@@ -203,6 +203,60 @@ test.describe('Payment tracking', () => {
 
       await context.close()
     })
+
+    test('joined paid event shows "Payment due" badge', async ({ browser, baseURL, createdEvents }) => {
+      const { eventId, eventUrl } = await createEventWithCost(browser, baseURL!, 15.99)
+      createdEvents.push(eventId)
+
+      await joinEvent(browser, 'alice', eventUrl)
+
+      // Alice's view: payment badge should show "Payment due" with the amount
+      const { context, page } = await contextAs(browser, 'alice')
+      await page.goto(eventUrl)
+      await page.getByTestId('event-detail').waitFor({ state: 'visible', timeout: 20000 })
+
+      const badge = page.getByTestId('event-payment-badge')
+      await expect(badge).toBeVisible({ timeout: 10000 })
+      await expect(badge).toContainText(/payment due/i)
+      await expect(badge).toContainText('15.99')
+
+      await context.close()
+    })
+
+    test('admin marks paid: alice\'s badge updates to "Paid" via realtime', async ({
+      browser,
+      baseURL,
+      createdEvents,
+    }) => {
+      const { eventId, eventUrl, manageUrl } = await createEventWithCost(browser, baseURL!, 20.0)
+      createdEvents.push(eventId)
+
+      const aliceUserId = await joinEvent(browser, 'alice', eventUrl)
+
+      // Open alice's view and keep it open
+      const { context: aliceCtx, page: alicePage } = await contextAs(browser, 'alice')
+      await alicePage.goto(eventUrl)
+      await alicePage.getByTestId('event-detail').waitFor({ state: 'visible', timeout: 20000 })
+      await expect(alicePage.getByTestId('event-payment-badge')).toContainText(/payment due/i)
+
+      // In a separate admin context, toggle payment for alice
+      const { context: adminCtx, page: adminPage } = await contextAs(browser, 'admin')
+      await goToAttendeesTab(adminPage, manageUrl)
+
+      const paymentResp = adminPage.waitForResponse(
+        (r) => r.url().includes('/payment') && r.request().method() === 'PUT',
+      )
+      await adminPage.getByTestId('manage-payment-toggle-btn').click()
+      await paymentResp
+
+      // Alice's still-open page should update the badge to "Paid" via realtime
+      await expect(alicePage.getByTestId('event-payment-badge')).toContainText('Paid', {
+        timeout: 10000,
+      })
+
+      await adminCtx.close()
+      await aliceCtx.close()
+    })
   })
 
   test.describe('negative', () => {
