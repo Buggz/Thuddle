@@ -362,6 +362,10 @@ watch(() => event.value?.participantCount, (newCount, oldCount) => {
         <div class="border-b border-gray-100 bg-white px-6 py-5 flex flex-col sm:flex-row gap-4 justify-between items-center z-10 relative">
           <div class="flex flex-col sm:flex-row items-center w-full sm:w-auto gap-3">
             <template v-if="!event.hasJoined">
+              <div v-if="event.isBlocked" data-testid="event-blocked-msg" class="text-sm font-medium text-red-700 bg-red-50 rounded-lg px-4 py-2 border border-red-200">
+                The host has removed you from this event and you can no longer join.
+              </div>
+              <template v-else>
               <button
                 v-if="auth.isAuthenticated && (event.canJoin || event.hasInvitation)"
                 data-testid="event-join-btn"
@@ -381,6 +385,7 @@ watch(() => event.value?.participantCount, (newCount, oldCount) => {
               <div v-else-if="!event.hasInvitation && event.joinMode === 1" data-testid="event-invite-only-msg" class="text-sm font-medium text-gray-500 bg-gray-50 rounded-lg px-4 py-2 border border-gray-200">
                 This event is invite only.
               </div>
+              </template>
             </template>
             <template v-else>
               <button

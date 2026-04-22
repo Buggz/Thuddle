@@ -273,8 +273,8 @@ export const useEventsStore = defineStore('events', () => {
     }
   }
 
-  async function kickAttendee(eventId, userId, { revokeInvitation = false } = {}) {
-    return kickAttendeeApi(authFetch, eventId, userId, { revokeInvitation })
+  async function kickAttendee(eventId, userId, { revokeInvitation = false, denyReentry = false } = {}) {
+    return kickAttendeeApi(authFetch, eventId, userId, { revokeInvitation, denyReentry })
   }
 
   return {

@@ -1,19 +1,27 @@
 <script setup>
-import { ref, watch } from 'vue'
+import { ref, computed, watch } from 'vue'
 
 const props = defineProps({
   open: { type: Boolean, required: true },
   attendeeName: { type: String, default: '' },
-  attendeeHasInvitation: { type: Boolean, default: false }
+  eventJoinMode: { type: Number, default: 0 }
 })
 
 const emit = defineEmits(['confirm', 'cancel'])
 
 const revokeInvitation = ref(false)
+const denyReentry = ref(false)
 
-// Reset checkbox each time the dialog opens
+// Exactly one checkbox is shown depending on join mode
+const showRevokeInvitation = computed(() => props.eventJoinMode === 1)
+const showDenyReentry = computed(() => props.eventJoinMode === 0)
+
+// Reset state each time the dialog opens; default denyReentry for open events
 watch(() => props.open, (isOpen) => {
-  if (isOpen) revokeInvitation.value = false
+  if (isOpen) {
+    revokeInvitation.value = false
+    denyReentry.value = (props.eventJoinMode === 0)
+  }
 })
 </script>
 
@@ -37,7 +45,7 @@ watch(() => props.open, (isOpen) => {
             </div>
           </div>
 
-          <label v-if="attendeeHasInvitation" class="mt-4 flex items-start gap-2 text-sm text-gray-700 cursor-pointer">
+          <label v-if="showRevokeInvitation" class="mt-4 flex items-start gap-2 text-sm text-gray-700 cursor-pointer">
             <input
               type="checkbox"
               v-model="revokeInvitation"
@@ -45,8 +53,21 @@ watch(() => props.open, (isOpen) => {
               class="mt-0.5"
             />
             <span>
-              Also revoke their invitation
+              Also revoke their invitation to this event
               <span class="block text-xs text-gray-500">If unchecked, they can rejoin using their existing invitation.</span>
+            </span>
+          </label>
+
+          <label v-else-if="showDenyReentry" class="mt-4 flex items-start gap-2 text-sm text-gray-700 cursor-pointer">
+            <input
+              type="checkbox"
+              v-model="denyReentry"
+              data-testid="kick-deny-reentry-checkbox"
+              class="mt-0.5"
+            />
+            <span>
+              Prevent this person from re-joining this event
+              <span class="block text-xs text-gray-500">If unchecked, they can rejoin while spaces remain.</span>
             </span>
           </label>
 
@@ -62,7 +83,7 @@ watch(() => props.open, (isOpen) => {
             <button
               type="button"
               data-testid="kick-confirm-btn"
-              @click="emit('confirm', { revokeInvitation })"
+              @click="emit('confirm', { revokeInvitation: revokeInvitation, denyReentry: denyReentry })"
               class="px-3 py-1.5 text-sm font-semibold text-white bg-red-600 hover:bg-red-700 rounded-lg"
             >
               Remove

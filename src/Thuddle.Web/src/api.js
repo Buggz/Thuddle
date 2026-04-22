@@ -236,8 +236,11 @@ export async function leaveEvent(authFetch, eventId) {
   }
 }
 
-export async function kickAttendee(authFetch, eventId, userId, { revokeInvitation = false } = {}) {
-  const qs = revokeInvitation ? '?revokeInvitation=true' : ''
+export async function kickAttendee(authFetch, eventId, userId, { revokeInvitation = false, denyReentry = false } = {}) {
+  const params = new URLSearchParams()
+  if (revokeInvitation) params.set('revokeInvitation', 'true')
+  if (denyReentry) params.set('denyReentry', 'true')
+  const qs = params.toString() ? `?${params.toString()}` : ''
   const res = await authFetch(`/api/events/${eventId}/attendees/${userId}${qs}`, { method: 'DELETE' })
   if (!res.ok) {
     const data = await res.json().catch(() => ({}))

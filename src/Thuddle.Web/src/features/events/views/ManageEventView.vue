@@ -108,6 +108,8 @@ const hasCost = computed(() => eventData.value?.cost != null && eventData.value.
 const eventOwnerId = computed(() => eventData.value?.ownerId ?? null)
 const eventIsInviteOnly = computed(() => (eventData.value?.joinMode ?? 0) === 1)
 
+const coAdminUserIds = computed(() => new Set(coAdmins.value.map(c => c.userId)))
+
 // Kick attendee dialog
 const kickDialogOpen = ref(false)
 const kickTarget = ref(null)
@@ -124,11 +126,11 @@ function openKickDialog(attendee) {
   kickDialogOpen.value = true
 }
 
-async function confirmKick({ revokeInvitation }) {
+async function confirmKick({ revokeInvitation, denyReentry }) {
   if (!kickTarget.value) return
   const targetId = kickTarget.value.userId
   try {
-    await eventsStore.kickAttendee(eventId, targetId, { revokeInvitation })
+    await eventsStore.kickAttendee(eventId, targetId, { revokeInvitation, denyReentry })
     attendees.value = attendees.value.filter(a => a.userId !== targetId)
   } catch (err) {
     attendeesError.value = err.message || 'Failed to remove attendee.'
@@ -706,7 +708,7 @@ onMounted(async () => {
                 </td>
                 <td class="px-4 py-3 text-right">
                   <button
-                    v-if="a.userId !== eventOwnerId"
+                    v-if="a.userId !== eventOwnerId && !coAdminUserIds.has(a.userId)"
                     :data-testid="`manage-kick-btn-${a.userId}`"
                     @click="openKickDialog(a)"
                     class="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-red-600 bg-red-50 border border-red-100 rounded-lg hover:bg-red-100 transition-colors opacity-0 group-hover/row:opacity-100 focus:opacity-100"
@@ -913,7 +915,7 @@ onMounted(async () => {
   <KickAttendeeDialog
     :open="kickDialogOpen"
     :attendee-name="kickTarget?.displayName || kickTarget?.email || ''"
-    :attendee-has-invitation="kickTargetHasInvitation"
+    :event-join-mode="eventData?.joinMode ?? 0"
     @confirm="confirmKick"
     @cancel="() => { kickDialogOpen = false; kickTarget = null }"
   />
