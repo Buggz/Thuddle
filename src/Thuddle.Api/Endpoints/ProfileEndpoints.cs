@@ -102,6 +102,7 @@ public static class ProfileEndpoints
         {
             return Results.Ok(new
             {
+                Id = (Guid?)null,
                 DisplayName = fullName,
                 Email = email,
                 ProfilePictureUrl = (string?)null,
@@ -111,6 +112,7 @@ public static class ProfileEndpoints
 
         return Results.Ok(new
         {
+            dbUser.Id,
             dbUser.DisplayName,
             dbUser.Email,
             ProfilePictureUrl = dbUser.ScaledPicturePath is not null ? $"/api/profile/picture/{dbUser.KeycloakId}" : null,
