@@ -1,5 +1,33 @@
 import { test, expect } from '../helpers/fixtures'
 import { STORAGE_STATE, uid, futureDates, contextAs } from '../helpers/auth'
+import type { Browser, Page } from '@playwright/test'
+
+/**
+ * Open a user context and navigate to `url`, waiting for the SignalR hub
+ * negotiate response (set up BEFORE navigation to avoid races) and the
+ * event-detail to be visible so SSO has completed.
+ */
+async function openWithRealtime(
+  browser: Browser,
+  user: Parameters<typeof contextAs>[1],
+  url: string,
+): Promise<{ context: Awaited<ReturnType<typeof contextAs>>['context']; page: Page }> {
+  const { context, page } = await contextAs(browser, user)
+  // Register the listener BEFORE goto so the negotiate response isn't missed.
+  const negotiatePromise = page
+    .waitForResponse(
+      (r) => r.url().includes('/hubs/thuddle') && r.status() < 400,
+      { timeout: 20000 },
+    )
+    .catch(() => null)
+  await page.goto(url)
+  await page.getByTestId('event-detail').waitFor({ state: 'visible', timeout: 20000 })
+  await negotiatePromise
+  // Small grace period for the WebSocket handshake to complete and subscriptions
+  // to be established server-side.
+  await page.waitForTimeout(500)
+  return { context, page }
+}
 
 /** Admin creates a public open event and returns its URL + id. */
 async function createEvent(
@@ -76,9 +104,9 @@ test.describe('Participants tab', () => {
     const { eventUrl, eventId } = await createEvent(browser, baseURL!)
     createdEvents.push(eventId)
 
-    const { context, page } = await contextAs(browser, 'alice')
-    await page.goto(eventUrl)
-    await page.getByTestId('event-detail').waitFor({ state: 'visible', timeout: 20000 })
+    // Use openWithRealtime so alice is fully subscribed to the event group
+    // before she clicks Join — otherwise she'll miss the ParticipantChanged broadcast.
+    const { context, page } = await openWithRealtime(browser, 'alice', eventUrl)
 
     // Count should be 0 before joining
     await expect(page.getByTestId('event-tab-attendees')).toContainText('0')

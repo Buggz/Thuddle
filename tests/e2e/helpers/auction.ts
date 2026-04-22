@@ -48,7 +48,10 @@ export async function userApi(
   })
   await page.goto(baseURL)
   await page.waitForResponse(
-    (r) => r.url().includes('/api/') && r.status() < 400,
+    (r) =>
+      r.url().includes('/api/') &&
+      r.status() < 400 &&
+      (r.request().headers()['authorization'] ?? '').startsWith('Bearer '),
     { timeout: 20000 },
   )
   if (!token) throw new Error(`Failed to capture ${String(user)} Bearer token.`)

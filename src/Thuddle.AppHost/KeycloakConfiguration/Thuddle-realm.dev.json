@@ -8,7 +8,7 @@
   "resetPasswordAllowed": true,
   "bruteForceProtected": true,
   "rememberMe": true,
-  "accessTokenLifespan": 300,
+  "accessTokenLifespan": 1800,
   "ssoSessionIdleTimeout": 2592000,
   "ssoSessionMaxLifespan": 2592000,
   "ssoSessionIdleTimeoutRememberMe": 2592000,
