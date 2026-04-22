@@ -9,14 +9,24 @@ import Spinner from '@/shared/components/Spinner.vue'
 import UserSearchComboBox from '@/shared/components/UserSearchComboBox.vue'
 import GroupSelectorPopover from '@/features/groups/components/GroupSelectorPopover.vue'
 import { usePermissionsStore } from '@/features/auth/stores/permissions'
+import { useFeatureFlags } from '@/shared/featureFlags'
 
 const route = useRoute()
 const router = useRouter()
 const { authFetch } = useApi()
 const permissionsStore = usePermissionsStore()
+const { auctions: auctionsEnabled } = useFeatureFlags()
 
 const eventId = route.params.id
 const activeTab = shallowRef('about')
+
+const manageTabs = computed(() => [
+  { key: 'about', label: 'About this event' },
+  { key: 'discussion', label: 'Discussion' },
+  { key: 'attendees', label: 'Attendees' },
+  { key: 'coadmins', label: 'Co-Admins' },
+  ...(auctionsEnabled.value ? [{ key: 'auction', label: 'Auction' }] : [])
+])
 
 // Event details (editable)
 const form = ref({
@@ -409,7 +419,11 @@ async function saveDiscussionSettings() {
 onMounted(async () => {
   await loadEvent()
   if (!error.value) {
-    await Promise.all([loadAttendees(), loadDiscussionSettings(), loadAuctionSettings()])
+    await Promise.all([
+      loadAttendees(),
+      loadDiscussionSettings(),
+      ...(auctionsEnabled.value ? [loadAuctionSettings()] : [])
+    ])
   }
 })
 </script>
@@ -440,13 +454,7 @@ onMounted(async () => {
         <div class="border-b border-gray-100">
           <nav class="flex px-6" aria-label="Tabs">
             <button
-              v-for="tab in [
-                { key: 'about', label: 'About this event' },
-                { key: 'discussion', label: 'Discussion' },
-                { key: 'attendees', label: 'Attendees' },
-                { key: 'coadmins', label: 'Co-Admins' },
-                { key: 'auction', label: 'Auction' }
-              ]"
+              v-for="tab in manageTabs"
               :key="tab.key"
               :data-testid="`manage-tab-${tab.key}`"
               @click="activeTab = tab.key"
