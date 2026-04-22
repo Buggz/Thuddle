@@ -5,6 +5,7 @@ const envFlag = (name) =>
 
 export function useFeatureFlags() {
   return {
-    auctions: computed(() => envFlag('VITE_FEATURE_AUCTIONS'))
+    auctions: computed(() => envFlag('VITE_FEATURE_AUCTIONS')),
+    notifications: computed(() => envFlag('VITE_FEATURE_NOTIFICATIONS'))
   }
 }

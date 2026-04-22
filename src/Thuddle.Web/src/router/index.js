@@ -81,7 +81,7 @@ export default function initRouter() {
         path: '/notifications',
         name: 'notifications',
         component: () => import('@/features/notifications/views/NotificationsView.vue'),
-        meta: { requiresAuth: true }
+        meta: { requiresAuth: true, featureFlag: 'notifications' }
       },
       {
         path: '/admin',
