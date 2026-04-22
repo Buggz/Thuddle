@@ -204,21 +204,20 @@ test.describe('Payment tracking', () => {
       await context.close()
     })
 
-    test('joined paid event shows "Payment due" badge', async ({ browser, baseURL, createdEvents }) => {
+    test('joined paid event shows "Payment not yet registered" badge', async ({ browser, baseURL, createdEvents }) => {
       const { eventId, eventUrl } = await createEventWithCost(browser, baseURL!, 15.99)
       createdEvents.push(eventId)
 
       await joinEvent(browser, 'alice', eventUrl)
 
-      // Alice's view: payment badge should show "Payment due" with the amount
+      // Alice's view: payment badge should show "Payment not yet registered"
       const { context, page } = await contextAs(browser, 'alice')
       await page.goto(eventUrl)
       await page.getByTestId('event-detail').waitFor({ state: 'visible', timeout: 20000 })
 
       const badge = page.getByTestId('event-payment-badge')
       await expect(badge).toBeVisible({ timeout: 10000 })
-      await expect(badge).toContainText(/payment due/i)
-      await expect(badge).toContainText('15.99')
+      await expect(badge).toContainText(/payment not yet registered/i)
 
       await context.close()
     })
@@ -237,7 +236,7 @@ test.describe('Payment tracking', () => {
       const { context: aliceCtx, page: alicePage } = await contextAs(browser, 'alice')
       await alicePage.goto(eventUrl)
       await alicePage.getByTestId('event-detail').waitFor({ state: 'visible', timeout: 20000 })
-      await expect(alicePage.getByTestId('event-payment-badge')).toContainText(/payment due/i)
+      await expect(alicePage.getByTestId('event-payment-badge')).toContainText(/payment not yet registered/i)
 
       // In a separate admin context, toggle payment for alice
       const { context: adminCtx, page: adminPage } = await contextAs(browser, 'admin')
@@ -256,6 +255,60 @@ test.describe('Payment tracking', () => {
 
       await adminCtx.close()
       await aliceCtx.close()
+    })
+
+    test('dashboard card shows "Payment not yet registered" badge for unpaid joined event', async ({
+      browser,
+      baseURL,
+      createdEvents,
+    }) => {
+      const { eventId, eventUrl } = await createEventWithCost(browser, baseURL!, 25.0)
+      createdEvents.push(eventId)
+
+      await joinEvent(browser, 'alice', eventUrl)
+
+      const { context, page } = await contextAs(browser, 'alice')
+      await page.goto(`${baseURL}/`)
+      await page.getByTestId('event-list').waitFor({ state: 'visible', timeout: 20000 })
+
+      // Find the card for this event by href
+      const cardByHref = page.locator(`[data-testid="event-card"][href*="${eventId}"]`)
+      await expect(cardByHref.getByTestId('event-card-payment-badge')).toBeVisible({ timeout: 10000 })
+      await expect(cardByHref.getByTestId('event-card-payment-badge')).toContainText(/payment not yet registered/i)
+
+      await context.close()
+    })
+
+    test('dashboard card shows "Paid" badge after admin marks payment', async ({
+      browser,
+      baseURL,
+      createdEvents,
+    }) => {
+      const { eventId, eventUrl, manageUrl } = await createEventWithCost(browser, baseURL!, 30.0)
+      createdEvents.push(eventId)
+
+      const aliceUserId = await joinEvent(browser, 'alice', eventUrl)
+
+      // Admin marks alice as paid
+      const { context: adminCtx, page: adminPage } = await contextAs(browser, 'admin')
+      await goToAttendeesTab(adminPage, manageUrl)
+      const paymentResp = adminPage.waitForResponse(
+        (r) => r.url().includes('/payment') && r.request().method() === 'PUT',
+      )
+      await adminPage.getByTestId('manage-payment-toggle-btn').click()
+      await paymentResp
+      await adminCtx.close()
+
+      // Alice loads the dashboard fresh — should see "Paid" pill
+      const { context, page } = await contextAs(browser, 'alice')
+      await page.goto(`${baseURL}/`)
+      await page.getByTestId('event-list').waitFor({ state: 'visible', timeout: 20000 })
+
+      const cardByHref = page.locator(`[data-testid="event-card"][href*="${eventId}"]`)
+      await expect(cardByHref.getByTestId('event-card-payment-badge')).toBeVisible({ timeout: 10000 })
+      await expect(cardByHref.getByTestId('event-card-payment-badge')).toContainText('Paid')
+
+      await context.close()
     })
   })
 
