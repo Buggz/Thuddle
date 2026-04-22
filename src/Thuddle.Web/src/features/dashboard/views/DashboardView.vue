@@ -202,6 +202,18 @@ onBeforeUnmount(() => {
               </svg>
               Attending
             </div>
+            <div
+              v-if="event.hasJoined && event.cost > 0"
+              data-testid="event-card-payment-badge"
+              class="absolute top-10 right-3 flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-bold shadow-md uppercase tracking-wide"
+              :class="event.hasPaid ? 'bg-emerald-500 text-white' : 'bg-amber-500 text-white'"
+            >
+              <svg v-if="event.hasPaid" class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+              </svg>
+              <span v-if="event.hasPaid">Paid</span>
+              <span v-else>Payment not yet registered</span>
+            </div>
           </div>
 
           <!-- Card content -->

@@ -191,6 +191,10 @@ public static class EventEndpoints
                         .FirstOrDefault()
                     : null,
                 HasJoined = !isAnonymous && db.EventParticipants.Any(ep => ep.EventId == e.Id && ep.UserId == userId),
+                HasPaid = !isAnonymous && db.EventParticipants
+                    .Where(ep => ep.EventId == e.Id && ep.UserId == userId)
+                    .Select(ep => ep.HasPaid)
+                    .FirstOrDefault(),
                 HasInvitation = !isAnonymous && db.EventInvitations.Any(i => i.EventId == e.Id && i.Email.ToLower() == userEmail),
                 IsAdmin = !isAnonymous && (e.OwnerId == userId || db.EventCoAdmins.Any(ca => ca.EventId == e.Id && ca.UserId == userId)),
                 PendingPostCount = !isAnonymous && (e.OwnerId == userId || db.EventCoAdmins.Any(ca => ca.EventId == e.Id && ca.UserId == userId))
@@ -224,6 +228,7 @@ public static class EventEndpoints
                 HasUnreadDiscussion = !isAnonymous && e.PostCount > 0
                     && (e.LastReadAt is null || latestActivity > e.LastReadAt),
                 e.HasJoined,
+                e.HasPaid,
                 e.HasInvitation,
                 CanJoin = !e.HasJoined && !isAnonymous
                     && (e.JoinMode == JoinMode.Open || e.HasInvitation),
