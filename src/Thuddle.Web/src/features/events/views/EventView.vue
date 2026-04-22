@@ -10,17 +10,28 @@ import { auctionApi } from '@/api'
 import DiscussionTab from '@/features/events/components/DiscussionTab.vue'
 import { formatCurrency } from '@/shared/formatCurrency'
 import FunnyLoader from '@/shared/components/FunnyLoader.vue'
+import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
+import { usePermissionsStore } from '@/features/auth/stores/permissions'
 
 const route = useRoute()
 const router = useRouter()
 const { authFetch } = useApi()
 const auth = useAuthStore()
 const eventsStore = useEventsStore()
+const permissions = usePermissionsStore()
 const { auctions: auctionsEnabled } = useFeatureFlags()
 
 const loading = shallowRef(true)
 const error = shallowRef(null)
 const joining = shallowRef(false)
+const leaveDialogOpen = ref(false)
+
+const isOwner = computed(() => !!(event.value && permissions.userId && event.value.ownerId === permissions.userId))
+const leaveMessage = computed(() =>
+  event.value?.joinMode === 1
+    ? 'Your invitation will be kept, so you can rejoin later.'
+    : 'You can rejoin anytime while spaces remain.'
+)
 
 const activeTab = shallowRef('about')
 const participants = ref([])
@@ -115,6 +126,16 @@ function selectTab(tab) {
 
 function goToAuction() {
   router.push({ name: 'auction', params: { id: route.params.id } })
+}
+
+async function confirmLeave() {
+  try {
+    await eventsStore.leaveEvent(route.params.id)
+  } catch (err) {
+    error.value = err.message || 'Failed to leave event.'
+  } finally {
+    leaveDialogOpen.value = false
+  }
 }
 
 async function joinEvent() {
@@ -249,11 +270,27 @@ watch(() => event.value?.participantCount, (newCount, oldCount) => {
             <p class="mt-2 text-sm font-medium text-white/80">Hosted by <span class="text-white">{{ event.ownerName }}</span></p>
           </div>
           
-          <div v-if="event.hasJoined" data-testid="event-joined-badge" class="absolute top-4 right-4 flex items-center gap-1 rounded-full bg-emerald-500 px-3 py-1.5 text-xs font-bold text-white shadow-lg uppercase tracking-wide">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-            </svg>
-            Attending
+          <div class="absolute top-4 right-4 flex flex-col items-end gap-2">
+            <div v-if="event.hasJoined" data-testid="event-joined-badge" class="flex items-center gap-1 rounded-full bg-emerald-500 px-3 py-1.5 text-xs font-bold text-white shadow-lg uppercase tracking-wide">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+              </svg>
+              Attending
+            </div>
+            <div
+              v-if="event.hasJoined && event.cost > 0"
+              data-testid="event-payment-badge"
+              class="flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-bold shadow-lg uppercase tracking-wide"
+              :class="event.hasPaid
+                ? 'bg-emerald-500 text-white'
+                : 'bg-amber-500 text-white'"
+            >
+              <svg v-if="event.hasPaid" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+              </svg>
+              <span v-if="event.hasPaid">Paid</span>
+              <span v-else>Payment due {{ formatCurrency(event.cost, event.currency) }}</span>
+            </div>
           </div>
         </div>
 
@@ -347,10 +384,19 @@ watch(() => event.value?.participantCount, (newCount, oldCount) => {
             </template>
             <template v-else>
               <button
-                v-if="!event.isAdmin"
+                v-if="!isOwner"
                 data-testid="event-leave-btn"
-                @click="confirmLeave"
-                class="w-full sm:w-auto justify-center rounded-xl bg-white px-6 py-3 text-sm font-bold text-gray-700 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 hover:text-gray-900 transition-all"
+                @click="leaveDialogOpen = true"
+                class="w-full sm:w-auto justify-center rounded-xl bg-white px-6 py-3 text-sm font-bold text-slate-600 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-red-50 hover:text-red-600 hover:ring-red-200 transition-all"
+              >
+                Leave Event
+              </button>
+              <button
+                v-else
+                data-testid="event-leave-btn-disabled"
+                disabled
+                title="Owners cannot leave their own event"
+                class="w-full sm:w-auto justify-center rounded-xl bg-gray-100 px-6 py-3 text-sm font-bold text-gray-400 cursor-not-allowed ring-1 ring-inset ring-gray-200"
               >
                 Leave Event
               </button>
@@ -548,5 +594,15 @@ watch(() => event.value?.participantCount, (newCount, oldCount) => {
         </div>
       </div>
     </template>
+
+    <ConfirmDialog
+      :open="leaveDialogOpen"
+      title="Leave this event?"
+      :message="leaveMessage"
+      confirm-label="Leave"
+      variant="danger"
+      @confirm="confirmLeave"
+      @cancel="leaveDialogOpen = false"
+    />
   </div>
 </template>

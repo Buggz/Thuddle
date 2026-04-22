@@ -18,6 +18,8 @@ public static class EventEndpoints
         app.MapDelete("/api/events/{eventId:guid}", DeleteEvent).RequireAuthorization();
         app.MapPost("/api/events/{eventId:guid}/invitations", InviteUsers).RequireAuthorization();
         app.MapPost("/api/events/{eventId:guid}/join", JoinEvent).RequireAuthorization();
+        app.MapDelete("/api/events/{eventId:guid}/participants/me", LeaveEvent).RequireAuthorization();
+        app.MapDelete("/api/events/{eventId:guid}/attendees/{userId:guid}", KickAttendee).RequireAuthorization();
         app.MapPost("/api/events/{eventId:guid}/co-admins", AddCoAdmin).RequireAuthorization();
         app.MapDelete("/api/events/{eventId:guid}/co-admins/{userId:guid}", RemoveCoAdmin).RequireAuthorization();
         app.MapGet("/api/events/{eventId:guid}/attendees", GetAttendees).RequireAuthorization();
@@ -285,6 +287,15 @@ public static class EventEndpoints
         var hasJoined = dbUser is not null && await db.EventParticipants
             .AnyAsync(p => p.EventId == eventId && p.UserId == dbUser.Id, ct);
 
+        var hasPaid = false;
+        if (dbUser is not null && hasJoined)
+        {
+            hasPaid = await db.EventParticipants
+                .Where(p => p.EventId == eventId && p.UserId == dbUser.Id)
+                .Select(p => p.HasPaid)
+                .FirstOrDefaultAsync(ct);
+        }
+
         var hasInvitation = dbUser is not null && await db.EventInvitations
             .AnyAsync(i => i.EventId == eventId && i.Email.ToLower() == dbUser.Email.ToLower(), ct);
 
@@ -341,6 +352,7 @@ public static class EventEndpoints
             PendingPostCount = pendingPostCount,
             HasUnreadDiscussion = hasUnreadDiscussion,
             HasJoined = hasJoined,
+            HasPaid = hasPaid,
             CanJoin = canJoin,
             IsAdmin = isAdmin
         });
@@ -552,6 +564,96 @@ public static class EventEndpoints
         await realtime.ParticipantChangedAsync(eventId, newCount, ct);
 
         return Results.Ok(new { joined = true, eventId });
+    }
+
+    private static async Task<IResult> LeaveEvent(
+        Guid eventId,
+        ClaimsPrincipal user,
+        ThuddleDbContext db,
+        IRealtimeNotifier realtime,
+        CancellationToken ct)
+    {
+        var keycloakId = GetKeycloakId(user);
+        if (keycloakId is null) return Results.Unauthorized();
+
+        var dbUser = await db.Users.FirstOrDefaultAsync(u => u.KeycloakId == keycloakId, ct);
+        if (dbUser is null) return Results.Unauthorized();
+
+        var evt = await db.Events.FirstOrDefaultAsync(e => e.Id == eventId, ct);
+        if (evt is null) return Results.NotFound(new { error = "Event not found." });
+
+        if (evt.OwnerId == dbUser.Id)
+            return Results.BadRequest(new { error = "Owners cannot leave their own event. Delete it or transfer ownership." });
+
+        var participant = await db.EventParticipants
+            .FirstOrDefaultAsync(p => p.EventId == eventId && p.UserId == dbUser.Id, ct);
+
+        if (participant is null)
+            return Results.NotFound(new { error = "You are not a participant of this event." });
+
+        db.EventParticipants.Remove(participant);
+        await db.SaveChangesAsync(ct);
+
+        var newCount = await db.EventParticipants.CountAsync(p => p.EventId == eventId, ct);
+        await realtime.ParticipantChangedAsync(eventId, newCount, ct);
+
+        return Results.NoContent();
+    }
+
+    private static async Task<IResult> KickAttendee(
+        Guid eventId,
+        Guid userId,
+        bool revokeInvitation,
+        ClaimsPrincipal user,
+        ThuddleDbContext db,
+        IRealtimeNotifier realtime,
+        CancellationToken ct)
+    {
+        var keycloakId = GetKeycloakId(user);
+        if (keycloakId is null) return Results.Unauthorized();
+
+        var dbUser = await db.Users.FirstOrDefaultAsync(u => u.KeycloakId == keycloakId, ct);
+        if (dbUser is null) return Results.Unauthorized();
+
+        if (!await IsEventAdmin(db, eventId, dbUser.Id, ct))
+            return Results.Forbid();
+
+        var evt = await db.Events.FirstOrDefaultAsync(e => e.Id == eventId, ct);
+        if (evt is null) return Results.NotFound(new { error = "Event not found." });
+
+        if (evt.OwnerId == userId)
+            return Results.BadRequest(new { error = "Cannot remove the event owner." });
+
+        var participant = await db.EventParticipants
+            .Include(p => p.User)
+            .FirstOrDefaultAsync(p => p.EventId == eventId && p.UserId == userId, ct);
+
+        if (participant is null)
+            return Results.NotFound(new { error = "Attendee not found." });
+
+        var kickedEmail = participant.User.Email;
+
+        db.EventParticipants.Remove(participant);
+
+        var invitationRevoked = false;
+        if (revokeInvitation)
+        {
+            var invitations = await db.EventInvitations
+                .Where(i => i.EventId == eventId && i.Email.ToLower() == kickedEmail.ToLower())
+                .ToListAsync(ct);
+            if (invitations.Count > 0)
+            {
+                db.EventInvitations.RemoveRange(invitations);
+                invitationRevoked = true;
+            }
+        }
+
+        await db.SaveChangesAsync(ct);
+
+        var newCount = await db.EventParticipants.CountAsync(p => p.EventId == eventId, ct);
+        await realtime.ParticipantChangedAsync(eventId, newCount, ct);
+
+        return Results.Ok(new { removed = true, invitationRevoked });
     }
 
     private static async Task<IResult> UpdateEvent(
@@ -812,6 +914,7 @@ public static class EventEndpoints
         UpdatePaymentRequest request,
         ClaimsPrincipal user,
         ThuddleDbContext db,
+        IRealtimeNotifier realtime,
         CancellationToken ct)
     {
         var keycloakId = GetKeycloakId(user);
@@ -832,6 +935,9 @@ public static class EventEndpoints
         participant.HasPaid = request.HasPaid;
         db.EventParticipants.Update(participant);
         await db.SaveChangesAsync(ct);
+
+        var participantCount = await db.EventParticipants.CountAsync(p => p.EventId == eventId, ct);
+        await realtime.ParticipantChangedAsync(eventId, participantCount, ct);
 
         return Results.Ok(new { userId, hasPaid = request.HasPaid });
     }
