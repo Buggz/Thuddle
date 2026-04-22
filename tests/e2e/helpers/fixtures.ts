@@ -24,7 +24,7 @@ export const test = base.extend<{ createdEvents: string[] }>({
       await page.goto(baseURL!)
       await page.waitForResponse(
         (r) =>
-          r.url().includes('/api/events') &&
+          r.url().includes('/api/profile') &&
           r.status() === 200 &&
           (r.request().headers()['authorization'] ?? '').startsWith('Bearer '),
       )

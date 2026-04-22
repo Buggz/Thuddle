@@ -49,8 +49,8 @@ export async function userApi(
   await page.goto(baseURL)
   await page.waitForResponse(
     (r) =>
-      r.url().includes('/api/') &&
-      r.status() < 400 &&
+      r.url().includes('/api/profile') &&
+      r.status() === 200 &&
       (r.request().headers()['authorization'] ?? '').startsWith('Bearer '),
     { timeout: 20000 },
   )

@@ -51,6 +51,18 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                     context.Token = accessToken;
                 }
                 return Task.CompletedTask;
+            },
+            OnChallenge = context =>
+            {
+                var logger = context.HttpContext.RequestServices.GetRequiredService<ILoggerFactory>()
+                    .CreateLogger("JwtBearer");
+                logger.LogWarning(
+                    "JWT challenge issued: error={Error} description={Description} hasAuthHeader={HasAuth} path={Path}",
+                    context.Error,
+                    context.ErrorDescription,
+                    context.HttpContext.Request.Headers.ContainsKey("Authorization"),
+                    context.HttpContext.Request.Path);
+                return Task.CompletedTask;
             }
         };
     });
