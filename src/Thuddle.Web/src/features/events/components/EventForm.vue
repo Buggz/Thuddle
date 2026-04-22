@@ -63,7 +63,8 @@ const isValid = computed(() => {
     new Date(f.start) >= startOfToday.value &&
     new Date(f.end) > new Date() &&
     new Date(f.end) > new Date(f.start) &&
-    (f.capacity == null || f.capacity === '' || (Number.isInteger(Number(f.capacity)) && Number(f.capacity) >= 1))
+    (f.capacity == null || f.capacity === '' || (Number.isInteger(Number(f.capacity)) && Number(f.capacity) >= 1)) &&
+    /^[A-Z0-9]{1,8}$/.test(f.currency || '')
   )
 })
 
@@ -86,6 +87,28 @@ function inputClass(field) {
       : 'border-gray-300 focus:border-indigo-500'
   ]
 }
+
+const CURRENCY_REGEX = /^[A-Z0-9]{1,8}$/
+const PRESET_CURRENCIES = new Set(['NOK', 'EUR', 'USD'])
+const currencyChoice = computed(() => {
+  const c = props.modelValue.currency || 'EUR'
+  return PRESET_CURRENCIES.has(c) ? c : 'CUSTOM'
+})
+function onCurrencyChoice(choice) {
+  if (choice === 'CUSTOM') {
+    if (PRESET_CURRENCIES.has(props.modelValue.currency || 'EUR')) {
+      update('currency', '')
+    }
+  } else {
+    update('currency', choice)
+  }
+}
+const currencyError = computed(() => {
+  const c = props.modelValue.currency || ''
+  if (!c) return 'Currency is required.'
+  if (!CURRENCY_REGEX.test(c)) return 'Use 1–8 uppercase letters or digits.'
+  return ''
+})
 
 defineExpose({ isValid, fieldErrors })
 </script>
@@ -213,6 +236,41 @@ defineExpose({ isValid, fieldErrors })
           class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
           placeholder="Free"
         />
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">Currency</label>
+        <select
+          :value="currencyChoice"
+          @change="onCurrencyChoice($event.target.value)"
+          :data-testid="`${testIdPrefix}-currency-select`"
+          class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+        >
+          <option value="NOK">NOK — Norwegian Krone</option>
+          <option value="EUR">EUR — Euro</option>
+          <option value="USD">USD — US Dollar</option>
+          <option value="CUSTOM">Custom…</option>
+        </select>
+      </div>
+      <div v-if="currencyChoice === 'CUSTOM'">
+        <label class="block text-sm font-medium text-gray-700 mb-1">Custom currency code</label>
+        <input
+          :value="modelValue.currency"
+          @input="update('currency', ($event.target.value || '').toUpperCase())"
+          type="text"
+          maxlength="8"
+          pattern="[A-Z0-9]{1,8}"
+          :data-testid="`${testIdPrefix}-currency-custom-input`"
+          :class="[
+            'w-full rounded-lg border px-3 py-2 text-sm uppercase tracking-wider focus:ring-2 focus:ring-indigo-500',
+            currencyError ? 'border-red-400 focus:border-red-500 focus:ring-red-500' : 'border-gray-300 focus:border-indigo-500'
+          ]"
+          placeholder="GBP"
+        />
+        <p v-if="currencyError" class="mt-1 text-xs text-red-600">{{ currencyError }}</p>
+        <p v-else class="mt-1 text-[11px] text-gray-400">1–8 characters, A–Z and 0–9 only.</p>
       </div>
     </div>
   </div>

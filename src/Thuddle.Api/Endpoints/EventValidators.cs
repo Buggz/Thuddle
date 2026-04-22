@@ -12,6 +12,7 @@ public sealed class CreateEventRequestValidator : AbstractValidator<CreateEventR
         RuleFor(x => x.End).GreaterThan(DateTime.UtcNow).WithMessage("End must be in the future.");
         RuleFor(x => x.End).GreaterThan(x => x.Start).WithMessage("End must be after Start.");
         RuleFor(x => x.Capacity).GreaterThanOrEqualTo(1).WithMessage("Capacity must be at least 1.").When(x => x.Capacity.HasValue);
+        RuleFor(x => x.Currency).NotEmpty().Matches(@"^[A-Z0-9]{1,8}$").WithMessage("Currency must be 1-8 uppercase alphanumeric characters.");
     }
 }
 
@@ -25,6 +26,7 @@ public sealed class UpdateEventRequestValidator : AbstractValidator<UpdateEventR
         RuleFor(x => x.End).GreaterThan(DateTime.UtcNow).WithMessage("End must be in the future.");
         RuleFor(x => x.End).GreaterThan(x => x.Start).WithMessage("End must be after Start.");
         RuleFor(x => x.Capacity).GreaterThanOrEqualTo(1).WithMessage("Capacity must be at least 1.").When(x => x.Capacity.HasValue);
+        RuleFor(x => x.Currency).NotEmpty().Matches(@"^[A-Z0-9]{1,8}$").WithMessage("Currency must be 1-8 uppercase alphanumeric characters.");
     }
 }
 

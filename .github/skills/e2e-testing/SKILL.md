@@ -452,6 +452,83 @@ await page.goto(`${baseURL}/events/${body.id}`)
 await expect(page.getByTestId('event-title')).toHaveText(name)
 ```
 
+## Test design: read vs write separation
+
+Every test should have a single responsibility — either verifying a **write** (create/edit/delete/save) or a **read** (view/list/display/render). The setup and assertion strategies differ:
+
+| Test type | Arrange (setup) | Act (exercise) | Assert (verify) |
+|---|---|---|---|
+| **Write test** | Navigate the UI | Use the GUI as a user would | Call the API to confirm data was persisted |
+| **Read test** | Create data directly via API | Navigate the UI as a user would | Assert the GUI shows the correct data |
+
+### Why this matters
+
+- **Test isolation** — a broken create form doesn't cascade failures into unrelated display tests
+- **Speed** — API setup is dramatically faster than clicking through forms
+- **Clear failure signals** — write test fails = save logic is broken; read test fails = display is broken
+
+### Write test example
+
+Test that a user can create an event. Drive the GUI, verify via API:
+
+```typescript
+test('admin can create a public event', async ({ page, baseURL, createdEvents }) => {
+  const name = `Public ${uid()}`
+
+  // Arrange + Act: use the GUI as a user would
+  await page.goto(baseURL!)
+  await page.getByTestId('event-create-btn').waitFor({ state: 'visible', timeout: 20000 })
+  await page.getByTestId('event-create-btn').click()
+  await page.getByTestId('event-title-input').fill(name)
+  await page.getByTestId('event-location-input').fill('Test Location')
+  // ... fill remaining fields ...
+
+  const responsePromise = page.waitForResponse(
+    (r) => r.url().includes('/api/events') && r.request().method() === 'POST'
+  )
+  await page.getByTestId('event-submit-btn').click()
+  const response = await responsePromise
+
+  // Assert: verify via API response
+  expect(response.status()).toBe(201)
+  const body = await response.json()
+  expect(body.title).toBe(name)
+  createdEvents.push(body.id)
+})
+```
+
+### Read test example
+
+Test that events appear on the dashboard. Set up data via API, then verify the GUI:
+
+```typescript
+test('authenticated user can see events on the dashboard', async ({ page, request, baseURL, createdEvents }) => {
+  // Arrange: create data directly via API
+  const resp = await request.post(`${baseURL}/api/events`, {
+    data: { title: `ListTest ${uid()}`, location: 'API Venue', /* ... */ },
+  })
+  expect(resp.status()).toBe(201)
+  const event = await resp.json()
+  createdEvents.push(event.id)
+
+  // Act: navigate the UI as a user would
+  await page.goto(baseURL!)
+  await page.getByTestId('user-display-name').waitFor({ state: 'visible', timeout: 20000 })
+
+  // Assert: verify the GUI displays the data
+  await expect(page.getByTestId('event-list')).toBeVisible()
+})
+```
+
+### When a test needs both — split it
+
+If a feature involves both saving and displaying, write **two separate tests**:
+
+1. A write test that saves via GUI and verifies via API
+2. A read test that creates via API and verifies via GUI
+
+Do not combine them into one test — that conflates two failure modes.
+
 ## Event cleanup: `createdEvents` fixture
 
 Tests that create events **must** clean them up to keep the database tidy. Without cleanup, events accumulate across test runs and push newer events off page 1 of the dashboard, breaking GUI assertions.

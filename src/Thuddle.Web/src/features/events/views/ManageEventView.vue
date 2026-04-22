@@ -2,20 +2,31 @@
 import { shallowRef, ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useApi } from '@/shared/composables/useApi'
+import { auctionApi } from '@/api'
 import EventForm from '@/features/events/components/EventForm.vue'
 import ImageCropper from '@/features/profile/components/ImageCropper.vue'
 import Spinner from '@/shared/components/Spinner.vue'
 import UserSearchComboBox from '@/shared/components/UserSearchComboBox.vue'
 import GroupSelectorPopover from '@/features/groups/components/GroupSelectorPopover.vue'
 import { usePermissionsStore } from '@/features/auth/stores/permissions'
+import { useFeatureFlags } from '@/shared/featureFlags'
 
 const route = useRoute()
 const router = useRouter()
 const { authFetch } = useApi()
 const permissionsStore = usePermissionsStore()
+const { auctions: auctionsEnabled } = useFeatureFlags()
 
 const eventId = route.params.id
 const activeTab = shallowRef('about')
+
+const manageTabs = computed(() => [
+  { key: 'about', label: 'About this event' },
+  { key: 'discussion', label: 'Discussion' },
+  { key: 'attendees', label: 'Attendees' },
+  { key: 'coadmins', label: 'Co-Admins' },
+  ...(auctionsEnabled.value ? [{ key: 'auction', label: 'Auction' }] : [])
+])
 
 // Event details (editable)
 const form = ref({
@@ -27,7 +38,8 @@ const form = ref({
   visibility: 0,
   joinMode: 0,
   capacity: null,
-  cost: null
+  cost: null,
+  currency: 'EUR'
 })
 const saving = shallowRef(false)
 const saveError = shallowRef(null)
@@ -66,6 +78,27 @@ const discussionSaveError = shallowRef(null)
 const eventData = ref(null)
 const loading = shallowRef(true)
 const error = shallowRef(null)
+
+// Auction
+const auctionSettings = ref(null)
+const auctionLoading = shallowRef(true)
+const auctionError = shallowRef(null)
+const auctionConfigured = computed(() =>
+  !!auctionSettings.value && auctionSettings.value.configured !== false
+)
+const auctionEnabled = computed(() =>
+  auctionConfigured.value && auctionSettings.value?.enabled === true
+)
+const auctionStatus = computed(() => auctionSettings.value?.status || null)
+const auctionStatusBadgeClass = computed(() => {
+  switch (auctionStatus.value) {
+    case 'Live': return 'bg-emerald-50 text-emerald-700 border-emerald-200'
+    case 'Scheduled': return 'bg-sky-50 text-sky-700 border-sky-200'
+    case 'Ended': return 'bg-gray-100 text-gray-600 border-gray-200'
+    case 'Draft':
+    default: return 'bg-amber-50 text-amber-700 border-amber-200'
+  }
+})
 
 const hasCost = computed(() => eventData.value?.cost != null && eventData.value.cost > 0)
 
@@ -220,7 +253,8 @@ async function loadEvent() {
       visibility: data.visibility,
       joinMode: data.joinMode,
       capacity: data.capacity,
-      cost: data.cost
+      cost: data.cost,
+      currency: data.currency || 'EUR'
     }
   } catch (err) {
     error.value = err.message || 'Failed to load event.'
@@ -248,7 +282,8 @@ async function saveEvent() {
         visibility: form.value.visibility,
         joinMode: form.value.joinMode,
         capacity: form.value.capacity || null,
-        cost: form.value.cost || null
+        cost: form.value.cost || null,
+        currency: form.value.currency || 'EUR'
       })
     })
     saveSuccess.value = true
@@ -340,6 +375,28 @@ async function loadDiscussionSettings() {
   } catch { /* ignore - uses defaults */ }
 }
 
+async function loadAuctionSettings() {
+  auctionLoading.value = true
+  auctionError.value = null
+  try {
+    auctionSettings.value = await auctionApi.getSettings(authFetch, eventId)
+  } catch (err) {
+    // Hide gracefully — never crash the page if the auction endpoint is unavailable.
+    auctionSettings.value = { configured: false }
+    auctionError.value = err.message || 'Failed to load auction settings.'
+  } finally {
+    auctionLoading.value = false
+  }
+}
+
+function goToAuctionSettings() {
+  router.push({ name: 'auction-settings', params: { id: eventId } })
+}
+
+function goToAuctionView() {
+  router.push({ name: 'auction', params: { id: eventId } })
+}
+
 async function saveDiscussionSettings() {
   savingDiscussion.value = true
   discussionSaveError.value = null
@@ -362,7 +419,11 @@ async function saveDiscussionSettings() {
 onMounted(async () => {
   await loadEvent()
   if (!error.value) {
-    await Promise.all([loadAttendees(), loadDiscussionSettings()])
+    await Promise.all([
+      loadAttendees(),
+      loadDiscussionSettings(),
+      ...(auctionsEnabled.value ? [loadAuctionSettings()] : [])
+    ])
   }
 })
 </script>
@@ -393,12 +454,7 @@ onMounted(async () => {
         <div class="border-b border-gray-100">
           <nav class="flex px-6" aria-label="Tabs">
             <button
-              v-for="tab in [
-                { key: 'about', label: 'About this event' },
-                { key: 'discussion', label: 'Discussion' },
-                { key: 'attendees', label: 'Attendees' },
-                { key: 'coadmins', label: 'Co-Admins' }
-              ]"
+              v-for="tab in manageTabs"
               :key="tab.key"
               :data-testid="`manage-tab-${tab.key}`"
               @click="activeTab = tab.key"
@@ -732,6 +788,77 @@ onMounted(async () => {
               </button>
             </li>
           </ul>
+        </div>
+
+        <!-- Tab: Auction -->
+        <div v-if="activeTab === 'auction'" class="p-6" data-testid="manage-auction-tab">
+          <div v-if="auctionLoading" class="text-sm text-gray-400">Loading auction…</div>
+
+          <template v-else>
+            <!-- Not configured / not enabled → setup CTA -->
+            <div v-if="!auctionEnabled" class="rounded-xl border border-dashed border-indigo-200 bg-indigo-50/40 p-6 text-center">
+              <div class="mx-auto w-12 h-12 rounded-full bg-white border border-indigo-200/60 shadow-sm flex items-center justify-center mb-3">
+                <span class="text-2xl" aria-hidden="true">🔨</span>
+              </div>
+              <h3 class="text-sm font-bold text-gray-900 mb-1">Silent auction</h3>
+              <p class="text-xs text-gray-600 max-w-sm mx-auto leading-relaxed mb-4">
+                Raise funds or just have fun — let attendees submit items and bid against each other in real time.
+              </p>
+              <button
+                type="button"
+                data-testid="manage-auction-setup-btn"
+                @click="goToAuctionSettings"
+                class="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 transition-colors"
+              >
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                </svg>
+                Set up silent auction
+              </button>
+              <p v-if="auctionError" class="mt-3 text-xs text-red-600">{{ auctionError }}</p>
+            </div>
+
+            <!-- Configured + enabled → status panel -->
+            <div v-else class="space-y-4">
+              <div class="flex items-center justify-between gap-3 flex-wrap">
+                <div class="flex items-center gap-3">
+                  <div class="w-10 h-10 rounded-lg bg-indigo-50 border border-indigo-100 flex items-center justify-center">
+                    <span class="text-lg" aria-hidden="true">🔨</span>
+                  </div>
+                  <div>
+                    <h3 class="text-sm font-bold text-gray-900">Silent auction</h3>
+                    <p class="text-xs text-gray-500">Manage settings or jump into the auction.</p>
+                  </div>
+                </div>
+                <span
+                  data-testid="manage-auction-status-badge"
+                  class="inline-flex items-center px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider rounded-md border"
+                  :class="auctionStatusBadgeClass"
+                >
+                  {{ auctionStatus || 'Draft' }}
+                </span>
+              </div>
+
+              <div class="flex flex-wrap gap-2 pt-2">
+                <button
+                  type="button"
+                  data-testid="manage-auction-settings-btn"
+                  @click="goToAuctionSettings"
+                  class="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold rounded-lg bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors"
+                >
+                  Auction settings
+                </button>
+                <button
+                  type="button"
+                  data-testid="manage-auction-view-btn"
+                  @click="goToAuctionView"
+                  class="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 transition-colors"
+                >
+                  View auction
+                </button>
+              </div>
+            </div>
+          </template>
         </div>
       </div>
     </template>

@@ -4,8 +4,11 @@ import { useRoute, useRouter, RouterLink } from 'vue-router'
 import { useApi } from '@/shared/composables/useApi'
 import { useAuthStore } from '@/features/auth/stores/auth'
 import { useEventsStore } from '@/features/events/stores/events'
+import { useFeatureFlags } from '@/shared/featureFlags'
 import { apiUrl } from '@/api'
+import { auctionApi } from '@/api'
 import DiscussionTab from '@/features/events/components/DiscussionTab.vue'
+import { formatCurrency } from '@/shared/formatCurrency'
 import FunnyLoader from '@/shared/components/FunnyLoader.vue'
 
 const route = useRoute()
@@ -13,6 +16,7 @@ const router = useRouter()
 const { authFetch } = useApi()
 const auth = useAuthStore()
 const eventsStore = useEventsStore()
+const { auctions: auctionsEnabled } = useFeatureFlags()
 
 const loading = shallowRef(true)
 const error = shallowRef(null)
@@ -22,6 +26,24 @@ const activeTab = shallowRef('about')
 const participants = ref([])
 const participantsLoading = shallowRef(false)
 const participantsLoaded = shallowRef(false)
+
+const auctionSettings = ref(null)
+const auctionVisible = computed(() =>
+  auctionsEnabled.value
+  && !!auctionSettings.value
+  && auctionSettings.value.configured !== false
+  && auctionSettings.value.enabled === true
+)
+const auctionStatus = computed(() => auctionSettings.value?.status || null)
+const auctionStatusBadgeClass = computed(() => {
+  switch (auctionStatus.value) {
+    case 'Live': return 'bg-emerald-50 text-emerald-700 border-emerald-200'
+    case 'Scheduled': return 'bg-sky-50 text-sky-700 border-sky-200'
+    case 'Ended': return 'bg-gray-100 text-gray-600 border-gray-200'
+    case 'Draft':
+    default: return 'bg-amber-50 text-amber-700 border-amber-200'
+  }
+})
 
 const event = computed(() => eventsStore.byId[route.params.id] ?? null)
 
@@ -35,6 +57,26 @@ async function loadEvent() {
     error.value = err.message || 'Failed to load event.'
   } finally {
     loading.value = false
+  }
+}
+
+async function loadAuctionSettings() {
+  if (!auctionsEnabled.value) {
+    auctionSettings.value = { configured: false }
+    return
+  }
+  try {
+    // Use authFetch when authenticated, fall back to plain fetch for guests so
+    // unauthenticated visitors still see public auction info.
+    if (auth.isAuthenticated) {
+      auctionSettings.value = await auctionApi.getSettings(authFetch, route.params.id)
+    } else {
+      const res = await fetch(apiUrl(`/api/events/${route.params.id}/auction`))
+      auctionSettings.value = res.ok ? await res.json() : { configured: false }
+    }
+  } catch {
+    // Never crash the page if the endpoint is unavailable — just hide auction UI.
+    auctionSettings.value = { configured: false }
   }
 }
 
@@ -71,6 +113,10 @@ function selectTab(tab) {
   }
 }
 
+function goToAuction() {
+  router.push({ name: 'auction', params: { id: route.params.id } })
+}
+
 async function joinEvent() {
   joining.value = true
   error.value = null
@@ -97,11 +143,6 @@ function formatDate(iso) {
   })
 }
 
-function formatCost(cost) {
-  if (cost === 0 || cost === null || cost === undefined) return 'Free'
-  return new Intl.NumberFormat(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 }).format(cost)
-}
-
 function eventImageGradient(id) {
   if (!id) return 'from-indigo-400 to-purple-500'
   const gradients = [
@@ -116,7 +157,10 @@ function eventImageGradient(id) {
   return gradients[sum % gradients.length]
 }
 
-onMounted(loadEvent)
+onMounted(() => {
+  loadEvent()
+  loadAuctionSettings()
+})
 
 onBeforeUnmount(() => {
   eventsStore.releaseEvent(route.params.id)
@@ -127,6 +171,7 @@ watch(() => auth.isAuthenticated, (authenticated, wasAuthenticated) => {
   if (authenticated !== wasAuthenticated) {
     participantsLoaded.value = false
     loadEvent()
+    loadAuctionSettings()
   }
 })
 
@@ -254,7 +299,7 @@ watch(() => event.value?.participantCount, (newCount, oldCount) => {
               <div>
                 <p class="text-[13px] font-bold text-gray-500 uppercase tracking-widest mb-1">Price</p>
                 <p class="text-sm font-bold text-gray-900 leading-snug">
-                  {{ formatCost(event.cost) }}
+                  {{ formatCurrency(event.cost, event.currency, { freeIfZero: true }) }}
                 </p>
                 <p class="text-sm text-gray-500">{{ event.cost ? 'Per person' : 'No cost to attend' }}</p>
               </div>
@@ -379,6 +424,27 @@ watch(() => event.value?.participantCount, (newCount, oldCount) => {
                 {{ event.participantCount || 0 }}
               </div>
             </button>
+
+            <button
+              v-if="auctionVisible"
+              data-testid="event-tab-auction"
+              @click="selectTab('auction')"
+              class="flex items-center px-5 py-2.5 text-sm font-bold rounded-xl transition-all duration-200 ease-out relative"
+              :class="activeTab === 'auction'
+                ? 'bg-white text-indigo-700 shadow-sm ring-1 ring-gray-200/50'
+                : 'text-gray-500 hover:text-gray-800 hover:bg-gray-200/50'"
+            >
+              <span class="mr-1.5" aria-hidden="true">🔨</span>
+              Auction
+              <span
+                v-if="auctionStatus"
+                data-testid="event-auction-tab-status"
+                class="ml-2 inline-flex items-center px-1.5 py-0.5 rounded-md border text-[10px] uppercase font-bold tracking-wider"
+                :class="auctionStatusBadgeClass"
+              >
+                {{ auctionStatus }}
+              </span>
+            </button>
           </nav>
         </div>
 
@@ -439,6 +505,46 @@ watch(() => event.value?.participantCount, (newCount, oldCount) => {
               </div>
             </li>
           </ul>
+        </div>
+
+        <!-- Tab: Auction -->
+        <div v-if="activeTab === 'auction' && auctionVisible" class="px-6 py-5" data-testid="event-auction-tab">
+          <div class="rounded-2xl border border-indigo-100 bg-linear-to-br from-indigo-50/60 to-white p-6">
+            <div class="flex items-start gap-4">
+              <div class="w-12 h-12 rounded-xl bg-white border border-indigo-200/60 shadow-sm flex items-center justify-center shrink-0">
+                <span class="text-2xl" aria-hidden="true">🔨</span>
+              </div>
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-2 flex-wrap mb-1">
+                  <h3 class="text-base font-bold text-gray-900">Silent auction</h3>
+                  <span
+                    data-testid="event-auction-status-badge"
+                    class="inline-flex items-center px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider rounded-md border"
+                    :class="auctionStatusBadgeClass"
+                  >
+                    {{ auctionStatus || 'Draft' }}
+                  </span>
+                </div>
+                <p class="text-sm text-gray-600 leading-relaxed mb-4">
+                  <template v-if="auctionStatus === 'Live'">Bidding is open — place a bid before time runs out.</template>
+                  <template v-else-if="auctionStatus === 'Scheduled'">The auction is scheduled. Take a look at the items on offer.</template>
+                  <template v-else-if="auctionStatus === 'Ended'">The auction has ended. See the final results.</template>
+                  <template v-else>Browse items and follow along as the auction goes live.</template>
+                </p>
+                <button
+                  type="button"
+                  data-testid="event-auction-link"
+                  @click="goToAuction"
+                  class="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 transition-colors"
+                >
+                  View auction
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </template>

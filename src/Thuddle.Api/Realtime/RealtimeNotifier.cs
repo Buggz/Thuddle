@@ -25,6 +25,21 @@ public interface IRealtimeNotifier
     /// </summary>
     Task CommentCountChangedAsync(Guid eventId, Guid postId, int commentCount, DateTime? latestCommentAt, CancellationToken ct = default);
     Task InvitationSentAsync(string userKeycloakId, Guid eventId, CancellationToken ct = default);
+
+    // Auction
+    Task AuctionSettingsChangedAsync(Guid eventId, CancellationToken ct = default);
+    Task AuctionStatusChangedAsync(Guid eventId, string status, CancellationToken ct = default);
+    Task AuctionItemAddedAsync(Guid eventId, Guid itemId, CancellationToken ct = default);
+    Task AuctionItemUpdatedAsync(Guid eventId, Guid itemId, CancellationToken ct = default);
+    Task AuctionItemRemovedAsync(Guid eventId, Guid itemId, CancellationToken ct = default);
+    Task AuctionBidPlacedAsync(Guid eventId, Guid itemId, decimal currentBid, int bidCount, CancellationToken ct = default);
+    Task AuctionItemSoldAsync(Guid eventId, Guid itemId, CancellationToken ct = default);
+    Task AuctionEndedAsync(Guid eventId, CancellationToken ct = default);
+    Task AuctionUserBannedAsync(Guid eventId, Guid userId, CancellationToken ct = default);
+    Task AuctionUserUnbannedAsync(Guid eventId, Guid userId, CancellationToken ct = default);
+
+    // Notifications (per-user)
+    Task NotificationCreatedAsync(string keycloakId, Guid notificationId, CancellationToken ct = default);
 }
 
 public sealed class RealtimeNotifier(IHubContext<ThuddleHub> hub) : IRealtimeNotifier
@@ -62,4 +77,52 @@ public sealed class RealtimeNotifier(IHubContext<ThuddleHub> hub) : IRealtimeNot
     public Task InvitationSentAsync(string userKeycloakId, Guid eventId, CancellationToken ct = default) =>
         hub.Clients.Group(ThuddleHub.UserGroup(userKeycloakId))
             .SendAsync(RealtimeEvents.InvitationSent, new { eventId }, ct);
+
+    // Auction
+
+    public Task AuctionSettingsChangedAsync(Guid eventId, CancellationToken ct = default) =>
+        hub.Clients.Group(ThuddleHub.EventGroup(eventId))
+            .SendAsync(RealtimeEvents.AuctionSettingsChanged, new { eventId }, ct);
+
+    public Task AuctionStatusChangedAsync(Guid eventId, string status, CancellationToken ct = default) =>
+        hub.Clients.Group(ThuddleHub.EventGroup(eventId))
+            .SendAsync(RealtimeEvents.AuctionStatusChanged, new { eventId, status }, ct);
+
+    public Task AuctionItemAddedAsync(Guid eventId, Guid itemId, CancellationToken ct = default) =>
+        hub.Clients.Group(ThuddleHub.EventGroup(eventId))
+            .SendAsync(RealtimeEvents.AuctionItemAdded, new { eventId, itemId }, ct);
+
+    public Task AuctionItemUpdatedAsync(Guid eventId, Guid itemId, CancellationToken ct = default) =>
+        hub.Clients.Group(ThuddleHub.EventGroup(eventId))
+            .SendAsync(RealtimeEvents.AuctionItemUpdated, new { eventId, itemId }, ct);
+
+    public Task AuctionItemRemovedAsync(Guid eventId, Guid itemId, CancellationToken ct = default) =>
+        hub.Clients.Group(ThuddleHub.EventGroup(eventId))
+            .SendAsync(RealtimeEvents.AuctionItemRemoved, new { eventId, itemId }, ct);
+
+    public Task AuctionBidPlacedAsync(Guid eventId, Guid itemId, decimal currentBid, int bidCount, CancellationToken ct = default) =>
+        hub.Clients.Group(ThuddleHub.EventGroup(eventId))
+            .SendAsync(RealtimeEvents.AuctionBidPlaced, new { eventId, itemId, currentBid, bidCount, serverTime = DateTime.UtcNow }, ct);
+
+    public Task AuctionItemSoldAsync(Guid eventId, Guid itemId, CancellationToken ct = default) =>
+        hub.Clients.Group(ThuddleHub.EventGroup(eventId))
+            .SendAsync(RealtimeEvents.AuctionItemSold, new { eventId, itemId }, ct);
+
+    public Task AuctionEndedAsync(Guid eventId, CancellationToken ct = default) =>
+        hub.Clients.Group(ThuddleHub.EventGroup(eventId))
+            .SendAsync(RealtimeEvents.AuctionEnded, new { eventId }, ct);
+
+    public Task AuctionUserBannedAsync(Guid eventId, Guid userId, CancellationToken ct = default) =>
+        hub.Clients.Group(ThuddleHub.EventGroup(eventId))
+            .SendAsync(RealtimeEvents.AuctionUserBanned, new { eventId, userId }, ct);
+
+    public Task AuctionUserUnbannedAsync(Guid eventId, Guid userId, CancellationToken ct = default) =>
+        hub.Clients.Group(ThuddleHub.EventGroup(eventId))
+            .SendAsync(RealtimeEvents.AuctionUserUnbanned, new { eventId, userId }, ct);
+
+    // Notifications
+
+    public Task NotificationCreatedAsync(string keycloakId, Guid notificationId, CancellationToken ct = default) =>
+        hub.Clients.Group(ThuddleHub.UserGroup(keycloakId))
+            .SendAsync(RealtimeEvents.NotificationCreated, new { notificationId }, ct);
 }

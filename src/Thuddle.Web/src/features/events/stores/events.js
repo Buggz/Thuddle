@@ -224,9 +224,10 @@ export const useEventsStore = defineStore('events', () => {
     await authFetch(`/api/events/${eventId}/join`, { method: 'POST' })
     // Do NOT bump participantCount optimistically. The server broadcasts an
     // authoritative ParticipantChanged over SignalR, and that frame can arrive
-    // *during* the await above. If we then do `count + 1` after the await, we
-    // double-count (authoritative 1 + optimistic 1 = 2). `hasJoined`/`canJoin`
-    // are viewer-scoped and aren't broadcast, so those we still update locally.
+    // *during* the await above. Instead, we call `refreshEventInPlace` which 
+    // guarantees our local participant count (and viewer-scoped fields) are 
+    // replaced with the authoritative server values even if we miss the SignalR 
+    // broadcast by joining quickly. This replacement is idempotent.
     const detail = byId.value[eventId]
     if (detail) {
       byId.value[eventId] = {
@@ -244,6 +245,7 @@ export const useEventsStore = defineStore('events', () => {
         canJoin: false
       })
     }
+    await refreshEventInPlace(eventId)
   }
 
   function markDiscussionRead(eventId) {

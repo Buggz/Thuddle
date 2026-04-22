@@ -38,16 +38,26 @@ var migrations = builder.AddProject<Projects.Thuddle_MigrationService>("migratio
     .WaitFor(thuddleDb)
     .WithEnvironment("Seed__AdminEmail", "testuser@thuddle.dev");
 
+var fakeBgg = builder.AddProject<Projects.Thuddle_FakeBgg>("fake-bgg")
+    .WithReference(thuddleDb)
+    .WaitFor(thuddleDb)
+    .WaitForCompletion(migrations)
+    .WithHttpEndpoint(port: 5217)
+    .WithExternalHttpEndpoints();
+
 // .NET API with Keycloak auth, PostgreSQL, and Azure Blob Storage
 var api = builder.AddProject<Projects.Thuddle_Api>("api")
     .WithReference(thuddleDb)
     .WithReference(realm)
     .WithReference(blobs)
+    .WithReference(fakeBgg)
     .WaitFor(thuddleDb)
     .WaitFor(keycloak)
+    .WaitFor(fakeBgg)
     .WaitFor(storage)
     .WaitForCompletion(migrations)
     .WithEndpoint("http", e => e.Port = 5208)
+    .WithEnvironment("Bgg__BaseUrl", fakeBgg.GetEndpoint("http"))
     .WithExternalHttpEndpoints();
 
 // Vue.js frontend
@@ -56,10 +66,17 @@ builder.AddViteApp("web", "../Thuddle.Web")
     .WithReference(api)
     .WaitFor(api)
     .WaitFor(keycloak)
-    .WithEndpoint("http", e => e.Port = 50279)
+    .WithEndpoint("http", e =>
+    {
+        e.Port = 8090;
+        e.IsProxied = false;
+    })
+    .WithEnvironment("PORT", "8090")
     .WithExternalHttpEndpoints()
     .WithEnvironment("VITE_KEYCLOAK_URL", keycloak.GetEndpoint("http"))
     .WithEnvironment("VITE_KEYCLOAK_REALM", "Thuddle")
-    .WithEnvironment("VITE_KEYCLOAK_CLIENT_ID", "thuddle-web");
+    .WithEnvironment("VITE_KEYCLOAK_CLIENT_ID", "thuddle-web")
+    .WithEnvironment("VITE_FEATURE_AUCTIONS", "false")
+    .WithEnvironment("VITE_FEATURE_NOTIFICATIONS", "false");
 
 builder.Build().Run();

@@ -5,10 +5,13 @@ import { useAuthStore } from '@/features/auth/stores/auth'
 import { useProfileStore } from '@/features/profile/stores/profile'
 import { usePermissionsStore } from '@/features/auth/stores/permissions'
 import { apiUrl } from '@/api'
+import NotificationBell from '@/features/notifications/components/NotificationBell.vue'
+import { useFeatureFlags } from '@/shared/featureFlags'
 
 const auth = useAuthStore()
 const profile = useProfileStore()
 const permissionsStore = usePermissionsStore()
+const { notifications: notificationsEnabled } = useFeatureFlags()
 const menuOpen = ref(false)
 const pictureFailed = ref(false)
 
@@ -66,7 +69,9 @@ function closeMenu() {
               <span data-testid="user-display-name" class="hidden sm:block text-sm font-semibold text-gray-700">
                 {{ permissionsStore.displayName || auth.userName }}
               </span>
-              
+
+              <NotificationBell v-if="notificationsEnabled" />
+
               <div>
                 <button
                   data-testid="nav-menu-btn"

@@ -1,8 +1,8 @@
 ---
 name: Columbo
 description: Create and maintain end-to-end tests using Playwright
-model: Claude Opus 4.6 (copilot)
-user-invocable: false
+model: Claude Sonnet 4.5 (copilot)
+user-invocable: true
 tools: ['read', 'search', 'edit', 'terminal', 'web']
 ---
 
@@ -40,6 +40,15 @@ Tests live in `tests/e2e/`, organized by feature — mirroring `src/Thuddle.Web/
 - Use kebab-case scoped by feature: `event-create-btn`, `auth-login-btn`
 - When a new UI element needs testing, coordinate with the Frontend agent to ensure `data-testid` attributes are added
 - Support multi-user testing with Keycloak authentication helpers in `tests/e2e/helpers/auth.ts`
+
+## Test design: read vs write separation
+
+Every test should have a single responsibility — either verifying a **write** (save/edit/delete) or a **read** (view/display/render). Never both.
+
+- **Write tests**: Drive the GUI to perform the action, then verify the result by calling the API directly
+- **Read tests**: Set up data by calling the API directly, then navigate the UI and assert it displays correctly
+
+This keeps tests isolated — a broken form doesn't cascade into unrelated display tests.
 
 ## Running tests
 

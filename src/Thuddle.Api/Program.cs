@@ -51,6 +51,18 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                     context.Token = accessToken;
                 }
                 return Task.CompletedTask;
+            },
+            OnChallenge = context =>
+            {
+                var logger = context.HttpContext.RequestServices.GetRequiredService<ILoggerFactory>()
+                    .CreateLogger("JwtBearer");
+                logger.LogWarning(
+                    "JWT challenge issued: error={Error} description={Description} hasAuthHeader={HasAuth} path={Path}",
+                    context.Error,
+                    context.ErrorDescription,
+                    context.HttpContext.Request.Headers.ContainsKey("Authorization"),
+                    context.HttpContext.Request.Path);
+                return Task.CompletedTask;
             }
         };
     });
@@ -71,10 +83,16 @@ builder.Services.AddScoped<IAuthorizationHandler, PermissionHandler>();
 builder.Services.AddSingleton<ImageScaler>();
 builder.Services.AddSingleton<ProfilePictureStorage>();
 builder.Services.AddSingleton<EventImageStorage>();
+builder.Services.AddSingleton<AuctionImageStorage>();
+builder.Services.AddSingleton<BggApiClient>();
+builder.Services.AddScoped<NotificationService>();
+builder.Services.AddHostedService<AuctionLifecycleWorker>();
 builder.Services.AddMemoryCache();
 builder.Services.AddSingleton<SmtpEmailSender>();
 builder.Services.AddSingleton(provider =>
     new RazorTemplateService(Path.Combine(AppContext.BaseDirectory, "EmailTemplates")));
+
+builder.Services.AddHttpClient();
 
 builder.Services.AddSignalR();
 builder.Services.AddSingleton<IRealtimeNotifier, RealtimeNotifier>();
@@ -134,6 +152,9 @@ app.MapEventEndpoints();
 app.MapDiscussionEndpoints();
 app.MapContactGroupEndpoints();
 app.MapAdminEndpoints();
+app.MapAuctionEndpoints();
+app.MapBoardGameEndpoints();
+app.MapNotificationEndpoints();
 app.MapHub<ThuddleHub>("/hubs/thuddle");
 
 app.MapGet("/api/hello", () => Results.Ok(new { message = "Hello from Thuddle API!" }));

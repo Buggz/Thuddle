@@ -5,13 +5,20 @@ import { useKeycloak } from '@josempgon/vue-keycloak'
 import AppNavbar from '@/features/layout/AppNavbar.vue'
 import AppLoadingScreen from '@/shared/components/AppLoadingScreen.vue'
 import { usePermissionsStore } from '@/features/auth/stores/permissions'
+import { useNotificationsStore } from '@/features/notifications/stores/notifications'
+import { useFeatureFlags } from '@/shared/featureFlags'
 
 const { isPending, isAuthenticated } = useKeycloak()
 const permissionsStore = usePermissionsStore()
+const notificationsStore = useNotificationsStore()
+const { notifications: notificationsEnabled } = useFeatureFlags()
 
 watch(isAuthenticated, (authenticated) => {
   if (authenticated) {
     permissionsStore.load()
+    if (notificationsEnabled.value) notificationsStore.subscribeRealtime()
+  } else {
+    if (notificationsEnabled.value) notificationsStore.reset()
   }
 }, { immediate: true })
 

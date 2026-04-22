@@ -9,6 +9,7 @@
         },
         "aspire": true,
         "ConvertFrom-Json": true,
-        "npx playwright": true
+        "npx playwright": true,
+        "dotnet ef": true
     }
 }

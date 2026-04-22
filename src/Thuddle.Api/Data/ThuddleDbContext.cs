@@ -15,6 +15,15 @@ public class ThuddleDbContext(DbContextOptions<ThuddleDbContext> options) : DbCo
     public DbSet<DiscussionReadReceipt> DiscussionReadReceipts => Set<DiscussionReadReceipt>();
     public DbSet<ContactGroup> ContactGroups => Set<ContactGroup>();
     public DbSet<ContactGroupMember> ContactGroupMembers => Set<ContactGroupMember>();
+    public DbSet<EventAuctionSettings> EventAuctionSettings => Set<EventAuctionSettings>();
+    public DbSet<AuctionItemSubmitter> AuctionItemSubmitters => Set<AuctionItemSubmitter>();
+    public DbSet<AuctionItem> AuctionItems => Set<AuctionItem>();
+    public DbSet<AuctionItemImage> AuctionItemImages => Set<AuctionItemImage>();
+    public DbSet<AuctionItemBoardGame> AuctionItemBoardGames => Set<AuctionItemBoardGame>();
+    public DbSet<AuctionBid> AuctionBids => Set<AuctionBid>();
+    public DbSet<AuctionPublishBan> AuctionPublishBans => Set<AuctionPublishBan>();
+    public DbSet<Notification> Notifications => Set<Notification>();
+    public DbSet<BoardGame> BoardGames => Set<BoardGame>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -139,6 +148,134 @@ public class ThuddleDbContext(DbContextOptions<ThuddleDbContext> options) : DbCo
                 .WithMany()
                 .HasForeignKey(m => m.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<EventAuctionSettings>(entity =>
+        {
+            entity.HasKey(e => e.EventId);
+            entity.Ignore(e => e.EarliestEndsAt);
+            entity.HasOne(e => e.Event)
+                .WithOne()
+                .HasForeignKey<EventAuctionSettings>(e => e.EventId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<AuctionItemSubmitter>(entity =>
+        {
+            entity.HasIndex(s => new { s.EventId, s.UserId }).IsUnique();
+            entity.HasOne(s => s.Event)
+                .WithMany()
+                .HasForeignKey(s => s.EventId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(s => s.User)
+                .WithMany()
+                .HasForeignKey(s => s.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<AuctionItem>(entity =>
+        {
+            entity.HasIndex(i => new { i.EventId, i.Status });
+            entity.HasOne(i => i.Event)
+                .WithMany()
+                .HasForeignKey(i => i.EventId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(i => i.SubmittedByUser)
+                .WithMany()
+                .HasForeignKey(i => i.SubmittedByUserId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(i => i.CurrentBid)
+                .WithMany()
+                .HasForeignKey(i => i.CurrentBidId)
+                .OnDelete(DeleteBehavior.SetNull);
+            entity.HasOne(i => i.Winner)
+                .WithMany()
+                .HasForeignKey(i => i.WinnerUserId)
+                .OnDelete(DeleteBehavior.SetNull);
+            entity.HasMany(i => i.BoardGames)
+                .WithOne(bg => bg.Item)
+                .HasForeignKey(bg => bg.ItemId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.Property(i => i.RowVersion)
+                .IsRowVersion();
+            entity.Property(i => i.RejectionReason)
+                .HasMaxLength(500);
+        });
+
+        modelBuilder.Entity<AuctionItemBoardGame>(entity =>
+        {
+            entity.HasIndex(e => new { e.ItemId, e.BggId }).IsUnique();
+            entity.HasIndex(e => new { e.ItemId, e.SortOrder });
+            entity.HasOne(e => e.Item)
+                .WithMany(i => i.BoardGames)
+                .HasForeignKey(e => e.ItemId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(e => e.BoardGame)
+                .WithMany()
+                .HasForeignKey(e => e.BggId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<AuctionItemImage>(entity =>
+        {
+            entity.HasIndex(img => new { img.ItemId, img.SortOrder });
+            entity.HasOne(img => img.Item)
+                .WithMany()
+                .HasForeignKey(img => img.ItemId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<AuctionBid>(entity =>
+        {
+            entity.HasIndex(b => new { b.ItemId, b.Amount }).IsUnique().IsDescending(false, true);
+            entity.HasIndex(b => new { b.BidderUserId, b.CreatedAt }).IsDescending(false, true);
+            entity.HasIndex(b => new { b.ItemId, b.IdempotencyKey }).IsUnique();
+            entity.HasOne(b => b.Item)
+                .WithMany()
+                .HasForeignKey(b => b.ItemId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(b => b.Bidder)
+                .WithMany()
+                .HasForeignKey(b => b.BidderUserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<Notification>(entity =>
+        {
+            entity.HasIndex(n => new { n.RecipientUserId, n.ReadAt, n.CreatedAt }).IsDescending(false, false, true);
+            entity.HasOne(n => n.Recipient)
+                .WithMany()
+                .HasForeignKey(n => n.RecipientUserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<AuctionPublishBan>(entity =>
+        {
+            entity.HasIndex(b => new { b.EventId, b.UserId }).IsUnique();
+            entity.HasOne(b => b.Event)
+                .WithMany()
+                .HasForeignKey(b => b.EventId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(b => b.User)
+                .WithMany()
+                .HasForeignKey(b => b.UserId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(b => b.BannedByUser)
+                .WithMany()
+                .HasForeignKey(b => b.BannedByUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.Property(b => b.Reason)
+                .HasMaxLength(500);
+        });
+
+        modelBuilder.Entity<BoardGame>(entity =>
+        {
+            entity.HasKey(b => b.BggId);
+            entity.Property(b => b.BggId).ValueGeneratedNever();
+            entity.HasIndex(b => b.Name)
+                .HasMethod("gist")
+                .HasOperators("gist_trgm_ops");
+            entity.HasIndex(b => b.BggRank);
         });
     }
 }

@@ -38,6 +38,7 @@ const emit = defineEmits(['confirm', 'cancel'])
 
           <div class="mt-5 flex justify-end gap-2">
             <button
+              type="button"
               data-testid="confirm-dialog-cancel"
               @click="emit('cancel')"
               class="px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
@@ -45,6 +46,7 @@ const emit = defineEmits(['confirm', 'cancel'])
               {{ cancelLabel }}
             </button>
             <button
+              type="button"
               data-testid="confirm-dialog-confirm"
               @click="emit('confirm')"
               class="px-3 py-1.5 text-sm font-semibold text-white rounded-lg transition-colors"
