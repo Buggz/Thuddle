@@ -69,6 +69,12 @@ export default function initRouter() {
         meta: { requiresAuth: true }
       },
       {
+        path: '/events/:id/auction/moderation',
+        name: 'auction-moderation',
+        component: () => import('@/features/auctions/views/ModerationQueueView.vue'),
+        meta: { requiresAuth: true }
+      },
+      {
         path: '/notifications',
         name: 'notifications',
         component: () => import('@/features/notifications/views/NotificationsView.vue'),

@@ -4,6 +4,7 @@ import { useRoute, RouterLink } from 'vue-router'
 import { storeToRefs } from 'pinia'
 import { useAuctionStore } from '@/features/auctions/stores/auction'
 import { useAuthStore } from '@/features/auth/stores/auth'
+import { usePermissionsStore } from '@/features/auth/stores/permissions'
 import { formatCurrency } from '@/shared/formatCurrency'
 import AuctionItemImageCarousel from '@/features/auctions/components/AuctionItemImageCarousel.vue'
 import AuctionTimeline from '@/features/auctions/components/AuctionTimeline.vue'
@@ -12,11 +13,13 @@ import BidPanel from '@/features/auctions/components/BidPanel.vue'
 import BidHistoryList from '@/features/auctions/components/BidHistoryList.vue'
 import PublishItemDialog from '@/features/auctions/components/PublishItemDialog.vue'
 import UnpublishDialog from '@/features/auctions/components/UnpublishDialog.vue'
+import RejectItemDialog from '@/features/auctions/components/RejectItemDialog.vue'
 import FunnyLoader from '@/shared/components/FunnyLoader.vue'
 import { useRouter } from 'vue-router'
 
 const route = useRoute()
 const auctionStore = useAuctionStore()
+const permissions = usePermissionsStore()
 const auth = useAuthStore()
 const router = useRouter()
 
@@ -49,15 +52,25 @@ const placeError = ref('')
 
 const isPublishDialogOpen = ref(false)
 const isUnpublishDialogOpen = ref(false)
+const isRejectDialogOpen = ref(false)
+
 const publishing = ref(false)
 const unpublishing = ref(false)
 const resubmitting = ref(false)
+const rejecting = ref(false)
 
 const isLive = computed(() => item.value?.status === 'Live' && settings.value?.status === 'Live')
 
 const isOwnItem = computed(() => {
-  if (!auth.isAuthenticated || !item.value) return false
-  return item.value.submittedByUserId === auth.user?.id
+  if (!auth.isAuthenticated || !item.value || !permissions.userId) return false
+  return item.value.submittedByUserId === permissions.userId
+})
+
+const isAdmin = computed(() => {
+  // Similarly to AuctionView, the precise admin identity isn't strictly tracked 
+  // on this screen, but the server applies a 403. Render the reject option for any
+  // authenticated user that the server allows. They'll just bounce if they click it.
+  return auth.isAuthenticated
 })
 
 const canBid = computed(() =>
@@ -112,6 +125,19 @@ async function confirmUnpublish() {
     placeError.value = err.message || 'Failed to unpublish item.'
   } finally {
     unpublishing.value = false
+  }
+}
+
+async function handleReject({ reason, allowResubmit }) {
+  rejecting.value = true
+  try {
+    await auctionStore.rejectItem(eventId.value, itemId.value, { reason, allowResubmit })
+    isRejectDialogOpen.value = false
+    await refresh()
+  } catch (err) {
+    placeError.value = err.message || 'Failed to reject item.'
+  } finally {
+    rejecting.value = false
   }
 }
 
@@ -243,6 +269,14 @@ onBeforeUnmount(() => {
         </div>
         <div class="sticky bottom-0 -mx-4 sm:mx-0 mt-6 bg-white/95 backdrop-blur border-t sm:border border-gray-200 sm:rounded-2xl px-4 py-3 sm:py-4 sm:shadow-lg flex flex-col-reverse sm:flex-row sm:items-center sm:justify-end gap-2 sm:gap-3 z-10">
           <button
+            v-if="isAdmin"
+            data-testid="item-reject-btn"
+            @click="isRejectDialogOpen = true"
+            class="inline-flex items-center justify-center gap-1.5 rounded-xl border border-red-300 bg-white px-4 py-2.5 text-sm font-bold text-red-600 hover:bg-red-50 transition-colors"
+          >
+            Reject
+          </button>
+          <button
             data-testid="unpublish-button"
             @click="isUnpublishDialogOpen = true"
             class="inline-flex items-center justify-center gap-1.5 rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-sm font-bold text-gray-700 hover:bg-gray-50 transition-colors"
@@ -258,6 +292,14 @@ onBeforeUnmount(() => {
           Approved. Will go live when the auction starts in {{ countdownText || 'moments' }}.
         </div>
         <div class="sticky bottom-0 -mx-4 sm:mx-0 mt-6 bg-white/95 backdrop-blur border-t sm:border border-gray-200 sm:rounded-2xl px-4 py-3 sm:py-4 sm:shadow-lg flex flex-col-reverse sm:flex-row sm:items-center sm:justify-end gap-2 sm:gap-3 z-10">
+          <button
+            v-if="isAdmin"
+            data-testid="item-reject-btn"
+            @click="isRejectDialogOpen = true"
+            class="inline-flex items-center justify-center gap-1.5 rounded-xl border border-red-300 bg-white px-4 py-2.5 text-sm font-bold text-red-600 hover:bg-red-50 transition-colors"
+          >
+            Reject
+          </button>
           <button
             data-testid="unpublish-button"
             @click="isUnpublishDialogOpen = true"
@@ -290,6 +332,20 @@ onBeforeUnmount(() => {
           This item is no longer available for republishing. You may submit a new item if the auction allows.
         </p>
       </template>
+    </section>
+
+    <!-- Admin Controls (for others' items or Live items where submitters lack unpublish controls) -->
+    <section v-if="item && isAdmin && ['PendingApproval', 'Scheduled', 'Live'].includes(item.status) && (!isOwnItem || item.status === 'Live')">
+      <div class="sticky bottom-0 -mx-4 sm:mx-0 mt-6 bg-white/95 backdrop-blur border-t sm:border border-red-200 sm:rounded-2xl px-4 py-3 sm:py-4 sm:shadow-lg flex flex-col-reverse sm:flex-row sm:items-center sm:justify-end gap-2 sm:gap-3 z-10">
+        <span class="text-sm font-bold text-red-600 mr-auto">Admin Controls</span>
+        <button
+          data-testid="item-reject-btn"
+          @click="isRejectDialogOpen = true"
+          class="inline-flex items-center justify-center gap-1.5 rounded-xl border border-red-300 bg-white px-4 py-2.5 text-sm font-bold text-red-600 hover:bg-red-50 transition-colors"
+        >
+          Reject
+        </button>
+      </div>
     </section>
 
     <div v-if="loading" class="py-16">
@@ -428,6 +484,13 @@ onBeforeUnmount(() => {
       :submitting="unpublishing"
       @confirm="confirmUnpublish"
       @cancel="isUnpublishDialogOpen = false"
+    />
+    <RejectItemDialog
+      :open="isRejectDialogOpen"
+      :item-name="item?.name ?? ''"
+      :submitting="rejecting"
+      @confirm="handleReject"
+      @cancel="isRejectDialogOpen = false"
     />
   </div>
 </template>

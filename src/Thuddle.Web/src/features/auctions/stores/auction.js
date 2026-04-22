@@ -29,6 +29,9 @@ export const useAuctionStore = defineStore('auction', () => {
   // eventId → itemId → item
   const myItemsByEvent = ref({})
   const loadingMyItemsByEvent = ref({})
+  // eventId → items array
+  const moderationQueueByEvent = ref({})
+  const loadingModerationByEvent = ref({})
   // eventId → server time anchor (ISO string)
   const serverTimeByEvent = shallowRef({})
   // per-event loading flags
@@ -73,6 +76,20 @@ export const useAuctionStore = defineStore('auction', () => {
       setError(eventId, err.message || 'Failed to load user items.')
     } finally {
       loadingMyItemsByEvent.value = { ...loadingMyItemsByEvent.value, [eventId]: false }
+    }
+  }
+
+  async function loadModerationQueue(eventId) {
+    loadingModerationByEvent.value = { ...loadingModerationByEvent.value, [eventId]: true }
+    try {
+      const resp = await auctionApi.getModerationQueue(authFetch, eventId)
+      // Usually backend wraps in { items: [...] } but instructions said "array of items" so fallback included
+      const queue = Array.isArray(resp) ? resp : (resp.items || [])
+      moderationQueueByEvent.value = { ...moderationQueueByEvent.value, [eventId]: queue }
+    } catch (err) {
+      setError(eventId, err.message || 'Failed to load moderation queue.')
+    } finally {
+      loadingModerationByEvent.value = { ...loadingModerationByEvent.value, [eventId]: false }
     }
   }
 
@@ -189,6 +206,21 @@ export const useAuctionStore = defineStore('auction', () => {
   async function approveItem(eventId, itemId) {
     await auctionApi.approveItem(authFetch, eventId, itemId)
     await loadItem(eventId, itemId)
+    if (moderationQueueByEvent.value[eventId]) {
+      await loadModerationQueue(eventId)
+    }
+  }
+
+  async function rejectItem(eventId, itemId, { reason, allowResubmit }) {
+    try {
+      await auctionApi.rejectItem(authFetch, eventId, itemId, { reason, allowResubmit })
+      await loadItem(eventId, itemId)
+      if (moderationQueueByEvent.value[eventId]) {
+        await loadModerationQueue(eventId)
+      }
+    } catch (err) {
+      throw new Error(err.message || 'Failed to reject item')
+    }
   }
 
   async function placeBid(eventId, itemId, amount, idempotencyKey) {
@@ -243,9 +275,11 @@ export const useAuctionStore = defineStore('auction', () => {
     })
     realtime.on(RealtimeEvents.AuctionItemUpdated, ({ eventId, itemId }) => {
       if (subscribedEvents.has(eventId)) loadItem(eventId, itemId)
+      if (moderationQueueByEvent.value[eventId]) loadModerationQueue(eventId)
     })
     realtime.on(RealtimeEvents.AuctionItemRemoved, ({ eventId, itemId }) => {
       removeItem(eventId, itemId)
+      if (moderationQueueByEvent.value[eventId]) loadModerationQueue(eventId)
     })
     realtime.on(RealtimeEvents.AuctionBidPlaced, ({ eventId, itemId, currentBid, bidCount, serverTime }) => {
       const items = itemsByEvent.value[eventId]
@@ -283,6 +317,8 @@ export const useAuctionStore = defineStore('auction', () => {
     itemsByEvent,
     myItemsByEvent,
     loadingMyItemsByEvent,
+    moderationQueueByEvent,
+    loadingModerationByEvent,
     bidsByItem,
     serverTimeByEvent,
     loadingByEvent,
@@ -292,6 +328,7 @@ export const useAuctionStore = defineStore('auction', () => {
     // loaders
     loadAuction,
     loadMyItems,
+    loadModerationQueue,
     loadItem,
     loadBids,
     // mutations
@@ -300,6 +337,7 @@ export const useAuctionStore = defineStore('auction', () => {
     unpublishItem,
     resubmitItem,
     uploadItemImages,
+    rejectItem,
     updateItem,
     withdrawItem,
     approveItem,

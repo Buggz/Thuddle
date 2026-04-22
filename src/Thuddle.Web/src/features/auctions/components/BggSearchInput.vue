@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, watch, onBeforeUnmount } from 'vue'
+import { ref, computed, onBeforeUnmount } from 'vue'
 import { boardGameApi } from '@/api'
 import { useApi } from '@/shared/composables/useApi'
 
@@ -247,7 +247,7 @@ function bestCategory(game) {
       <!-- Search input (visible as long as < 20 games) -->
       <div v-if="games.length < 20" class="relative">
         <input
-          data-testid="bgg-search-input"
+          data-testid="submit-item-name"
           type="text"
           :value="searchQuery"
           :disabled="disabled || loadingDetail"
