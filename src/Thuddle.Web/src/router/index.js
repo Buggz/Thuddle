@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '@/features/auth/stores/auth'
 import { usePermissionsStore } from '@/features/auth/stores/permissions'
+import { useFeatureFlags } from '@/shared/featureFlags'
 
 export default function initRouter() {
   const router = createRouter({
@@ -43,36 +44,38 @@ export default function initRouter() {
       {
         path: '/events/:id/auction',
         name: 'auction',
-        component: () => import('@/features/auctions/views/AuctionView.vue')
+        component: () => import('@/features/auctions/views/AuctionView.vue'),
+        meta: { featureFlag: 'auctions' }
       },
       {
         path: '/events/:id/auction/items/new',
         name: 'auction-submit',
         component: () => import('@/features/auctions/views/SubmitAuctionItemView.vue'),
-        meta: { requiresAuth: true }
+        meta: { requiresAuth: true, featureFlag: 'auctions' }
       },
       {
         path: '/events/:id/auction/items/:itemId/edit',
         name: 'auction-edit',
         component: () => import('@/features/auctions/views/SubmitAuctionItemView.vue'),
-        meta: { requiresAuth: true }
+        meta: { requiresAuth: true, featureFlag: 'auctions' }
       },
       {
         path: '/events/:id/auction/items/:itemId',
         name: 'auction-item',
-        component: () => import('@/features/auctions/views/AuctionItemView.vue')
+        component: () => import('@/features/auctions/views/AuctionItemView.vue'),
+        meta: { featureFlag: 'auctions' }
       },
       {
         path: '/events/:id/auction/settings',
         name: 'auction-settings',
         component: () => import('@/features/auctions/views/AuctionSettingsView.vue'),
-        meta: { requiresAuth: true }
+        meta: { requiresAuth: true, featureFlag: 'auctions' }
       },
       {
         path: '/events/:id/auction/moderation',
         name: 'auction-moderation',
         component: () => import('@/features/auctions/views/ModerationQueueView.vue'),
-        meta: { requiresAuth: true }
+        meta: { requiresAuth: true, featureFlag: 'auctions' }
       },
       {
         path: '/notifications',
@@ -90,6 +93,13 @@ export default function initRouter() {
   })
 
   router.beforeEach(async (to) => {
+    if (to.meta.featureFlag) {
+      const flags = useFeatureFlags()
+      if (!flags[to.meta.featureFlag]?.value) {
+        return { path: '/' }
+      }
+    }
+
     const auth = useAuthStore()
 
     if (to.meta.requiresAuth && !auth.isAuthenticated) {

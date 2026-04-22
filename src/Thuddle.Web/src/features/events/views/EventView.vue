@@ -4,6 +4,7 @@ import { useRoute, useRouter, RouterLink } from 'vue-router'
 import { useApi } from '@/shared/composables/useApi'
 import { useAuthStore } from '@/features/auth/stores/auth'
 import { useEventsStore } from '@/features/events/stores/events'
+import { useFeatureFlags } from '@/shared/featureFlags'
 import { apiUrl } from '@/api'
 import { auctionApi } from '@/api'
 import DiscussionTab from '@/features/events/components/DiscussionTab.vue'
@@ -15,6 +16,7 @@ const router = useRouter()
 const { authFetch } = useApi()
 const auth = useAuthStore()
 const eventsStore = useEventsStore()
+const { auctions: auctionsEnabled } = useFeatureFlags()
 
 const loading = shallowRef(true)
 const error = shallowRef(null)
@@ -27,7 +29,8 @@ const participantsLoaded = shallowRef(false)
 
 const auctionSettings = ref(null)
 const auctionVisible = computed(() =>
-  !!auctionSettings.value
+  auctionsEnabled.value
+  && !!auctionSettings.value
   && auctionSettings.value.configured !== false
   && auctionSettings.value.enabled === true
 )
@@ -58,6 +61,10 @@ async function loadEvent() {
 }
 
 async function loadAuctionSettings() {
+  if (!auctionsEnabled.value) {
+    auctionSettings.value = { configured: false }
+    return
+  }
   try {
     // Use authFetch when authenticated, fall back to plain fetch for guests so
     // unauthenticated visitors still see public auction info.

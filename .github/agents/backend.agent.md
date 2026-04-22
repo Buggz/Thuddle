@@ -1,7 +1,7 @@
 ---
 name: House
 description: Implement backend features in the .NET API
-model: Claude Sonnet 4.5 (copilot)
+model: Claude Sonnet 4.6 (copilot)
 user-invocable: true
 tools: ['read', 'search', 'edit', 'execute', 'web']
 ---

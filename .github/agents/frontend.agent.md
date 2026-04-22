@@ -1,7 +1,7 @@
 ---
 name: Poirot
 description: Implement frontend features in the Vue/TypeScript web app
-model: Gemini 3.1 Pro (Preview) (copilot)
+model: Claude Sonnet 4.6 (copilot)
 user-invocable: true
 tools: ['read', 'search', 'edit', 'execute', 'web']
 ---
