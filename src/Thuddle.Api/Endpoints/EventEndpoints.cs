@@ -563,7 +563,7 @@ public static class EventEndpoints
         var newCount = await db.EventParticipants.CountAsync(p => p.EventId == eventId, ct);
         await realtime.ParticipantChangedAsync(eventId, newCount, ct);
 
-        return Results.Ok(new { joined = true, eventId });
+        return Results.Ok(new { joined = true, eventId, userId = dbUser.Id });
     }
 
     private static async Task<IResult> LeaveEvent(
@@ -603,11 +603,11 @@ public static class EventEndpoints
     private static async Task<IResult> KickAttendee(
         Guid eventId,
         Guid userId,
-        bool revokeInvitation,
         ClaimsPrincipal user,
         ThuddleDbContext db,
         IRealtimeNotifier realtime,
-        CancellationToken ct)
+        CancellationToken ct,
+        bool revokeInvitation = false)
     {
         var keycloakId = GetKeycloakId(user);
         if (keycloakId is null) return Results.Unauthorized();
@@ -936,8 +936,7 @@ public static class EventEndpoints
         db.EventParticipants.Update(participant);
         await db.SaveChangesAsync(ct);
 
-        var participantCount = await db.EventParticipants.CountAsync(p => p.EventId == eventId, ct);
-        await realtime.ParticipantChangedAsync(eventId, participantCount, ct);
+        await realtime.EventUpdatedAsync(eventId, ct);
 
         return Results.Ok(new { userId, hasPaid = request.HasPaid });
     }
