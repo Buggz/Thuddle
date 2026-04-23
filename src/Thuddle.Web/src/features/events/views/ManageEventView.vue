@@ -140,6 +140,26 @@ async function confirmKick({ revokeInvitation, denyReentry }) {
   }
 }
 
+// Rescind pending invitations
+const rescindingEmails = ref(new Set())
+async function rescindInvitation(email) {
+  if (!email || rescindingEmails.value.has(email)) return
+  if (!window.confirm(`Rescind the invitation for ${email}?`)) return
+  const next = new Set(rescindingEmails.value)
+  next.add(email)
+  rescindingEmails.value = next
+  try {
+    await eventsStore.rescindInvitation(eventId, email)
+    pendingInvitations.value = pendingInvitations.value.filter(i => i.email !== email)
+  } catch (err) {
+    attendeesError.value = err.message || 'Failed to rescind invitation.'
+  } finally {
+    const after = new Set(rescindingEmails.value)
+    after.delete(email)
+    rescindingEmails.value = after
+  }
+}
+
 // Invitation form state
 const selectedInvitees = ref([])
 const inviting = shallowRef(false)
@@ -752,7 +772,17 @@ onMounted(async () => {
                   </span>
                 </td>
                 <td v-if="hasCost" class="px-4 py-3 text-center text-slate-300 text-xs">—</td>
-                <td class="px-4 py-3"></td>
+                <td class="px-4 py-3 text-right">
+                  <button
+                    :data-testid="`manage-rescind-invitation-btn-${inv.email}`"
+                    @click="rescindInvitation(inv.email)"
+                    :disabled="rescindingEmails.has(inv.email)"
+                    class="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-red-600 bg-red-50 border border-red-100 rounded-lg hover:bg-red-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    :title="`Rescind invitation for ${inv.email}`"
+                  >
+                    {{ rescindingEmails.has(inv.email) ? 'Rescinding…' : 'Rescind' }}
+                  </button>
+                </td>
                 <td class="px-4 py-3"></td>
               </tr>
             </tbody>
