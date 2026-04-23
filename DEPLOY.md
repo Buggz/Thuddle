@@ -112,10 +112,23 @@ Two scripts in `infra/` handle provisioning and deploying from your local machin
 | `-ContainerRegistry` | Yes | — | Registry prefix (e.g. `ghcr.io/myuser`) |
 | `-Location` | No | `norwayeast` | Azure region |
 | `-ResourceGroup` | No | `rg-thuddle` | Resource group name |
+| `-KeycloakCustomDomain` | No | — | Custom hostname for Keycloak (e.g. `auth.thuddle.app`) |
+| `-ApiCustomDomain` | No | — | Custom hostname for the API (e.g. `api.thuddle.app`) |
 
 The script prompts for PostgreSQL and Keycloak passwords (or reads `$env:POSTGRES_PASSWORD` / `$env:KEYCLOAK_ADMIN_PASSWORD`).
 
 On success, it writes endpoint URLs to `infra/.deploy-outputs.json`.
+
+#### Custom domains
+
+Passing `-KeycloakCustomDomain` or `-ApiCustomDomain` will:
+
+1. Bind the hostname to the respective Container App's ingress (declaratively in Bicep).
+2. Request an Azure-managed TLS certificate via `Microsoft.App/managedEnvironments/managedCertificates`. Managed certs auto-renew — no manual intervention needed.
+
+**Before running the script**, create a CNAME record pointing the custom hostname at the Container App's auto-generated FQDN (shown in the Azure portal under the app's ingress settings, or in the `apiFqdn` / `keycloakFqdn` outputs). DNS must resolve before Azure can validate and issue the certificate.
+
+> **Note for existing deployments**: if you previously added custom domain bindings manually in the portal, ARM will reconcile on the next Bicep deploy. Manually-created certs with auto-generated names (e.g. `auth-thuddle-app-xxxxx`) will be orphaned; Bicep creates new certs named `auth-thuddle-app` and `api-thuddle-app`. The orphaned certs can be deleted from the portal safely after the deploy succeeds.
 
 ### Step 2: Build, Push, and Deploy
 

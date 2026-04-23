@@ -1,0 +1,542 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_generator": {
+      "name": "bicep",
+      "version": "0.42.1.51946",
+      "templateHash": "12276772027603275571"
+    }
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "defaultValue": "norwayeast",
+      "metadata": {
+        "description": "Azure region for all resources"
+      }
+    },
+    "swaLocation": {
+      "type": "string",
+      "defaultValue": "westeurope",
+      "metadata": {
+        "description": "Azure region for Static Web App (limited availability)"
+      }
+    },
+    "imageTag": {
+      "type": "string",
+      "metadata": {
+        "description": "Container image tag to deploy"
+      }
+    },
+    "containerRegistry": {
+      "type": "string",
+      "metadata": {
+        "description": "Container registry prefix (e.g. ghcr.io/owner)"
+      }
+    },
+    "postgresAdminPassword": {
+      "type": "securestring",
+      "metadata": {
+        "description": "PostgreSQL administrator password"
+      }
+    },
+    "keycloakAdminPassword": {
+      "type": "securestring",
+      "metadata": {
+        "description": "Keycloak administrator password"
+      }
+    },
+    "keycloakCustomDomain": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Custom domain for Keycloak (e.g. auth.thuddle.app). Falls back to auto-generated FQDN if empty."
+      }
+    },
+    "apiCustomDomain": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Custom domain for the API (e.g. api.thuddle.app). Falls back to auto-generated FQDN if empty."
+      }
+    },
+    "webAllowedOrigins": {
+      "type": "array",
+      "defaultValue": [
+        "https://thuddle.app"
+      ],
+      "metadata": {
+        "description": "Allowed origins for CORS (the public web frontend URL)."
+      }
+    }
+  },
+  "variables": {
+    "postgresAdminUser": "thuddleadmin",
+    "suffix": "[uniqueString(resourceGroup().id)]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2023-09-01",
+      "name": "thuddle-logs",
+      "location": "[parameters('location')]",
+      "properties": {
+        "sku": {
+          "name": "PerGB2018"
+        },
+        "retentionInDays": 30
+      }
+    },
+    {
+      "type": "Microsoft.App/managedEnvironments",
+      "apiVersion": "2024-03-01",
+      "name": "thuddle-env",
+      "location": "[parameters('location')]",
+      "properties": {
+        "appLogsConfiguration": {
+          "destination": "log-analytics",
+          "logAnalyticsConfiguration": {
+            "customerId": "[reference(resourceId('Microsoft.OperationalInsights/workspaces', 'thuddle-logs'), '2023-09-01').customerId]",
+            "sharedKey": "[listKeys(resourceId('Microsoft.OperationalInsights/workspaces', 'thuddle-logs'), '2023-09-01').primarySharedKey]"
+          }
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.OperationalInsights/workspaces', 'thuddle-logs')]"
+      ]
+    },
+    {
+      "type": "Microsoft.DBforPostgreSQL/flexibleServers",
+      "apiVersion": "2024-08-01",
+      "name": "[format('thuddle-pg-{0}', variables('suffix'))]",
+      "location": "[parameters('location')]",
+      "sku": {
+        "name": "Standard_B1ms",
+        "tier": "Burstable"
+      },
+      "properties": {
+        "version": "16",
+        "administratorLogin": "[variables('postgresAdminUser')]",
+        "administratorLoginPassword": "[parameters('postgresAdminPassword')]",
+        "storage": {
+          "storageSizeGB": 32
+        },
+        "backup": {
+          "backupRetentionDays": 7,
+          "geoRedundantBackup": "Disabled"
+        },
+        "highAvailability": {
+          "mode": "Disabled"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.DBforPostgreSQL/flexibleServers/firewallRules",
+      "apiVersion": "2024-08-01",
+      "name": "[format('{0}/{1}', format('thuddle-pg-{0}', variables('suffix')), 'AllowAzureServices')]",
+      "properties": {
+        "startIpAddress": "0.0.0.0",
+        "endIpAddress": "0.0.0.0"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.DBforPostgreSQL/flexibleServers', format('thuddle-pg-{0}', variables('suffix')))]"
+      ]
+    },
+    {
+      "type": "Microsoft.DBforPostgreSQL/flexibleServers/configurations",
+      "apiVersion": "2024-08-01",
+      "name": "[format('{0}/{1}', format('thuddle-pg-{0}', variables('suffix')), 'azure.extensions')]",
+      "properties": {
+        "value": "PG_TRGM",
+        "source": "user-override"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.DBforPostgreSQL/flexibleServers', format('thuddle-pg-{0}', variables('suffix')))]"
+      ]
+    },
+    {
+      "type": "Microsoft.DBforPostgreSQL/flexibleServers/databases",
+      "apiVersion": "2024-08-01",
+      "name": "[format('{0}/{1}', format('thuddle-pg-{0}', variables('suffix')), 'thuddledb')]",
+      "properties": {
+        "charset": "UTF8",
+        "collation": "en_US.utf8"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.DBforPostgreSQL/flexibleServers', format('thuddle-pg-{0}', variables('suffix')))]"
+      ]
+    },
+    {
+      "type": "Microsoft.DBforPostgreSQL/flexibleServers/databases",
+      "apiVersion": "2024-08-01",
+      "name": "[format('{0}/{1}', format('thuddle-pg-{0}', variables('suffix')), 'keycloakdb')]",
+      "properties": {
+        "charset": "UTF8",
+        "collation": "en_US.utf8"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.DBforPostgreSQL/flexibleServers', format('thuddle-pg-{0}', variables('suffix')))]"
+      ]
+    },
+    {
+      "condition": "[not(equals(parameters('keycloakCustomDomain'), ''))]",
+      "type": "Microsoft.App/managedEnvironments/managedCertificates",
+      "apiVersion": "2024-03-01",
+      "name": "[format('{0}/{1}', 'thuddle-env', replace(parameters('keycloakCustomDomain'), '.', '-'))]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "subjectName": "[parameters('keycloakCustomDomain')]",
+        "domainControlValidation": "CNAME"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.App/managedEnvironments', 'thuddle-env')]"
+      ]
+    },
+    {
+      "condition": "[not(equals(parameters('apiCustomDomain'), ''))]",
+      "type": "Microsoft.App/managedEnvironments/managedCertificates",
+      "apiVersion": "2024-03-01",
+      "name": "[format('{0}/{1}', 'thuddle-env', replace(parameters('apiCustomDomain'), '.', '-'))]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "subjectName": "[parameters('apiCustomDomain')]",
+        "domainControlValidation": "CNAME"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.App/managedEnvironments', 'thuddle-env')]"
+      ]
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts",
+      "apiVersion": "2023-05-01",
+      "name": "[format('thuddle{0}', variables('suffix'))]",
+      "location": "[parameters('location')]",
+      "sku": {
+        "name": "Standard_LRS"
+      },
+      "kind": "StorageV2",
+      "properties": {
+        "accessTier": "Hot",
+        "minimumTlsVersion": "TLS1_2",
+        "allowBlobPublicAccess": true
+      }
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts/blobServices",
+      "apiVersion": "2023-05-01",
+      "name": "[format('{0}/{1}', format('thuddle{0}', variables('suffix')), 'default')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts', format('thuddle{0}', variables('suffix')))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
+      "apiVersion": "2023-05-01",
+      "name": "[format('{0}/{1}/{2}', format('thuddle{0}', variables('suffix')), 'default', 'profile-pictures')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts/blobServices', format('thuddle{0}', variables('suffix')), 'default')]"
+      ]
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
+      "apiVersion": "2023-05-01",
+      "name": "[format('{0}/{1}/{2}', format('thuddle{0}', variables('suffix')), 'default', 'event-images')]",
+      "properties": {
+        "publicAccess": "Blob"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts/blobServices', format('thuddle{0}', variables('suffix')), 'default')]"
+      ]
+    },
+    {
+      "type": "Microsoft.App/containerApps",
+      "apiVersion": "2024-03-01",
+      "name": "thuddle-keycloak",
+      "location": "[parameters('location')]",
+      "properties": {
+        "managedEnvironmentId": "[resourceId('Microsoft.App/managedEnvironments', 'thuddle-env')]",
+        "configuration": {
+          "activeRevisionsMode": "Single",
+          "ingress": {
+            "external": true,
+            "targetPort": 8080,
+            "transport": "http",
+            "allowInsecure": false,
+            "customDomains": "[if(not(equals(parameters('keycloakCustomDomain'), '')), createArray(createObject('name', parameters('keycloakCustomDomain'), 'bindingType', 'SniEnabled', 'certificateId', resourceId('Microsoft.App/managedEnvironments/managedCertificates', 'thuddle-env', replace(parameters('keycloakCustomDomain'), '.', '-')))), createArray())]"
+          },
+          "secrets": [
+            {
+              "name": "db-password",
+              "value": "[parameters('postgresAdminPassword')]"
+            },
+            {
+              "name": "keycloak-admin-password",
+              "value": "[parameters('keycloakAdminPassword')]"
+            }
+          ]
+        },
+        "template": {
+          "containers": [
+            {
+              "name": "keycloak",
+              "image": "[format('{0}/thuddle-keycloak:{1}', parameters('containerRegistry'), parameters('imageTag'))]",
+              "resources": {
+                "cpu": "[json('0.5')]",
+                "memory": "1Gi"
+              },
+              "env": [
+                {
+                  "name": "KC_DB",
+                  "value": "postgres"
+                },
+                {
+                  "name": "KC_DB_URL",
+                  "value": "[format('jdbc:postgresql://{0}:5432/keycloakdb?sslmode=require', reference(resourceId('Microsoft.DBforPostgreSQL/flexibleServers', format('thuddle-pg-{0}', variables('suffix'))), '2024-08-01').fullyQualifiedDomainName)]"
+                },
+                {
+                  "name": "KC_DB_USERNAME",
+                  "value": "[variables('postgresAdminUser')]"
+                },
+                {
+                  "name": "KC_DB_PASSWORD",
+                  "secretRef": "db-password"
+                },
+                {
+                  "name": "KC_HOSTNAME_STRICT",
+                  "value": "false"
+                },
+                {
+                  "name": "KC_PROXY_HEADERS",
+                  "value": "xforwarded"
+                },
+                {
+                  "name": "KC_HTTP_ENABLED",
+                  "value": "true"
+                },
+                {
+                  "name": "KC_HEALTH_ENABLED",
+                  "value": "true"
+                },
+                {
+                  "name": "KEYCLOAK_ADMIN",
+                  "value": "admin"
+                },
+                {
+                  "name": "KEYCLOAK_ADMIN_PASSWORD",
+                  "secretRef": "keycloak-admin-password"
+                }
+              ],
+              "probes": [
+                {
+                  "type": "Startup",
+                  "httpGet": {
+                    "path": "/health/started",
+                    "port": 9000
+                  },
+                  "initialDelaySeconds": 15,
+                  "periodSeconds": 10,
+                  "failureThreshold": 12
+                },
+                {
+                  "type": "Liveness",
+                  "httpGet": {
+                    "path": "/health/live",
+                    "port": 9000
+                  },
+                  "periodSeconds": 30
+                }
+              ]
+            }
+          ],
+          "scale": {
+            "minReplicas": 1,
+            "maxReplicas": 1
+          }
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.App/managedEnvironments', 'thuddle-env')]",
+        "[resourceId('Microsoft.App/managedEnvironments/managedCertificates', 'thuddle-env', replace(parameters('keycloakCustomDomain'), '.', '-'))]",
+        "[resourceId('Microsoft.DBforPostgreSQL/flexibleServers', format('thuddle-pg-{0}', variables('suffix')))]"
+      ]
+    },
+    {
+      "type": "Microsoft.App/containerApps",
+      "apiVersion": "2024-03-01",
+      "name": "thuddle-api",
+      "location": "[parameters('location')]",
+      "properties": {
+        "managedEnvironmentId": "[resourceId('Microsoft.App/managedEnvironments', 'thuddle-env')]",
+        "configuration": {
+          "activeRevisionsMode": "Single",
+          "ingress": {
+            "external": true,
+            "targetPort": 8080,
+            "transport": "http",
+            "allowInsecure": false,
+            "customDomains": "[if(not(equals(parameters('apiCustomDomain'), '')), createArray(createObject('name', parameters('apiCustomDomain'), 'bindingType', 'SniEnabled', 'certificateId', resourceId('Microsoft.App/managedEnvironments/managedCertificates', 'thuddle-env', replace(parameters('apiCustomDomain'), '.', '-')))), createArray())]"
+          },
+          "secrets": [
+            {
+              "name": "db-connection-string",
+              "value": "[format('Host={0};Database=thuddledb;Username={1};Password={2};SSL Mode=Require', reference(resourceId('Microsoft.DBforPostgreSQL/flexibleServers', format('thuddle-pg-{0}', variables('suffix'))), '2024-08-01').fullyQualifiedDomainName, variables('postgresAdminUser'), parameters('postgresAdminPassword'))]"
+            },
+            {
+              "name": "storage-connection-string",
+              "value": "[format('DefaultEndpointsProtocol=https;AccountName={0};AccountKey={1}', format('thuddle{0}', variables('suffix')), listKeys(resourceId('Microsoft.Storage/storageAccounts', format('thuddle{0}', variables('suffix'))), '2023-05-01').keys[0].value)]"
+            }
+          ]
+        },
+        "template": {
+          "containers": [
+            {
+              "name": "api",
+              "image": "[format('{0}/thuddle-api:{1}', parameters('containerRegistry'), parameters('imageTag'))]",
+              "resources": {
+                "cpu": "[json('0.25')]",
+                "memory": "0.5Gi"
+              },
+              "env": [
+                {
+                  "name": "ASPNETCORE_ENVIRONMENT",
+                  "value": "Production"
+                },
+                {
+                  "name": "ConnectionStrings__thuddledb",
+                  "secretRef": "db-connection-string"
+                },
+                {
+                  "name": "ConnectionStrings__blobs",
+                  "secretRef": "storage-connection-string"
+                },
+                {
+                  "name": "Keycloak__AuthServerUrl",
+                  "value": "[format('https://{0}', if(not(equals(parameters('keycloakCustomDomain'), '')), parameters('keycloakCustomDomain'), reference(resourceId('Microsoft.App/containerApps', 'thuddle-keycloak'), '2024-03-01').configuration.ingress.fqdn))]"
+                },
+                {
+                  "name": "Keycloak__Realm",
+                  "value": "Thuddle"
+                },
+                {
+                  "name": "Cors__AllowedOrigins__0",
+                  "value": "[parameters('webAllowedOrigins')[0]]"
+                }
+              ],
+              "probes": [
+                {
+                  "type": "Startup",
+                  "httpGet": {
+                    "path": "/health",
+                    "port": 8080
+                  },
+                  "initialDelaySeconds": 3,
+                  "periodSeconds": 5,
+                  "failureThreshold": 10
+                },
+                {
+                  "type": "Liveness",
+                  "httpGet": {
+                    "path": "/alive",
+                    "port": 8080
+                  },
+                  "periodSeconds": 30
+                }
+              ]
+            }
+          ],
+          "scale": {
+            "minReplicas": 1,
+            "maxReplicas": 1
+          }
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.App/managedEnvironments/managedCertificates', 'thuddle-env', replace(parameters('apiCustomDomain'), '.', '-'))]",
+        "[resourceId('Microsoft.App/managedEnvironments', 'thuddle-env')]",
+        "[resourceId('Microsoft.App/containerApps', 'thuddle-keycloak')]",
+        "[resourceId('Microsoft.DBforPostgreSQL/flexibleServers', format('thuddle-pg-{0}', variables('suffix')))]",
+        "[resourceId('Microsoft.Storage/storageAccounts', format('thuddle{0}', variables('suffix')))]"
+      ]
+    },
+    {
+      "type": "Microsoft.App/jobs",
+      "apiVersion": "2024-03-01",
+      "name": "thuddle-migrations",
+      "location": "[parameters('location')]",
+      "properties": {
+        "environmentId": "[resourceId('Microsoft.App/managedEnvironments', 'thuddle-env')]",
+        "configuration": {
+          "triggerType": "Manual",
+          "replicaTimeout": 300,
+          "replicaRetryLimit": 1,
+          "secrets": [
+            {
+              "name": "db-connection-string",
+              "value": "[format('Host={0};Database=thuddledb;Username={1};Password={2};SSL Mode=Require', reference(resourceId('Microsoft.DBforPostgreSQL/flexibleServers', format('thuddle-pg-{0}', variables('suffix'))), '2024-08-01').fullyQualifiedDomainName, variables('postgresAdminUser'), parameters('postgresAdminPassword'))]"
+            }
+          ]
+        },
+        "template": {
+          "containers": [
+            {
+              "name": "migrations",
+              "image": "[format('{0}/thuddle-migrations:{1}', parameters('containerRegistry'), parameters('imageTag'))]",
+              "resources": {
+                "cpu": "[json('0.25')]",
+                "memory": "0.5Gi"
+              },
+              "env": [
+                {
+                  "name": "ConnectionStrings__thuddledb",
+                  "secretRef": "db-connection-string"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.App/managedEnvironments', 'thuddle-env')]",
+        "[resourceId('Microsoft.DBforPostgreSQL/flexibleServers', format('thuddle-pg-{0}', variables('suffix')))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Web/staticSites",
+      "apiVersion": "2024-04-01",
+      "name": "thuddle-web",
+      "location": "[parameters('swaLocation')]",
+      "sku": {
+        "name": "Free",
+        "tier": "Free"
+      },
+      "properties": {}
+    }
+  ],
+  "outputs": {
+    "apiFqdn": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.App/containerApps', 'thuddle-api'), '2024-03-01').configuration.ingress.fqdn]"
+    },
+    "keycloakFqdn": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.App/containerApps', 'thuddle-keycloak'), '2024-03-01').configuration.ingress.fqdn]"
+    },
+    "staticWebAppName": {
+      "type": "string",
+      "value": "thuddle-web"
+    },
+    "staticWebAppDefaultHostname": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Web/staticSites', 'thuddle-web'), '2024-04-01').defaultHostname]"
+    },
+    "keycloakCustomDomain": {
+      "type": "string",
+      "value": "[parameters('keycloakCustomDomain')]"
+    },
+    "apiCustomDomain": {
+      "type": "string",
+      "value": "[parameters('apiCustomDomain')]"
+    }
+  }
+}

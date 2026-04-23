@@ -21,6 +21,9 @@ param keycloakAdminPassword string
 @description('Custom domain for Keycloak (e.g. auth.thuddle.app). Falls back to auto-generated FQDN if empty.')
 param keycloakCustomDomain string = ''
 
+@description('Custom domain for the API (e.g. api.thuddle.app). Falls back to auto-generated FQDN if empty.')
+param apiCustomDomain string = ''
+
 @description('Allowed origins for CORS (the public web frontend URL).')
 param webAllowedOrigins array = [
   'https://thuddle.app'
@@ -122,6 +125,28 @@ resource keycloakDb 'Microsoft.DBforPostgreSQL/flexibleServers/databases@2024-08
   }
 }
 
+// ─── Managed Certificates (custom domains) ──────────────────────────────────
+
+resource keycloakManagedCert 'Microsoft.App/managedEnvironments/managedCertificates@2024-03-01' = if (keycloakCustomDomain != '') {
+  parent: containerAppsEnv
+  name: replace(keycloakCustomDomain, '.', '-')
+  location: location
+  properties: {
+    subjectName: keycloakCustomDomain
+    domainControlValidation: 'CNAME'
+  }
+}
+
+resource apiManagedCert 'Microsoft.App/managedEnvironments/managedCertificates@2024-03-01' = if (apiCustomDomain != '') {
+  parent: containerAppsEnv
+  name: replace(apiCustomDomain, '.', '-')
+  location: location
+  properties: {
+    subjectName: apiCustomDomain
+    domainControlValidation: 'CNAME'
+  }
+}
+
 // ─── Storage Account ─────────────────────────────────────────────────────────
 
 resource storageAccount 'Microsoft.Storage/storageAccounts@2023-05-01' = {
@@ -170,6 +195,13 @@ resource keycloakApp 'Microsoft.App/containerApps@2024-03-01' = {
         targetPort: 8080
         transport: 'http'
         allowInsecure: false
+        customDomains: keycloakCustomDomain != '' ? [
+          {
+            name: keycloakCustomDomain
+            bindingType: 'SniEnabled'
+            certificateId: keycloakManagedCert.id
+          }
+        ] : []
       }
       secrets: [
         {
@@ -247,6 +279,13 @@ resource apiApp 'Microsoft.App/containerApps@2024-03-01' = {
         targetPort: 8080
         transport: 'http'
         allowInsecure: false
+        customDomains: apiCustomDomain != '' ? [
+          {
+            name: apiCustomDomain
+            bindingType: 'SniEnabled'
+            certificateId: apiManagedCert.id
+          }
+        ] : []
       }
       secrets: [
         {
@@ -361,3 +400,5 @@ output apiFqdn string = apiApp.properties.configuration.ingress.fqdn
 output keycloakFqdn string = keycloakApp.properties.configuration.ingress.fqdn
 output staticWebAppName string = staticWebApp.name
 output staticWebAppDefaultHostname string = staticWebApp.properties.defaultHostname
+output keycloakCustomDomain string = keycloakCustomDomain
+output apiCustomDomain string = apiCustomDomain

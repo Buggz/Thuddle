@@ -74,6 +74,13 @@ Write-Host "  API:      https://$($outputs.apiFqdn)" -ForegroundColor White
 Write-Host "  Keycloak: https://$($outputs.keycloakFqdn)" -ForegroundColor White
 Write-Host "  Web:      https://$($outputs.swaHostname)" -ForegroundColor White
 
+if (-not ($outputs.PSObject.Properties['apiCustomDomain'] -and $outputs.apiCustomDomain)) {
+    Write-Warning "apiCustomDomain is not set in deploy outputs. The API will be reachable only via its auto-generated FQDN. Re-run Deploy-Infrastructure.ps1 with -ApiCustomDomain to bind a custom hostname and request a managed certificate."
+}
+if (-not ($outputs.PSObject.Properties['keycloakCustomDomain'] -and $outputs.keycloakCustomDomain)) {
+    Write-Warning "keycloakCustomDomain is not set in deploy outputs. Keycloak will be reachable only via its auto-generated FQDN. Re-run Deploy-Infrastructure.ps1 with -KeycloakCustomDomain to bind a custom hostname and request a managed certificate."
+}
+
 # ─── Build & push Docker images ──────────────────────────────────────────────
 
 if (-not $SkipBuild) {

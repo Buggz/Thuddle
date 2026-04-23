@@ -87,6 +87,7 @@ $paramsObj = @{
         postgresAdminPassword = @{ value = $postgresPassword }
         keycloakAdminPassword = @{ value = $keycloakPassword }
         keycloakCustomDomain  = @{ value = ($KeycloakCustomDomain ?? '') }
+        apiCustomDomain       = @{ value = ($ApiCustomDomain ?? '') }
     }
 }
 $paramsFile = Join-Path $PSScriptRoot '.deploy-params.json'
@@ -126,8 +127,8 @@ $outputFile = Join-Path $PSScriptRoot '.deploy-outputs.json'
 @{
     apiFqdn              = $apiFqdn
     keycloakFqdn         = $keycloakFqdn
-    apiCustomDomain      = ($ApiCustomDomain ?? '')
-    keycloakCustomDomain = ($KeycloakCustomDomain ?? '')
+    apiCustomDomain      = $outputs.apiCustomDomain.value
+    keycloakCustomDomain = $outputs.keycloakCustomDomain.value
     swaName              = $swaName
     swaHostname          = $swaHostname
 } | ConvertTo-Json | Set-Content $outputFile -Encoding UTF8
