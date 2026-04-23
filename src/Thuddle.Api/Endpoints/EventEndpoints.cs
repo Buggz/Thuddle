@@ -17,6 +17,7 @@ public static class EventEndpoints
         app.MapPut("/api/events/{eventId:guid}", UpdateEvent).RequireAuthorization();
         app.MapDelete("/api/events/{eventId:guid}", DeleteEvent).RequireAuthorization();
         app.MapPost("/api/events/{eventId:guid}/invitations", InviteUsers).RequireAuthorization();
+        app.MapDelete("/api/events/{eventId:guid}/invitations", RescindInvitation).RequireAuthorization();
         app.MapPost("/api/events/{eventId:guid}/join", JoinEvent).RequireAuthorization();
         app.MapDelete("/api/events/{eventId:guid}/participants/me", LeaveEvent).RequireAuthorization();
         app.MapDelete("/api/events/{eventId:guid}/attendees/{userId:guid}", KickAttendee).RequireAuthorization();
@@ -518,6 +519,38 @@ public static class EventEndpoints
         }
 
         return Results.Ok(new { invited = newInvitations.Count });
+    }
+
+    private static async Task<IResult> RescindInvitation(
+        Guid eventId,
+        string email,
+        ClaimsPrincipal user,
+        ThuddleDbContext db,
+        CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(email))
+            return Results.BadRequest(new { error = "Email is required." });
+
+        var keycloakId = GetKeycloakId(user);
+        if (keycloakId is null) return Results.Unauthorized();
+
+        var dbUser = await db.Users.FirstOrDefaultAsync(u => u.KeycloakId == keycloakId, ct);
+        if (dbUser is null) return Results.Unauthorized();
+
+        if (!await IsEventAdmin(db, eventId, dbUser.Id, ct))
+            return Results.Forbid();
+
+        var normalized = email.Trim().ToLower();
+        var invitation = await db.EventInvitations
+            .FirstOrDefaultAsync(i => i.EventId == eventId && i.Email.ToLower() == normalized, ct);
+
+        if (invitation is null)
+            return Results.NotFound(new { error = "Invitation not found." });
+
+        db.EventInvitations.Remove(invitation);
+        await db.SaveChangesAsync(ct);
+
+        return Results.Ok(new { rescinded = true });
     }
 
     private static async Task<IResult> JoinEvent(

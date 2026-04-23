@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, shallowRef } from 'vue'
-import { apiUrl, leaveEvent as leaveEventApi, kickAttendee as kickAttendeeApi } from '@/api'
+import { apiUrl, leaveEvent as leaveEventApi, kickAttendee as kickAttendeeApi, rescindInvitation as rescindInvitationApi } from '@/api'
 import { useApi } from '@/shared/composables/useApi'
 import { useAuthStore } from '@/features/auth/stores/auth'
 import { useRealtime, RealtimeEvents } from '@/shared/composables/useRealtime'
@@ -277,6 +277,10 @@ export const useEventsStore = defineStore('events', () => {
     return kickAttendeeApi(authFetch, eventId, userId, { revokeInvitation, denyReentry })
   }
 
+  async function rescindInvitation(eventId, email) {
+    return rescindInvitationApi(authFetch, eventId, email)
+  }
+
   return {
     // state
     items,
@@ -295,6 +299,7 @@ export const useEventsStore = defineStore('events', () => {
     joinEvent,
     markDiscussionRead,
     leaveEvent,
-    kickAttendee
+    kickAttendee,
+    rescindInvitation
   }
 })

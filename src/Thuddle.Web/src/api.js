@@ -248,3 +248,12 @@ export async function kickAttendee(authFetch, eventId, userId, { revokeInvitatio
   }
   return res.json()
 }
+
+export async function rescindInvitation(authFetch, eventId, email) {
+  const res = await authFetch(`/api/events/${eventId}/invitations?email=${encodeURIComponent(email)}`, { method: 'DELETE' })
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}))
+    throw new Error(data.error || `HTTP ${res.status}`)
+  }
+  return res.json().catch(() => ({}))
+}
