@@ -21,7 +21,14 @@ export const RealtimeEvents = Object.freeze({
   AuctionItemSold: 'AuctionItemSold',
   AuctionEnded: 'AuctionEnded',
   // Notifications
-  NotificationCreated: 'NotificationCreated'
+  NotificationCreated: 'NotificationCreated',
+  // Raffle
+  RaffleCreated: 'RaffleCreated',
+  RaffleUpdated: 'RaffleUpdated',
+  RaffleDeleted: 'RaffleDeleted',
+  RaffleEntryChanged: 'RaffleEntryChanged',
+  RaffleStarted: 'RaffleStarted',
+  RaffleWinnerRevealed: 'RaffleWinnerRevealed'
 })
 
 let connection = null

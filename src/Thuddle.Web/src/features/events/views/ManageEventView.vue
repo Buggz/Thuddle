@@ -12,6 +12,7 @@ import { usePermissionsStore } from '@/features/auth/stores/permissions'
 import { useFeatureFlags } from '@/shared/featureFlags'
 import { useEventsStore } from '@/features/events/stores/events'
 import KickAttendeeDialog from '@/features/events/components/KickAttendeeDialog.vue'
+import RafflesSection from '@/features/events/raffles/RafflesSection.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -28,7 +29,8 @@ const manageTabs = computed(() => [
   { key: 'discussion', label: 'Discussion' },
   { key: 'attendees', label: 'Attendees' },
   { key: 'coadmins', label: 'Co-Admins' },
-  ...(auctionsEnabled.value ? [{ key: 'auction', label: 'Auction' }] : [])
+  ...(auctionsEnabled.value ? [{ key: 'auction', label: 'Auction' }] : []),
+  { key: 'raffles', label: 'Raffles' }
 ])
 
 // Event details (editable)
@@ -937,6 +939,16 @@ onMounted(async () => {
               </div>
             </div>
           </template>
+        </div>
+
+        <!-- Tab: Raffles -->
+        <div v-if="activeTab === 'raffles'" class="p-6" data-testid="manage-raffles-tab">
+          <RafflesSection
+            :event-id="eventId"
+            :is-host="true"
+            :can-author="true"
+            :currency="eventData?.currency || form.currency || ''"
+          />
         </div>
       </div>
     </template>
