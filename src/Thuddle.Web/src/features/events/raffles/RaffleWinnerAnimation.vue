@@ -17,11 +17,9 @@ const baseNames = [
   'Quinn?', 'Avery?', 'Blake?', 'Reese?', 'Skyler?'
 ]
 const shuffleNames = computed(() => {
-  if (props.entries?.length > 1) {
-    // Filter out the winner so they don't randomly appear *before* the final reveal
-    return props.entries
-      .filter(e => e.userId !== props.winner.winnerUserId)
-      .map(e => e.displayName + '?')
+  if (props.entries?.length > 0) {
+    // Include all participants in the shuffle for maximum suspense!
+    return props.entries.map(e => e.displayName + '?')
   }
   return baseNames
 })
