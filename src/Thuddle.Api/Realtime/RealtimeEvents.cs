@@ -27,4 +27,12 @@ public static class RealtimeEvents
 
     // Notifications
     public const string NotificationCreated = "NotificationCreated";
+
+    // Raffle events
+    public const string RaffleCreated = "RaffleCreated";
+    public const string RaffleUpdated = "RaffleUpdated";
+    public const string RaffleDeleted = "RaffleDeleted";
+    public const string RaffleEntryChanged = "RaffleEntryChanged";
+    public const string RaffleStarted = "RaffleStarted";
+    public const string RaffleWinnerRevealed = "RaffleWinnerRevealed";
 }
