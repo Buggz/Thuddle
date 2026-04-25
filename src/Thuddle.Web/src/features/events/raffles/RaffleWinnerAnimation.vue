@@ -12,19 +12,29 @@ const emit = defineEmits(['revealed'])
 
 // If entries are provided, use their names. If empty, use fallback generic names.
 const baseNames = [
-  'Alex?', 'Jordan?', 'Sam?', 'Pat?', 'Chris?',
-  'Taylor?', 'Casey?', 'Morgan?', 'Riley?', 'Drew?',
-  'Quinn?', 'Avery?', 'Blake?', 'Reese?', 'Skyler?'
+  { displayName: 'Alex?', profilePictureUrl: null },
+  { displayName: 'Jordan?', profilePictureUrl: null },
+  { displayName: 'Sam?', profilePictureUrl: null },
+  { displayName: 'Pat?', profilePictureUrl: null },
+  { displayName: 'Chris?', profilePictureUrl: null },
+  { displayName: 'Taylor?', profilePictureUrl: null },
+  { displayName: 'Casey?', profilePictureUrl: null },
+  { displayName: 'Morgan?', profilePictureUrl: null },
+  { displayName: 'Riley?', profilePictureUrl: null },
+  { displayName: 'Drew?', profilePictureUrl: null }
 ]
 const shuffleNames = computed(() => {
   if (props.entries?.length > 0) {
     // Include all participants in the shuffle for maximum suspense!
-    return props.entries.map(e => e.displayName + '?')
+    return props.entries.map(e => ({
+      displayName: e.displayName + '?',
+      profilePictureUrl: e.profilePictureUrl
+    }))
   }
   return baseNames
 })
 
-const displayName = ref(shuffleNames.value[0])
+const currentDisplay = ref(shuffleNames.value[0])
 const revealed = ref(false)
 
 let shuffleInterval = null
@@ -45,13 +55,16 @@ onMounted(() => {
   let i = 0
   shuffleInterval = setInterval(() => {
     i++
-    const names = shuffleNames.value
-    displayName.value = names[i % names.length]
+    const items = shuffleNames.value
+    currentDisplay.value = items[i % items.length]
   }, 120)
 
   shuffleTimeout = setTimeout(() => {
     clearInterval(shuffleInterval)
-    displayName.value = props.winner.displayName
+    currentDisplay.value = {
+      displayName: props.winner.displayName,
+      profilePictureUrl: props.winner.profilePictureUrl
+    }
     revealed.value = true
     fireConfetti()
     revealTimeout = setTimeout(() => emit('revealed'), 2000)
@@ -84,14 +97,23 @@ onBeforeUnmount(() => {
     <!-- Name display -->
     <div
       data-testid="raffle-winner-name"
-      class="relative text-5xl sm:text-7xl md:text-8xl font-extrabold tracking-tighter transition-all duration-500 ease-out z-10"
+      class="relative flex flex-col items-center gap-6 transition-all duration-500 ease-out z-10"
       :class="[
-        revealed ? 'text-white scale-100' : 'text-indigo-200/40 scale-95 blur-[1px]'
+        revealed ? 'scale-100' : 'scale-95'
       ]"
     >
-      <span class="bg-clip-text text-transparent bg-gradient-to-br from-white to-white"
-            :class="revealed ? 'from-white to-gray-300' : 'from-indigo-200 to-indigo-400'">
-        {{ displayName }}
+      <!-- Avatar -->
+      <div 
+        class="h-32 w-32 sm:h-40 sm:w-40 rounded-full overflow-hidden border-4 flex items-center justify-center bg-indigo-900 shadow-2xl transition-all duration-500"
+        :class="revealed ? 'border-emerald-400 scale-110 shadow-emerald-400/20' : 'border-indigo-400 blur-[2px] opacity-80'"
+      >
+        <img v-if="currentDisplay.profilePictureUrl" :src="currentDisplay.profilePictureUrl" alt="" class="h-full w-full object-cover" />
+        <span v-else class="text-5xl font-black text-indigo-300">{{ currentDisplay.displayName?.charAt(0).toUpperCase() || '?' }}</span>
+      </div>
+
+      <span class="text-5xl sm:text-7xl md:text-8xl font-extrabold tracking-tighter bg-clip-text text-transparent bg-gradient-to-br from-white to-white transition-all duration-500"
+            :class="revealed ? 'from-white to-gray-300 text-white' : 'from-indigo-200 to-indigo-400 text-indigo-200/40 blur-[1px]'">
+        {{ currentDisplay.displayName }}
       </span>
       
       <!-- Glow effect behind text when revealed -->

@@ -182,10 +182,16 @@ onMounted(() => {
             <template v-if="initEditState(entry.userId, entry.tickets) === undefined" />
 
             <div class="flex items-center justify-between">
-              <!-- Name -->
-              <span class="flex-1 text-sm font-semibold text-gray-900 truncate pr-2" :title="entry.displayName">
-                {{ entry.displayName }}
-              </span>
+              <!-- Profile Picture & Name -->
+              <div class="flex flex-1 items-center gap-2 overflow-hidden">
+                <div class="h-6 w-6 shrink-0 rounded-full bg-indigo-100 flex items-center justify-center overflow-hidden border border-indigo-50">
+                  <img v-if="entry.profilePictureUrl" :src="entry.profilePictureUrl" alt="" class="h-full w-full object-cover" />
+                  <span v-else class="text-[10px] font-bold text-indigo-700">{{ entry.displayName?.charAt(0).toUpperCase() || '?' }}</span>
+                </div>
+                <span class="text-sm font-semibold text-gray-900 truncate pr-2" :title="entry.displayName">
+                  {{ entry.displayName }}
+                </span>
+              </div>
 
               <!-- Remove button (Open only) -->
               <button

@@ -22,6 +22,7 @@ const store = useRafflesStore()
 const permissions = usePermissionsStore()
 
 const entries = computed(() => store.entries.get(props.raffleId) ?? [])
+const draws = computed(() => store.draws.get(props.raffleId) ?? [])
 
 const canSelfReport = computed(() =>
   props.raffle?.selfReportingEnabled === true && props.raffle?.status === 'Open'
@@ -49,12 +50,18 @@ const latestDraw = ref(null)
 const handleWinnerRevealed = (payload) => {
   if (payload.raffleId === props.raffleId) {
     latestDraw.value = payload
+    // Fetch updated draws so the new winner appears in the list when they dismiss the animation
+    store.fetchDraws(props.eventId, props.raffleId).catch(() => {})
   }
 }
 
 onMounted(() => {
   // Automatically show the animation on real-time broadcast of a draw
   realtime.on(RealtimeEvents.RaffleWinnerRevealed, handleWinnerRevealed)
+  
+  if (props.raffle?.drawCount > 0) {
+    store.fetchDraws(props.eventId, props.raffleId).catch(() => {})
+  }
 })
 
 onBeforeUnmount(() => {
@@ -236,5 +243,25 @@ function decrement() {
         </div>
       </div>
     </div>
+
+    <!-- Winners List -->
+    <div v-if="draws.length > 0" class="border-t border-indigo-50 bg-indigo-50/50 px-6 py-4 pl-14 relative z-0">
+      <h4 class="text-[10px] font-black uppercase tracking-[0.2em] text-indigo-400 mb-3 flex items-center gap-2">
+        <svg class="h-4 w-4 text-amber-400" fill="currentColor" viewBox="0 0 24 24">
+          <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+        </svg>
+        Winners
+      </h4>
+      <div class="flex flex-wrap gap-2">
+        <div v-for="draw in draws" :key="draw.id" class="inline-flex items-center gap-2 rounded-full bg-white pr-3 pl-1 py-1 shadow-sm border border-indigo-100 transition-transform hover:scale-105">
+          <div class="h-7 w-7 shrink-0 rounded-full bg-indigo-100 flex items-center justify-center overflow-hidden">
+            <img v-if="draw.profilePictureUrl" :src="draw.profilePictureUrl" alt="" class="h-full w-full object-cover" />
+            <span v-else class="text-xs font-bold text-indigo-700">{{ draw.displayName?.charAt(0).toUpperCase() || '?' }}</span>
+          </div>
+          <span class="text-sm font-semibold text-gray-900">{{ draw.displayName || 'Unknown' }}</span>
+        </div>
+      </div>
+    </div>
+
   </div>
 </template>

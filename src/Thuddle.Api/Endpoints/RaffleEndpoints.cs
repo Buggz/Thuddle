@@ -132,6 +132,7 @@ public static class RaffleEndpoints
                     {
                         e.UserId,
                         displayName = e.User.DisplayName ?? e.User.Email,
+                        profilePictureUrl = e.User.ScaledPicturePath != null ? $"/api/profile/picture/{e.User.KeycloakId}" : null,
                         e.Tickets
                     })
                     .ToList(),
@@ -524,17 +525,22 @@ public static class RaffleEndpoints
         await db.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
 
-        // Load winner display name after commit
+        // Load winner display name and profile picture after commit
         var winnerUser = await db.Users.AsNoTracking()
             .Where(u => u.Id == winner.UserId)
-            .Select(u => new { displayName = u.DisplayName ?? u.Email })
+            .Select(u => new 
+            { 
+                displayName = u.DisplayName ?? u.Email,
+                profilePictureUrl = u.ScaledPicturePath != null ? $"/api/profile/picture/{u.KeycloakId}" : null
+            })
             .FirstOrDefaultAsync(ct);
 
         var displayName = winnerUser?.displayName ?? "Unknown";
+        var profilePictureUrl = winnerUser?.profilePictureUrl;
 
         await realtime.RaffleWinnerRevealedAsync(
             eventId, raffleId, draw.Id,
-            winner.UserId, displayName,
+            winner.UserId, displayName, profilePictureUrl,
             draw.TicketsBefore, draw.TicketsAfter, draw.DrawnAt, ct);
 
         await notifications.CreateAsync(
@@ -550,6 +556,7 @@ public static class RaffleEndpoints
             drawId = draw.Id,
             winnerUserId = winner.UserId,
             displayName,
+            profilePictureUrl,
             ticketsBefore = draw.TicketsBefore,
             ticketsAfter = draw.TicketsAfter,
             drawnAt = draw.DrawnAt
@@ -587,6 +594,7 @@ public static class RaffleEndpoints
                 d.Id,
                 d.WinnerUserId,
                 displayName = d.Winner.DisplayName ?? d.Winner.Email,
+                profilePictureUrl = d.Winner.ScaledPicturePath != null ? $"/api/profile/picture/{d.Winner.KeycloakId}" : null,
                 d.DrawnAt,
                 d.TicketsBefore,
                 d.TicketsAfter
