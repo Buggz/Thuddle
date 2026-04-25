@@ -1,21 +1,32 @@
 <script setup>
-import { ref, onMounted, onBeforeUnmount } from 'vue'
+import { ref, onMounted, onBeforeUnmount, computed } from 'vue'
 import confetti from 'canvas-confetti'
 
 const props = defineProps({
-  winner: { type: Object, required: true }
+  winner: { type: Object, required: true },
   // { drawId, winnerUserId, displayName, ticketsBefore, ticketsAfter, drawnAt }
+  entries: { type: Array, default: () => [] }
 })
 
 const emit = defineEmits(['revealed'])
 
-const SHUFFLE_NAMES = [
+// If entries are provided, use their names. If empty, use fallback generic names.
+const baseNames = [
   'Alex?', 'Jordan?', 'Sam?', 'Pat?', 'Chris?',
   'Taylor?', 'Casey?', 'Morgan?', 'Riley?', 'Drew?',
   'Quinn?', 'Avery?', 'Blake?', 'Reese?', 'Skyler?'
 ]
+const shuffleNames = computed(() => {
+  if (props.entries?.length > 1) {
+    // Filter out the winner so they don't randomly appear *before* the final reveal
+    return props.entries
+      .filter(e => e.userId !== props.winner.winnerUserId)
+      .map(e => e.displayName + '?')
+  }
+  return baseNames
+})
 
-const displayName = ref(SHUFFLE_NAMES[0])
+const displayName = ref(shuffleNames.value[0])
 const revealed = ref(false)
 
 let shuffleInterval = null
@@ -36,7 +47,8 @@ onMounted(() => {
   let i = 0
   shuffleInterval = setInterval(() => {
     i++
-    displayName.value = SHUFFLE_NAMES[i % SHUFFLE_NAMES.length]
+    const names = shuffleNames.value
+    displayName.value = names[i % names.length]
   }, 120)
 
   shuffleTimeout = setTimeout(() => {

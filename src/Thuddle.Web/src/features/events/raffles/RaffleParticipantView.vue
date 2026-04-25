@@ -1,8 +1,10 @@
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useRafflesStore } from '../stores/raffles'
 import { usePermissionsStore } from '@/features/auth/stores/permissions'
 import { formatCurrency } from '@/shared/formatCurrency'
+import RaffleWinnerAnimation from './RaffleWinnerAnimation.vue'
+import { useRealtime, RealtimeEvents } from '@/shared/composables/useRealtime'
 
 const props = defineProps({
   eventId: { type: String, required: true },
@@ -15,6 +17,7 @@ const formattedPrice = computed(() =>
   formatCurrency(props.raffle?.pricePerTicket, props.currency)
 )
 
+const realtime = useRealtime()
 const store = useRafflesStore()
 const permissions = usePermissionsStore()
 
@@ -39,6 +42,28 @@ const isDirty = computed(() => selfTickets.value !== myTickets.value)
 const saving = ref(false)
 const error = ref(null)
 const success = ref(false)
+
+// Real-time draw tracking
+const latestDraw = ref(null)
+
+const handleWinnerRevealed = (payload) => {
+  if (payload.raffleId === props.raffleId) {
+    latestDraw.value = payload
+  }
+}
+
+onMounted(() => {
+  // Automatically show the animation on real-time broadcast of a draw
+  realtime.on(RealtimeEvents.RaffleWinnerRevealed, handleWinnerRevealed)
+})
+
+onBeforeUnmount(() => {
+  realtime.off(RealtimeEvents.RaffleWinnerRevealed, handleWinnerRevealed)
+})
+
+function dismissDraw() {
+  latestDraw.value = null
+}
 
 async function save() {
   if (selfTickets.value < 0) selfTickets.value = 0
@@ -67,6 +92,35 @@ function decrement() {
 
 <template>
   <div class="relative overflow-hidden rounded-2xl border border-indigo-100 bg-white shadow-sm transition-all duration-300 hover:shadow-md">
+    
+    <!-- Live Winner Reveal Overlay -->
+    <Transition
+      enter-active-class="transition duration-500 ease-out"
+      enter-from-class="opacity-0 translate-y-4"
+      enter-to-class="opacity-100 translate-y-0"
+      leave-active-class="transition duration-300 ease-in"
+      leave-from-class="opacity-100"
+      leave-to-class="opacity-0"
+    >
+      <div v-if="latestDraw" class="fixed inset-0 z-[100] flex bg-indigo-950/95 text-white items-center justify-center p-4 backdrop-blur-sm shadow-xl overflow-hidden">
+        <RaffleWinnerAnimation
+          :winner="latestDraw"
+          :entries="entries"
+          @revealed="dismissDraw"
+        />
+        <button
+          type="button"
+          @click="dismissDraw"
+          class="absolute top-6 right-6 text-white/50 hover:text-white transition-colors p-3 bg-white/10 rounded-full hover:bg-white/20"
+          title="Dismiss"
+        >
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+    </Transition>
+
     <!-- Left dashed line simulating a ticket stub -->
     <div class="absolute left-0 top-0 bottom-0 w-8 border-r-2 border-dashed border-indigo-100 bg-indigo-50/50 flex flex-col justify-between py-2">
       <!-- Decorative cutouts -->
@@ -85,7 +139,7 @@ function decrement() {
           <span class="text-4xl font-extrabold text-gray-900 tracking-tight" :class="{'text-indigo-600': myTickets > 0}">
             {{ myTickets }}
           </span>
-          <span class="text-sm font-semibold text-gray-400">ticket{{ myTickets === 1 ? '' : 's' }}</span>
+          <span class="text-sm font-semibold text-gray-400">ticket{{ myTickets === 1 ? '' : 's' }} left</span>
         </div>
 
         <div class="mt-1 flex items-center gap-2">
@@ -137,32 +191,27 @@ function decrement() {
               </button>
             </div>
 
-            <!-- Save button smoothly reveals when dirty -->
-            <transition
-              enter-active-class="transition ease-out duration-200"
-              enter-from-class="opacity-0 translate-y-1"
-              enter-to-class="opacity-100 translate-y-0"
-              leave-active-class="transition ease-in duration-150"
-              leave-from-class="opacity-100 translate-y-0"
-              leave-to-class="opacity-0 translate-y-1"
+            <!-- Save button smoothly reveals when dirty (space preserved to prevent layout shift) -->
+            <div
+              class="w-full flex justify-end transition-all duration-200"
+              :class="isDirty || saving ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-1 pointer-events-none'"
             >
-              <div v-show="isDirty" class="w-full flex justify-end">
-                <button
-                  type="button"
-                  data-testid="raffle-self-save-btn"
-                  :disabled="saving"
-                  @click="save"
-                  class="flex w-full sm:w-auto justify-center rounded-lg bg-indigo-600 px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:opacity-60 transition-all"
-                >
-                  <svg v-if="saving" class="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
-                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
-                  <span v-if="saving">Updating...</span>
-                  <span v-else>Update Tickets</span>
-                </button>
-              </div>
-            </transition>
+              <button
+                type="button"
+                data-testid="raffle-self-save-btn"
+                :disabled="saving || (!isDirty && !saving)"
+                :tabindex="isDirty || saving ? 0 : -1"
+                @click="save"
+                class="flex w-full sm:w-auto justify-center items-center rounded-lg bg-indigo-600 px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:opacity-60 transition-all"
+              >
+                <svg v-if="saving" class="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                <span v-if="saving">Updating...</span>
+                <span v-else>Update Tickets</span>
+              </button>
+            </div>
             
             <p v-if="error" class="text-xs text-red-600 font-medium">{{ error }}</p>
             <p v-if="success" class="text-xs text-emerald-600 font-bold transition-opacity duration-300">✓ Updated securely</p>

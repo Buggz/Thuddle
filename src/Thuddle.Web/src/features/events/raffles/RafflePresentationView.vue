@@ -28,6 +28,8 @@ const isDrawing = computed(() => raffle.value?.status === 'Drawing')
 
 async function load() {
   loading.value = true
+  store.consumeReveal(raffleId)
+  
   try {
     store.installRealtime()
     await Promise.all([
@@ -109,6 +111,7 @@ onBeforeUnmount(() => {
         >
           <RaffleWinnerAnimation
             :winner="pendingReveal"
+            :entries="store.entries.get(raffleId)"
             @revealed="handleRevealed"
           />
         </div>

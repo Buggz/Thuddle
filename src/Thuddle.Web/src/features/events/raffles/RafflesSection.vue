@@ -289,7 +289,6 @@ onMounted(() => {
                 :raffle="raffle"
               />
               <div class="border-t border-gray-100 pt-5">
-                <p class="text-xs font-bold uppercase tracking-widest text-gray-400 mb-3">Entries</p>
                 <RaffleEntries
                   :event-id="eventId"
                   :raffle-id="raffle.id"

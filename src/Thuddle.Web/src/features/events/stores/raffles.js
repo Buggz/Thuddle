@@ -64,6 +64,7 @@ export const useRafflesStore = defineStore('raffles', () => {
   async function fetchRaffle(eventId, raffleId) {
     installRealtime()
     const data = await raffleApi.get(authFetch, eventId, raffleId)
+    const ents = data.entries || []
     raffles.value.set(raffleId, {
       id: data.id,
       name: data.name,
@@ -73,9 +74,11 @@ export const useRafflesStore = defineStore('raffles', () => {
       selfReportingEnabled: data.selfReportingEnabled,
       deletedAt: data.deletedAt ?? null,
       drawCount: data.drawCount,
+      entryCount: ents.length,
+      totalTickets: ents.reduce((s, e) => s + e.tickets, 0),
       eventId
     })
-    entries.value.set(raffleId, data.entries || [])
+    entries.value.set(raffleId, ents)
     return data
   }
 
@@ -163,21 +166,38 @@ export const useRafflesStore = defineStore('raffles', () => {
 
   function applyRealtimeEntryChanged({ eventId, raffleId, userId, tickets }) {
     const current = entries.value.get(raffleId)
+    const currentRaffle = raffles.value.get(raffleId)
     if (!current) {
       // Entries not yet loaded — fetch them so the view is up to date
       fetchEntries(eventId, raffleId).catch(() => {})
+      if (currentRaffle) fetchRaffle(eventId, raffleId).catch(() => {})
       return
     }
     const idx = current.findIndex((e) => e.userId === userId)
+    let nextEntries = [...current]
+    
     if (tickets === 0) {
-      if (idx !== -1) entries.value.set(raffleId, current.filter((e) => e.userId !== userId))
+      if (idx !== -1) {
+        nextEntries = current.filter((e) => e.userId !== userId)
+        entries.value.set(raffleId, nextEntries)
+      }
     } else if (idx !== -1) {
-      const next = [...current]
-      next[idx] = { ...next[idx], tickets }
-      entries.value.set(raffleId, next)
+      nextEntries[idx] = { ...nextEntries[idx], tickets }
+      entries.value.set(raffleId, nextEntries)
     } else {
       // New entry — we need the displayName, so refetch
       fetchEntries(eventId, raffleId).catch(() => {})
+      if (currentRaffle) fetchRaffle(eventId, raffleId).catch(() => {})
+      return
+    }
+
+    // Live update total tickets in the raffle summary
+    if (currentRaffle) {
+      raffles.value.set(raffleId, {
+        ...currentRaffle,
+        entryCount: nextEntries.length,
+        totalTickets: nextEntries.reduce((s, e) => s + e.tickets, 0)
+      })
     }
   }
 
