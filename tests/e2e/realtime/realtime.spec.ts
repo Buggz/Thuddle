@@ -1,6 +1,7 @@
 import { test, expect } from '../helpers/fixtures'
-import { STORAGE_STATE, contextAs, uid, futureDates } from '../helpers/auth'
-import type { APIRequestContext, Browser, Page } from '@playwright/test'
+import { STORAGE_STATE, contextAs, uid } from '../helpers/auth'
+import { adminApi, createEventApi, updateEventApi, deleteEventApi, inviteUsersApi } from '../helpers/api'
+import type { Browser, Page } from '@playwright/test'
 
 /**
  * End-to-end tests for the SignalR realtime system (Option B: group-scoped
@@ -13,122 +14,6 @@ import type { APIRequestContext, Browser, Page } from '@playwright/test'
  *   3. Observer asserts UI changes via Playwright's auto-waiting expects.
  *   4. No `page.reload()` is ever called.
  */
-
-// ── Admin token + REST helpers ─────────────────────────────────────────────
-
-/** Open an admin-authenticated page and capture a Bearer token for REST calls. */
-async function adminApi(
-  browser: Browser,
-  baseURL: string,
-): Promise<{ close: () => Promise<void>; request: APIRequestContext; headers: Record<string, string>; baseURL: string }> {
-  const context = await browser.newContext({ storageState: STORAGE_STATE.admin })
-  const page = await context.newPage()
-  let token = ''
-  page.on('request', (req) => {
-    const auth = req.headers()['authorization']
-    if (auth?.startsWith('Bearer ')) token = auth.substring(7)
-  })
-  await page.goto(baseURL)
-  await page.waitForResponse(
-    (r) =>
-      r.url().includes('/api/profile') &&
-      r.status() === 200 &&
-      (r.request().headers()['authorization'] ?? '').startsWith('Bearer '),
-    { timeout: 20000 },
-  )
-  if (!token) {
-    throw new Error('Failed to capture admin Bearer token.')
-  }
-  return {
-    close: () => context.close(),
-    request: page.request,
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    baseURL,
-  }
-}
-
-interface CreatePayload {
-  title?: string
-  visibility?: 0 | 1 // 0 = Public, 1 = Unlisted
-  joinMode?: 0 | 1 // 0 = Public, 1 = InviteOnly
-  capacity?: number | null
-}
-
-async function createEventApi(
-  api: Awaited<ReturnType<typeof adminApi>>,
-  payload: CreatePayload = {},
-): Promise<{ id: string; title: string }> {
-  const title = payload.title ?? `RT ${uid()}`
-  const dates = futureDates(10)
-  const resp = await api.request.post(`${api.baseURL}/api/events`, {
-    headers: api.headers,
-    data: JSON.stringify({
-      title,
-      location: 'Realtime Venue',
-      description: null,
-      start: new Date(dates.start).toISOString(),
-      end: new Date(dates.end).toISOString(),
-      visibility: payload.visibility ?? 0,
-      joinMode: payload.joinMode ?? 0,
-      capacity: payload.capacity ?? null,
-      cost: null,
-    }),
-  })
-  if (resp.status() !== 201) {
-    throw new Error(`Create event failed: ${resp.status()} ${await resp.text()}`)
-  }
-  const body = await resp.json()
-  return { id: body.id, title }
-}
-
-async function updateEventApi(
-  api: Awaited<ReturnType<typeof adminApi>>,
-  eventId: string,
-  updates: { title?: string; location?: string },
-): Promise<void> {
-  const getResp = await api.request.get(`${api.baseURL}/api/events/${eventId}`, {
-    headers: api.headers,
-  })
-  if (!getResp.ok()) throw new Error(`Get event failed: ${getResp.status()}`)
-  const current = await getResp.json()
-  const resp = await api.request.put(`${api.baseURL}/api/events/${eventId}`, {
-    headers: api.headers,
-    data: JSON.stringify({
-      title: updates.title ?? current.title,
-      location: updates.location ?? current.location,
-      description: current.description,
-      start: current.start,
-      end: current.end,
-      visibility: current.visibility,
-      joinMode: current.joinMode,
-      capacity: current.capacity,
-      cost: current.cost,
-    }),
-  })
-  if (!resp.ok()) throw new Error(`Update event failed: ${resp.status()} ${await resp.text()}`)
-}
-
-async function deleteEventApi(
-  api: Awaited<ReturnType<typeof adminApi>>,
-  eventId: string,
-): Promise<void> {
-  const resp = await api.request.delete(`${api.baseURL}/api/events/${eventId}`, {
-    headers: api.headers,
-  })
-  if (!resp.ok()) throw new Error(`Delete event failed: ${resp.status()}`)
-}
-
-async function inviteUsersApi(
-  api: Awaited<ReturnType<typeof adminApi>>,
-  eventId: string,
-  emails: string[],
-): Promise<void> {
-  const resp = await api.request.post(`${api.baseURL}/api/events/${eventId}/invitations`, {
-    headers: api.headers,
-    data: JSON.stringify({ emails }),
-  })
-  if (!resp.ok()) throw new Error(`Invite failed: ${resp.status()} ${await resp.text()}`)
-}
 
 /**
  * Open a user context and navigate to `url`, waiting for the SignalR hub

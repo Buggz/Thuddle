@@ -219,6 +219,7 @@ onMounted(() => {
               </span>
               <span
                 v-else
+                :data-testid="`raffle-status-badge-${raffle.id}`"
                 class="inline-flex items-center px-1.5 py-0.5 rounded-md border text-[10px] uppercase font-bold tracking-wider"
                 :class="statusBadgeClass(raffle.status)"
               >
@@ -240,6 +241,7 @@ onMounted(() => {
           <div v-if="isHost && canAuthor && !raffle.deletedAt" class="flex items-center gap-1 shrink-0">
             <button
               type="button"
+              :data-testid="`raffle-edit-btn-${raffle.id}`"
               class="p-1.5 rounded-lg text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors"
               title="Edit raffle"
               @click="openEdit(raffle, $event)"
@@ -251,6 +253,7 @@ onMounted(() => {
             <button
               v-if="raffle.status === 'Open'"
               type="button"
+              :data-testid="`raffle-delete-btn-${raffle.id}`"
               class="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
               title="Delete raffle"
               @click="confirmDelete(raffle.id, $event)"

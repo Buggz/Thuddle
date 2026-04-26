@@ -130,6 +130,7 @@ onMounted(() => {
         </div>
         <button
           type="button"
+          data-testid="raffle-lock-submissions-btn"
           @click="store.patchRaffle(eventId, raffleId, { selfReportingEnabled: false })"
           class="shrink-0 flex items-center justify-center gap-2 px-3 py-1.5 bg-white text-indigo-600 text-xs font-bold rounded-lg border border-indigo-200 hover:bg-indigo-600 hover:text-white hover:border-indigo-600 transition-colors shadow-sm"
         >

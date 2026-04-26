@@ -85,7 +85,8 @@ public static class RaffleEndpoints
                 myTickets = db.RaffleEntries
                     .Where(e => e.RaffleId == r.Id && e.UserId == dbUser.Id)
                     .Select(e => (int?)e.Tickets)
-                    .FirstOrDefault() ?? 0
+                    .FirstOrDefault() ?? 0,
+                drawCount = db.RaffleDraws.Count(d => d.RaffleId == r.Id)
             })
             .ToListAsync(ct);
 

@@ -100,28 +100,31 @@ export const useRafflesStore = defineStore('raffles', () => {
   }
 
   async function patchRaffle(eventId, raffleId, body) {
-    return raffleApi.patch(authFetch, eventId, raffleId, body)
-    // RaffleUpdated SignalR → applyRealtimeUpdated → fetchRaffle
+    const result = await raffleApi.patch(authFetch, eventId, raffleId, body)
+    await applyRealtimeUpdated({ eventId, raffleId })
+    return result
   }
 
   async function deleteRaffle(eventId, raffleId) {
     await raffleApi.remove(authFetch, eventId, raffleId)
-    // RaffleDeleted SignalR → applyRealtimeDeleted
+    await applyRealtimeDeleted({ eventId, raffleId })
   }
 
   async function setEntryTickets(eventId, raffleId, userId, tickets) {
-    return raffleApi.setTickets(authFetch, eventId, raffleId, userId, tickets)
-    // RaffleEntryChanged SignalR → applyRealtimeEntryChanged
+    const result = await raffleApi.setTickets(authFetch, eventId, raffleId, userId, tickets)
+    applyRealtimeEntryChanged({ eventId, raffleId, userId, tickets })
+    return result
   }
 
   async function removeEntry(eventId, raffleId, userId) {
     await raffleApi.removeEntry(authFetch, eventId, raffleId, userId)
-    // RaffleEntryChanged SignalR with tickets=0 → applyRealtimeEntryChanged
+    applyRealtimeEntryChanged({ eventId, raffleId, userId, tickets: 0 })
   }
 
   async function startDraw(eventId, raffleId) {
-    return raffleApi.start(authFetch, eventId, raffleId)
-    // RaffleStarted SignalR → applyRealtimeStarted
+    const result = await raffleApi.start(authFetch, eventId, raffleId)
+    applyRealtimeStarted({ raffleId })
+    return result
   }
 
   /**

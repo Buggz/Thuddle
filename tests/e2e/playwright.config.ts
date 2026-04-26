@@ -3,7 +3,7 @@ import { defineConfig } from '@playwright/test'
 export default defineConfig({
   testDir: '.',
   testMatch: '**/*.spec.ts',
-  timeout: 60_000,
+  timeout: 30_000,
   expect: { timeout: 10_000 },
   // Tests in the same file run serially (they often share setup state such as a
   // created event); different files run in parallel across workers.

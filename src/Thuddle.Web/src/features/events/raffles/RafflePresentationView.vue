@@ -119,6 +119,7 @@ onBeforeUnmount(() => {
       <Transition name="reveal">
         <div
           v-if="pendingReveal"
+          data-testid="raffle-winner-reveal"
           class="absolute inset-0 z-50 flex flex-col items-center justify-center bg-black/85 backdrop-blur-xl"
         >
           <RaffleWinnerAnimation
@@ -221,6 +222,7 @@ onBeforeUnmount(() => {
           <div class="absolute bottom-6 left-6 sm:bottom-10 sm:left-10">
             <button
               type="button"
+              data-testid="raffle-present-exit-btn"
               @click="exit"
               class="flex items-center gap-3 px-5 py-3 text-sm font-black uppercase tracking-widest text-white/30 hover:text-white border border-white/10 rounded-full hover:bg-white/10 transition-all backdrop-blur-md"
             >
@@ -246,10 +248,11 @@ onBeforeUnmount(() => {
               <p class="font-bold text-lg uppercase tracking-widest">Awaiting First Draw</p>
             </div>
 
-            <ul v-else class="space-y-5">
+            <ul v-else data-testid="raffle-winners-list" class="space-y-5">
               <li
                 v-for="(draw, idx) in draws"
                 :key="draw.id"
+                :data-testid="`raffle-winners-row-${draw.id}`"
                 class="relative p-6 sm:p-8 rounded-3xl overflow-hidden group transition-all"
                 :class="idx === 0 
                   ? 'bg-gradient-to-br from-indigo-500/20 to-purple-500/10 border-2 border-indigo-400/50 shadow-2xl shadow-indigo-900/30' 
