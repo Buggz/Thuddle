@@ -2,6 +2,7 @@
 import { shallowRef, ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useApi } from '@/shared/composables/useApi'
+import { useInlineImageUpload } from '@/shared/composables/useInlineImageUpload'
 import { auctionApi } from '@/api'
 import EventForm from '@/features/events/components/EventForm.vue'
 import ImageCropper from '@/features/profile/components/ImageCropper.vue'
@@ -22,6 +23,7 @@ const eventsStore = useEventsStore()
 const { auctions: auctionsEnabled } = useFeatureFlags()
 
 const eventId = route.params.id
+const { uploadImage } = useInlineImageUpload(eventId)
 const activeTab = shallowRef('about')
 
 const manageTabs = computed(() => [
@@ -416,16 +418,7 @@ async function removeCoAdmin(admin) {
   }
 }
 
-async function uploadDescriptionImage(file) {
-  const formData = new FormData()
-  formData.append('file', file)
-  const res = await authFetch(`/api/events/${eventId}/images`, {
-    method: 'POST',
-    body: formData
-  })
-  const data = await res.json()
-  return data.url
-}
+
 
 async function loadDiscussionSettings() {
   try {
@@ -570,7 +563,7 @@ onMounted(async () => {
               v-model="form"
               :submitted="submitted"
               test-id-prefix="manage"
-              :upload-image="uploadDescriptionImage"
+              :upload-image="uploadImage"
               :show-cost="true"
             />
 

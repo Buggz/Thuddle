@@ -1,12 +1,15 @@
 <script setup>
 import { ref, computed, watch } from 'vue'
 import RichTextEditor from '@/shared/components/RichTextEditor.vue'
+import Spinner from '@/shared/components/Spinner.vue'
 
 const props = defineProps({
   open: { type: Boolean, required: true },
   raffle: { type: Object, default: null },  // null = create mode
   saving: { type: Boolean, default: false },
-  currency: { type: String, default: '' }
+  loading: { type: Boolean, default: false },
+  currency: { type: String, default: '' },
+  uploadImage: { type: Function, default: null }
 })
 
 const emit = defineEmits(['save', 'cancel'])
@@ -20,15 +23,38 @@ const pricePerTicket = ref('')
 const selfReportingEnabled = ref(false)
 const localError = ref(null)
 
-watch(() => props.open, (open) => {
-  if (open) {
-    name.value = props.raffle?.name ?? ''
-    description.value = props.raffle?.description ?? ''
-    pricePerTicket.value = props.raffle?.pricePerTicket != null
-      ? String(props.raffle.pricePerTicket)
-      : ''
-    selfReportingEnabled.value = props.raffle?.selfReportingEnabled ?? false
+// True once the editor has been seeded with fetched (full) data for the current
+// dialog session. Prevents re-snapshotting from a late-arriving raffle prop
+// after the user has started editing.
+const fullyHydrated = ref(false)
+
+function snapshotFromRaffle(raffle) {
+  name.value = raffle?.name ?? ''
+  description.value = raffle?.description ?? ''
+  pricePerTicket.value = raffle?.pricePerTicket != null
+    ? String(raffle.pricePerTicket)
+    : ''
+  selfReportingEnabled.value = raffle?.selfReportingEnabled ?? false
+}
+
+watch([() => props.open, () => props.raffle], ([open, raffle], prev) => {
+  const wasOpen = prev?.[0]
+  if (!open) {
+    fullyHydrated.value = false
+    return
+  }
+  if (!wasOpen) {
+    // Dialog just opened — snapshot whatever data we have (may be stale)
+    snapshotFromRaffle(raffle)
     localError.value = null
+    // If there is no pending fetch (create mode or no loading), mark as done
+    if (!props.loading) fullyHydrated.value = true
+    return
+  }
+  // Dialog already open and raffle prop changed (late fetch arrived)
+  if (!fullyHydrated.value) {
+    snapshotFromRaffle(raffle)
+    if (!props.loading) fullyHydrated.value = true
   }
 }, { immediate: true })
 
@@ -98,7 +124,7 @@ function handleCancel() {
           </div>
 
           <!-- Body -->
-          <div class="flex-1 overflow-y-auto px-6 py-5 space-y-5">
+          <div class="relative flex-1 overflow-y-auto px-6 py-5 space-y-5">
             <!-- Error -->
             <div
               v-if="localError"
@@ -136,7 +162,7 @@ function handleCancel() {
                 Description
               </label>
               <div data-testid="raffle-description-input">
-                <RichTextEditor v-model="description" />
+                <RichTextEditor v-model="description" :upload-image="uploadImage" />
               </div>
             </div>
 
@@ -189,6 +215,17 @@ function handleCancel() {
                 />
               </button>
             </div>
+
+            <!-- Loading overlay (edit mode only) -->
+            <div
+              v-if="loading && isEdit"
+              data-testid="raffle-editor-loading"
+              class="absolute inset-0 bg-white/70 z-10 flex items-center justify-center pointer-events-auto rounded-b-2xl"
+            >
+              <div class="w-8 h-8 flex items-center justify-center text-indigo-600">
+                <Spinner />
+              </div>
+            </div>
           </div>
 
           <!-- Footer -->
@@ -204,7 +241,7 @@ function handleCancel() {
             <button
               type="button"
               data-testid="raffle-save-btn"
-              :disabled="saving"
+              :disabled="saving || loading"
               @click="handleSave"
               class="px-4 py-2 text-sm font-semibold text-white bg-indigo-600 rounded-lg hover:bg-indigo-500 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
             >

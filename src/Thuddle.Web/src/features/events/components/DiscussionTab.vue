@@ -1,6 +1,7 @@
 <script setup>
 import { ref, shallowRef, onMounted, onBeforeUnmount } from 'vue'
 import { useApi } from '@/shared/composables/useApi'
+import { useInlineImageUpload } from '@/shared/composables/useInlineImageUpload'
 import { useAuthStore } from '@/features/auth/stores/auth'
 import { useRealtime, RealtimeEvents } from '@/shared/composables/useRealtime'
 import { apiUrl } from '@/api'
@@ -13,6 +14,7 @@ const props = defineProps({
 })
 
 const { authFetch } = useApi()
+const { uploadImage } = useInlineImageUpload(() => props.eventId)
 const auth = useAuthStore()
 const realtime = useRealtime()
 
@@ -232,18 +234,6 @@ function formatRelative(iso) {
   const diffD = Math.floor(diffH / 24)
   if (diffD < 7) return `${diffD}d ago`
   return d.toLocaleDateString()
-}
-
-// Can the current user post?
-async function uploadImage(file) {
-  const formData = new FormData()
-  formData.append('file', file)
-  const res = await authFetch(`/api/events/${props.eventId}/images`, {
-    method: 'POST',
-    body: formData
-  })
-  const data = await res.json()
-  return data.url
 }
 
 function canPost() {

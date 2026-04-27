@@ -1,6 +1,7 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, shallowRef, computed, onMounted } from 'vue'
 import { useRafflesStore } from '../stores/raffles'
+import { useInlineImageUpload } from '@/shared/composables/useInlineImageUpload'
 import RaffleEditor from './RaffleEditor.vue'
 import RaffleEntries from './RaffleEntries.vue'
 import RaffleDrawConsole from './RaffleDrawConsole.vue'
@@ -22,11 +23,13 @@ function formatPrice(amount) {
 }
 
 const store = useRafflesStore()
+const { uploadImage } = useInlineImageUpload(() => props.eventId)
 
 const loading = ref(false)
 const error = ref(null)
 const editorOpen = ref(false)
 const editingRaffle = ref(null) // null = create
+const editLoading = shallowRef(false)
 const saving = ref(false)
 const saveError = ref(null)
 const expandedRaffleId = ref(null)
@@ -68,17 +71,36 @@ function openCreate() {
   editorOpen.value = true
 }
 
-function openEdit(raffle, e) {
+async function openEdit(raffle, e) {
   e?.stopPropagation()
-  editingRaffle.value = raffle
   saveError.value = null
+
+  const cached = store.raffles.get(raffle.id)
+  if (cached && cached.description !== undefined) {
+    editingRaffle.value = cached
+    editorOpen.value = true
+    return
+  }
+
+  editingRaffle.value = raffle
   editorOpen.value = true
+  editLoading.value = true
+  try {
+    await store.fetchRaffle(props.eventId, raffle.id)
+    editingRaffle.value = store.raffles.get(raffle.id)
+  } catch (err) {
+    saveError.value = err.message || 'Failed to load raffle.'
+    closeEditor()
+  } finally {
+    editLoading.value = false
+  }
 }
 
 function closeEditor() {
   editorOpen.value = false
   editingRaffle.value = null
   saveError.value = null
+  editLoading.value = false
 }
 
 async function handleSave(body) {
@@ -327,7 +349,9 @@ onMounted(() => {
       :open="editorOpen"
       :raffle="editingRaffle"
       :saving="saving"
+      :loading="editLoading"
       :currency="currency"
+      :upload-image="props.canAuthor ? uploadImage : null"
       @save="handleSave"
       @cancel="closeEditor"
     />
