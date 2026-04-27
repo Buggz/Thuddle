@@ -9,8 +9,13 @@ import {
   getAuctionSettingsApi,
   startAuctionApi,
 } from '../helpers/auction'
+import { setFeatureFlagOverride } from '../helpers/featureFlags'
 
 test.describe('Auction settings', () => {
+  test.beforeEach(async ({ page }) => {
+    await setFeatureFlagOverride(page, 'VITE_FEATURE_AUCTIONS', true)
+  })
+
   // ── 1 & 2: Admin configures full settings, verifies via API, reload persists ─
 
   test.describe('admin configuration', () => {
@@ -176,6 +181,7 @@ test.describe('Auction settings', () => {
 
       // Alice navigates to settings → form should not be visible
       const { context: aliceCtx, page: alicePage } = await contextAs(browser, 'alice')
+      await setFeatureFlagOverride(alicePage, 'VITE_FEATURE_AUCTIONS', true)
       await alicePage.goto(`${baseURL}/events/${eventId}/auction/settings`)
       await alicePage.getByTestId('user-display-name').waitFor({ state: 'visible', timeout: 20000 })
       // Form is visible because there's no frontend ownership guard, but API blocks saves (tested above with 403)

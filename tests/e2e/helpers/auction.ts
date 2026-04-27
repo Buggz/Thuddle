@@ -5,6 +5,7 @@
  */
 import { type Browser, type BrowserContext, type APIRequestContext, type Page } from '@playwright/test'
 import { STORAGE_STATE, uid, futureDates } from './auth'
+import { setFeatureFlagOverride } from './featureFlags'
 import { randomUUID } from 'crypto'
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -41,6 +42,7 @@ export async function userApi(
 ): Promise<ApiContext> {
   const context = await browser.newContext({ storageState: STORAGE_STATE[user] })
   const page = await context.newPage()
+  await setFeatureFlagOverride(page, 'VITE_FEATURE_AUCTIONS', true)
   let token = ''
   page.on('request', (req) => {
     const auth = req.headers()['authorization']

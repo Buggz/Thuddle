@@ -83,6 +83,11 @@ test.describe('Auction item lifecycle: publish', () => {
     const bobCtx = await userApi(browser, 'bob', baseURL!)
     await joinEventApi(bobCtx, eventId)
     await bobCtx.page.goto(`${baseURL}/events/${eventId}/auction`)
+    // Ensure we're on the auction page (not redirected to home by feature-flag gate)
+    // by waiting for the AuctionView's "Bidding floor" heading to render.
+    await bobCtx.page
+      .getByRole('heading', { name: 'Bidding floor' })
+      .waitFor({ state: 'visible', timeout: 20000 })
     await expect(bobCtx.page.getByText('Gloomhaven')).toHaveCount(0)
     await bobCtx.close()
 

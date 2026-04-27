@@ -10,8 +10,13 @@ import {
   createItemApi,
   publishItemApi,
 } from '../helpers/auction'
+import { setFeatureFlagOverride } from '../helpers/featureFlags'
 
 test.describe('Auction moderation queue', () => {
+  test.beforeEach(async ({ page }) => {
+    await setFeatureFlagOverride(page, 'VITE_FEATURE_AUCTIONS', true)
+  })
+
   test.describe('moderation link visibility', () => {
     test.use({ storageState: STORAGE_STATE.admin })
 

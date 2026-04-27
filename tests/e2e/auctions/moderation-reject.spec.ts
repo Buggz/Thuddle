@@ -11,8 +11,13 @@ import {
   publishItemApi,
   placeBidApi,
 } from '../helpers/auction'
+import { setFeatureFlagOverride } from '../helpers/featureFlags'
 
 test.describe('Auction moderation: reject', () => {
+  test.beforeEach(async ({ page }) => {
+    await setFeatureFlagOverride(page, 'VITE_FEATURE_AUCTIONS', true)
+  })
+
   test.describe('admin panel rejection', () => {
     test.use({ storageState: STORAGE_STATE.admin })
 
