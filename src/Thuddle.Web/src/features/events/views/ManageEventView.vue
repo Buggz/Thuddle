@@ -80,6 +80,7 @@ const discussionSettings = ref({
 const savingDiscussion = shallowRef(false)
 const discussionSaveSuccess = shallowRef(false)
 const discussionSaveError = shallowRef(null)
+const discussionSettingsLoaded = shallowRef(false)
 
 // Event metadata
 const eventData = ref(null)
@@ -426,6 +427,7 @@ async function loadDiscussionSettings() {
     const data = await res.json()
     discussionSettings.value = data
   } catch { /* ignore - uses defaults */ }
+  finally { discussionSettingsLoaded.value = true }
 }
 
 async function loadAuctionSettings() {
@@ -581,7 +583,8 @@ onMounted(async () => {
 
         <!-- Tab: Discussion Settings -->
         <div v-if="activeTab === 'discussion'" class="p-6">
-          <div class="space-y-4">
+          <div v-if="!discussionSettingsLoaded" data-testid="manage-discussion-loading" class="text-xs font-bold tracking-wider uppercase text-slate-400 flex items-center justify-center py-12">Loading discussion settings...</div>
+          <div v-else class="space-y-4">
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">Member posts</label>

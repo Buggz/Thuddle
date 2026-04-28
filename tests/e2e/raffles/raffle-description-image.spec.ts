@@ -111,30 +111,14 @@ test.describe('Raffle description image upload', () => {
       { timeout: 15000 },
     )
 
-    // Slow the single-raffle GET that the editor fires on open so the
-    // loading overlay is reliably observable on fast machines. Without
-    // this delay the spinner can disappear before the assertion runs.
-    await adminPage.route(
-      `**/api/events/${eventId}/raffles/${raffleId}`,
-      async (route) => {
-        if (route.request().method() === 'GET') {
-          await new Promise((r) => setTimeout(r, 400))
-        }
-        await route.continue()
-      },
-    )
-
     const saveBtn = adminPage.getByTestId('raffle-save-btn')
-    const loadingOverlay = adminPage.getByTestId('raffle-editor-loading')
 
     await adminPage.getByTestId(`raffle-edit-btn-${raffleId}`).click()
 
-    // Dialog opens immediately; the loading overlay covers it and the Save
-    // button is disabled until store.fetchRaffle resolves. Once the (delayed)
-    // GET completes, the overlay disappears and Save becomes enabled.
-    await expect(loadingOverlay).toBeVisible({ timeout: 2000 })
-    await expect(saveBtn).toBeDisabled()
-    await expect(loadingOverlay).toBeHidden({ timeout: 5000 })
+    // The raffle detail was already fetched by the card click above and is
+    // cached in the store, so the editor opens with the description already
+    // hydrated — no loading overlay is shown. Save should be enabled
+    // immediately.
     await expect(saveBtn).toBeEnabled()
 
     // Wait for the editor dialog to be fully open and the ProseMirror to hydrate
