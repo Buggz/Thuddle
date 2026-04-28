@@ -55,8 +55,12 @@ function initEditState(userId, tickets) {
   if (!editState.value[userId]) {
     editState.value[userId] = { value: tickets, original: tickets, saving: false, error: null }
   } else if (editState.value[userId].original !== tickets && !editState.value[userId].saving) {
-    editState.value[userId].original = tickets
-    editState.value[userId].value = tickets
+    const state = editState.value[userId]
+    const hasDraft = state.value !== state.original
+    state.original = tickets
+    // Don't clobber an in-progress edit; only sync the displayed value when
+    // the user has no pending draft.
+    if (!hasDraft) state.value = tickets
   }
 }
 

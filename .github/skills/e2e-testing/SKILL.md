@@ -329,6 +329,36 @@ playwright-cli -s=alice goto http://localhost:5173/events/<id>
 playwright-cli -s=alice click "getByTestId('event-join-btn')"
 ```
 
+## Register response/event waiters BEFORE the action that triggers them
+
+**Always set up `waitForResponse`, `waitForEvent`, etc. *before* the click/fill/keypress that fires the request — never after.** Registering a waiter after the action is a race: on a fast environment the response can arrive before the listener is attached and the test hangs until timeout. This is a common source of CI-only flakes (CI is often *faster* on the network round-trip than a developer machine because everything is local in the same VM).
+
+### Wrong (race condition)
+
+```ts
+await ticketsInput.fill('3')
+await ticketsInput.press('Enter')
+// If the PUT completes before this line runs, the waiter never sees it.
+await page.waitForResponse(
+  (r) => r.url().includes('/api/.../entries/') && r.request().method() === 'PUT',
+  { timeout: 10000 }
+)
+```
+
+### Right (waiter armed first)
+
+```ts
+const saveResp = page.waitForResponse(
+  (r) => r.url().includes('/api/.../entries/') && r.request().method() === 'PUT',
+  { timeout: 10000 }
+)
+await ticketsInput.fill('3')
+await ticketsInput.press('Enter')
+await saveResp
+```
+
+The same applies to `page.waitForEvent('download')`, `waitForRequest`, dialog handlers, popup waiters, and SignalR/WebSocket message expectations. Build the promise first, then perform the trigger, then `await` the promise.
+
 ## Negative test patterns
 
 **Every positive test should have a corresponding negative test.** Think about who should be denied, not just who should succeed.

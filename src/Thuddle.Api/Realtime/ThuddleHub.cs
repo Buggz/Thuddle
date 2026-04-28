@@ -33,6 +33,10 @@ public sealed class ThuddleHub(ThuddleDbContext db) : Hub
         {
             await Groups.AddToGroupAsync(Context.ConnectionId, UserGroup(keycloakId));
         }
+        // Signal to the caller that initial group memberships are complete.
+        // Clients (including e2e tests) can await this to avoid races where a
+        // mutation fires before this connection is in its dashboard/user groups.
+        await Clients.Caller.SendAsync(RealtimeEvents.Ready);
     }
 
     /// <summary>

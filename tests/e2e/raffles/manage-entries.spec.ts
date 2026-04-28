@@ -258,12 +258,13 @@ test.describe('Manage raffle entries', () => {
 
     // Set tickets to 3
     const ticketsInput = adminPage.getByTestId(`raffle-tickets-input-${aliceUserId}`)
-    await ticketsInput.fill('3')
-    await ticketsInput.press('Enter')
-    await adminPage.waitForResponse(
+    const setTicketsResp = adminPage.waitForResponse(
       (r) => r.url().includes(`/api/events/${eventId}/raffles/${raffleId}/entries/${aliceUserId}`) && r.request().method() === 'PUT',
       { timeout: 10000 }
     )
+    await ticketsInput.fill('3')
+    await ticketsInput.press('Enter')
+    await setTicketsResp
 
     // Start the raffle
     await adminPage.getByTestId('raffle-start-btn').click()

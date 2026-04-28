@@ -4,6 +4,7 @@ import { API_BASE } from '@/api'
 
 // Event name constants — keep in sync with Thuddle.Api/Realtime/RealtimeEvents.cs
 export const RealtimeEvents = Object.freeze({
+  Ready: 'Ready',
   EventCreated: 'EventCreated',
   EventUpdated: 'EventUpdated',
   EventDeleted: 'EventDeleted',
@@ -33,6 +34,8 @@ export const RealtimeEvents = Object.freeze({
 
 let connection = null
 let startPromise = null
+let readyPromise = null
+let readyResolve = null
 const resyncHandlers = new Set()
 
 // Tracks the set of event ids we've asked the hub to subscribe us to. Kept so
@@ -42,6 +45,12 @@ const subscribedEventIds = new Set()
 function buildConnection() {
   const auth = useAuthStore()
   const hubUrl = `${API_BASE}/hubs/thuddle`
+
+  // Reset the ready promise for this (re)build of the connection.
+  readyPromise = new Promise((resolve) => { readyResolve = resolve })
+  if (typeof window !== 'undefined') {
+    window.__thuddleRealtimeReady = readyPromise
+  }
 
   const conn = new HubConnectionBuilder()
     .withUrl(hubUrl, {
@@ -57,6 +66,16 @@ function buildConnection() {
     .withAutomaticReconnect()
     .configureLogging(LogLevel.Warning)
     .build()
+
+  // Server sends 'Ready' from OnConnectedAsync after the initial group
+  // memberships are established. Resolve the readyPromise so callers (and
+  // e2e tests) can await full hub readiness, not just the WebSocket handshake.
+  conn.on(RealtimeEvents.Ready, () => {
+    if (readyResolve) {
+      readyResolve()
+      readyResolve = null
+    }
+  })
 
   conn.onreconnected(async () => {
     // Re-establish event subscriptions server-side after reconnect.
@@ -142,6 +161,11 @@ export function useRealtime() {
     subscribedEventIds.clear()
     connection = null
     startPromise = null
+    readyPromise = null
+    readyResolve = null
+    if (typeof window !== 'undefined') {
+      delete window.__thuddleRealtimeReady
+    }
   }
 
   return { ensureStarted, on, off, onResync, subscribeEvents, unsubscribeEvents, stop }

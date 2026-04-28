@@ -16,9 +16,10 @@ import type { Browser, Page } from '@playwright/test'
  */
 
 /**
- * Open a user context and navigate to `url`, waiting for the SignalR hub
- * negotiate response (set up BEFORE navigation to avoid races) and the
- * user-display-name to be visible so SSO has completed.
+ * Open a user context and navigate to `url`, waiting for the SignalR hub to
+ * be fully ready (negotiate response received AND server-side OnConnectedAsync
+ * has finished establishing initial group memberships, signalled via the
+ * 'Ready' message exposed as `window.__thuddleRealtimeReady`).
  */
 async function openWithRealtime(
   browser: Browser,
@@ -36,9 +37,18 @@ async function openWithRealtime(
   await page.goto(url)
   await page.getByTestId('user-display-name').waitFor({ state: 'visible', timeout: 20000 })
   await negotiatePromise
-  // Small grace period for the WebSocket handshake to complete and subscriptions
-  // to be established server-side.
-  await page.waitForTimeout(500)
+  // Wait for the server's 'Ready' handshake message — this guarantees the
+  // connection has been added to the dashboard (and user) groups server-side
+  // and any subsequent broadcast will reach this client. Avoids the prior
+  // race where a fixed sleep wasn't always long enough on slower CI runners.
+  await page.waitForFunction(
+    () => (window as unknown as { __thuddleRealtimeReady?: Promise<void> }).__thuddleRealtimeReady != null,
+    null,
+    { timeout: 20000 },
+  )
+  await page.evaluate(
+    () => (window as unknown as { __thuddleRealtimeReady: Promise<void> }).__thuddleRealtimeReady,
+  )
   return { context, page }
 }
 
