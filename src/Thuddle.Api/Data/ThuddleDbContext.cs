@@ -329,7 +329,7 @@ public class ThuddleDbContext(DbContextOptions<ThuddleDbContext> options) : DbCo
             entity.HasOne(d => d.Raffle)
                 .WithMany(r => r.Draws)
                 .HasForeignKey(d => d.RaffleId)
-                .OnDelete(DeleteBehavior.Restrict);
+                .OnDelete(DeleteBehavior.Cascade);
             entity.HasOne(d => d.Winner)
                 .WithMany()
                 .HasForeignKey(d => d.WinnerUserId)
