@@ -8,6 +8,8 @@ import { useFeatureFlags } from '@/shared/featureFlags'
 import { apiUrl } from '@/api'
 import { auctionApi } from '@/api'
 import DiscussionTab from '@/features/events/components/DiscussionTab.vue'
+import RafflesSection from '@/features/events/raffles/RafflesSection.vue'
+import { raffleApi } from '@/api'
 import { formatCurrency } from '@/shared/formatCurrency'
 import FunnyLoader from '@/shared/components/FunnyLoader.vue'
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
@@ -25,6 +27,7 @@ const loading = shallowRef(true)
 const error = shallowRef(null)
 const joining = shallowRef(false)
 const leaveDialogOpen = ref(false)
+const leaveTicketWarning = ref(null)
 
 const isOwner = computed(() => !!(event.value && permissions.userId && event.value.ownerId === permissions.userId))
 const leaveMessage = computed(() =>
@@ -32,6 +35,28 @@ const leaveMessage = computed(() =>
     ? 'Your invitation will be kept, so you can rejoin later.'
     : 'You can rejoin anytime while spaces remain.'
 )
+
+// Whether the current user can see participant-only tabs (raffles, etc.).
+// Owners/co-hosts get access regardless of explicit RSVP.
+const hasParticipantAccess = computed(() =>
+  !!(event.value && (event.value.hasJoined || event.value.isAdmin))
+)
+
+async function openLeaveDialog() {
+  leaveTicketWarning.value = null
+  leaveDialogOpen.value = true
+  if (!auth.isAuthenticated) return
+  try {
+    const raffles = await raffleApi.list(authFetch, route.params.id)
+    const total = (raffles || []).reduce((sum, r) => sum + (r.myTickets || 0), 0)
+    if (total > 0) {
+      const raffleCount = raffles.filter(r => (r.myTickets || 0) > 0).length
+      leaveTicketWarning.value = `You hold ${total} raffle ticket${total === 1 ? '' : 's'} across ${raffleCount} raffle${raffleCount === 1 ? '' : 's'}. Your tickets will be kept and remain eligible for the draw.`
+    }
+  } catch {
+    // Best-effort — never block the leave flow.
+  }
+}
 
 const activeTab = shallowRef('about')
 const participants = ref([])
@@ -177,6 +202,19 @@ function eventImageGradient(id) {
   const sum = id.split('').reduce((a, b) => a + b.charCodeAt(0), 0)
   return gradients[sum % gradients.length]
 }
+
+// Auto-switch to raffles tab when navigated via ?raffle= deep link
+watch(() => route.query.raffle, (raffleId) => {
+  if (raffleId) activeTab.value = 'raffles'
+}, { immediate: true })
+
+// Defensive: if the user loses participant access (e.g. they leave the event)
+// while a participant-only tab is active, fall back to About.
+watch(hasParticipantAccess, (hasAccess) => {
+  if (!hasAccess && activeTab.value === 'raffles') {
+    activeTab.value = 'about'
+  }
+})
 
 onMounted(() => {
   loadEvent()
@@ -391,7 +429,7 @@ watch(() => event.value?.participantCount, (newCount, oldCount) => {
               <button
                 v-if="!isOwner"
                 data-testid="event-leave-btn"
-                @click="leaveDialogOpen = true"
+                @click="openLeaveDialog"
                 class="w-full sm:w-auto justify-center rounded-xl bg-white px-6 py-3 text-sm font-bold text-slate-600 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-red-50 hover:text-red-600 hover:ring-red-200 transition-all"
               >
                 Leave Event
@@ -496,6 +534,19 @@ watch(() => event.value?.participantCount, (newCount, oldCount) => {
                 {{ auctionStatus }}
               </span>
             </button>
+
+            <button
+              v-if="auth.isAuthenticated && hasParticipantAccess"
+              data-testid="event-tab-raffles"
+              @click="selectTab('raffles')"
+              class="flex items-center px-5 py-2.5 text-sm font-bold rounded-xl transition-all duration-200 ease-out"
+              :class="activeTab === 'raffles'
+                ? 'bg-white text-indigo-700 shadow-sm ring-1 ring-gray-200/50'
+                : 'text-gray-500 hover:text-gray-800 hover:bg-gray-200/50'"
+            >
+              <span class="mr-1.5" aria-hidden="true">🎟️</span>
+              Raffles
+            </button>
           </nav>
         </div>
 
@@ -558,6 +609,16 @@ watch(() => event.value?.participantCount, (newCount, oldCount) => {
           </ul>
         </div>
 
+        <!-- Tab: Raffles -->
+        <div v-if="activeTab === 'raffles' && hasParticipantAccess" class="px-6 py-5" data-testid="event-raffles-tab">
+          <RafflesSection
+            :event-id="event.id"
+            :is-host="event.isAdmin"
+            :can-author="false"
+            :currency="event.currency || ''"
+          />
+        </div>
+
         <!-- Tab: Auction -->
         <div v-if="activeTab === 'auction' && auctionVisible" class="px-6 py-5" data-testid="event-auction-tab">
           <div class="rounded-2xl border border-indigo-100 bg-linear-to-br from-indigo-50/60 to-white p-6">
@@ -604,6 +665,7 @@ watch(() => event.value?.participantCount, (newCount, oldCount) => {
       :open="leaveDialogOpen"
       title="Leave this event?"
       :message="leaveMessage"
+      :warning="leaveTicketWarning"
       confirm-label="Leave"
       variant="danger"
       @confirm="confirmLeave"

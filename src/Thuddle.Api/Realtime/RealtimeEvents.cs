@@ -5,6 +5,14 @@ namespace Thuddle.Api.Realtime;
 /// </summary>
 public static class RealtimeEvents
 {
+    /// <summary>
+    /// Sent to the caller from <c>OnConnectedAsync</c> after all initial group
+    /// memberships (dashboard, user) have been established. Clients can await
+    /// this to know the hub is fully ready to receive broadcasts — useful in
+    /// e2e tests to avoid races where a mutation fires before the observer's
+    /// connection is in the dashboard group.
+    /// </summary>
+    public const string Ready = "Ready";
     public const string EventCreated = "EventCreated";
     public const string EventUpdated = "EventUpdated";
     public const string EventDeleted = "EventDeleted";
@@ -27,4 +35,12 @@ public static class RealtimeEvents
 
     // Notifications
     public const string NotificationCreated = "NotificationCreated";
+
+    // Raffle events
+    public const string RaffleCreated = "RaffleCreated";
+    public const string RaffleUpdated = "RaffleUpdated";
+    public const string RaffleDeleted = "RaffleDeleted";
+    public const string RaffleEntryChanged = "RaffleEntryChanged";
+    public const string RaffleStarted = "RaffleStarted";
+    public const string RaffleWinnerRevealed = "RaffleWinnerRevealed";
 }

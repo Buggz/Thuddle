@@ -257,3 +257,67 @@ export async function rescindInvitation(authFetch, eventId, email) {
   }
   return res.json().catch(() => ({}))
 }
+
+// ─── Raffle API ──────────────────────────────────────────────────────────────
+
+export const raffleApi = {
+  async list(authFetch, eventId) {
+    const res = await authFetch(`/api/events/${eventId}/raffles`)
+    return res.json()
+  },
+
+  async get(authFetch, eventId, raffleId) {
+    const res = await authFetch(`/api/events/${eventId}/raffles/${raffleId}`)
+    return res.json()
+  },
+
+  async create(authFetch, eventId, body) {
+    const res = await authFetch(`/api/events/${eventId}/raffles`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    })
+    return res.json()
+  },
+
+  async patch(authFetch, eventId, raffleId, body) {
+    const res = await authFetch(`/api/events/${eventId}/raffles/${raffleId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    })
+    return res.json()
+  },
+
+  async remove(authFetch, eventId, raffleId) {
+    await authFetch(`/api/events/${eventId}/raffles/${raffleId}`, { method: 'DELETE' })
+  },
+
+  async setTickets(authFetch, eventId, raffleId, userId, tickets) {
+    const res = await authFetch(`/api/events/${eventId}/raffles/${raffleId}/entries/${userId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tickets })
+    })
+    return res.json()
+  },
+
+  async removeEntry(authFetch, eventId, raffleId, userId) {
+    await authFetch(`/api/events/${eventId}/raffles/${raffleId}/entries/${userId}`, { method: 'DELETE' })
+  },
+
+  async start(authFetch, eventId, raffleId) {
+    const res = await authFetch(`/api/events/${eventId}/raffles/${raffleId}/start`, { method: 'POST' })
+    return res.json()
+  },
+
+  async draw(authFetch, eventId, raffleId) {
+    const res = await authFetch(`/api/events/${eventId}/raffles/${raffleId}/draw`, { method: 'POST' })
+    return res.json()
+  },
+
+  async draws(authFetch, eventId, raffleId) {
+    const res = await authFetch(`/api/events/${eventId}/raffles/${raffleId}/draws`)
+    return res.json()
+  }
+}

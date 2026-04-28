@@ -40,6 +40,14 @@ public interface IRealtimeNotifier
 
     // Notifications (per-user)
     Task NotificationCreatedAsync(string keycloakId, Guid notificationId, CancellationToken ct = default);
+
+    // Raffle
+    Task RaffleCreatedAsync(Guid eventId, Guid raffleId, CancellationToken ct = default);
+    Task RaffleUpdatedAsync(Guid eventId, Guid raffleId, CancellationToken ct = default);
+    Task RaffleDeletedAsync(Guid eventId, Guid raffleId, CancellationToken ct = default);
+    Task RaffleEntryChangedAsync(Guid eventId, Guid raffleId, Guid userId, int tickets, CancellationToken ct = default);
+    Task RaffleStartedAsync(Guid eventId, Guid raffleId, CancellationToken ct = default);
+    Task RaffleWinnerRevealedAsync(Guid eventId, Guid raffleId, Guid drawId, Guid winnerUserId, string displayName, string? profilePictureUrl, int ticketsBefore, int ticketsAfter, DateTime drawnAt, CancellationToken ct = default);
 }
 
 public sealed class RealtimeNotifier(IHubContext<ThuddleHub> hub) : IRealtimeNotifier
@@ -125,4 +133,30 @@ public sealed class RealtimeNotifier(IHubContext<ThuddleHub> hub) : IRealtimeNot
     public Task NotificationCreatedAsync(string keycloakId, Guid notificationId, CancellationToken ct = default) =>
         hub.Clients.Group(ThuddleHub.UserGroup(keycloakId))
             .SendAsync(RealtimeEvents.NotificationCreated, new { notificationId }, ct);
+
+    // Raffle
+
+    public Task RaffleCreatedAsync(Guid eventId, Guid raffleId, CancellationToken ct = default) =>
+        hub.Clients.Group(ThuddleHub.EventGroup(eventId))
+            .SendAsync(RealtimeEvents.RaffleCreated, new { eventId, raffleId }, ct);
+
+    public Task RaffleUpdatedAsync(Guid eventId, Guid raffleId, CancellationToken ct = default) =>
+        hub.Clients.Group(ThuddleHub.EventGroup(eventId))
+            .SendAsync(RealtimeEvents.RaffleUpdated, new { eventId, raffleId }, ct);
+
+    public Task RaffleDeletedAsync(Guid eventId, Guid raffleId, CancellationToken ct = default) =>
+        hub.Clients.Group(ThuddleHub.EventGroup(eventId))
+            .SendAsync(RealtimeEvents.RaffleDeleted, new { eventId, raffleId }, ct);
+
+    public Task RaffleEntryChangedAsync(Guid eventId, Guid raffleId, Guid userId, int tickets, CancellationToken ct = default) =>
+        hub.Clients.Group(ThuddleHub.EventGroup(eventId))
+            .SendAsync(RealtimeEvents.RaffleEntryChanged, new { eventId, raffleId, userId, tickets }, ct);
+
+    public Task RaffleStartedAsync(Guid eventId, Guid raffleId, CancellationToken ct = default) =>
+        hub.Clients.Group(ThuddleHub.EventGroup(eventId))
+            .SendAsync(RealtimeEvents.RaffleStarted, new { eventId, raffleId }, ct);
+
+    public Task RaffleWinnerRevealedAsync(Guid eventId, Guid raffleId, Guid drawId, Guid winnerUserId, string displayName, string? profilePictureUrl, int ticketsBefore, int ticketsAfter, DateTime drawnAt, CancellationToken ct = default) =>
+        hub.Clients.Group(ThuddleHub.EventGroup(eventId))
+            .SendAsync(RealtimeEvents.RaffleWinnerRevealed, new { eventId, raffleId, drawId, winnerUserId, displayName, profilePictureUrl, ticketsBefore, ticketsAfter, drawnAt }, ct);
 }

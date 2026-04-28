@@ -1,4 +1,4 @@
-import { type Browser, type BrowserContext, type Page, type Response } from '@playwright/test'
+import { type APIResponse, type Browser, type BrowserContext, type Page, type Request, type Response } from '@playwright/test'
 import { randomUUID } from 'crypto'
 import path from 'path'
 
@@ -61,14 +61,13 @@ export async function contextAs(
  * text if the body is not valid JSON. This prevents cryptic
  * "Unexpected end of JSON input" errors from swallowing the real server error.
  */
-export async function expectJson<T = unknown>(resp: Response): Promise<T> {
+export async function expectJson<T = unknown>(resp: Response | APIResponse): Promise<T> {
   const status = resp.status()
   const url = resp.url()
-  const method = resp.request().method()
   const text = await resp.text()
   if (!resp.ok()) {
     throw new Error(
-      `Expected JSON response but got ${status} from ${method} ${url}\n` +
+      `Expected JSON response but got ${status} from ${url}\n` +
         `Body (${text.length} bytes): ${text.slice(0, 2000)}`,
     )
   }
@@ -76,11 +75,44 @@ export async function expectJson<T = unknown>(resp: Response): Promise<T> {
     return JSON.parse(text) as T
   } catch (err) {
     throw new Error(
-      `Response was ${status} but body is not valid JSON from ${method} ${url}\n` +
+      `Response was ${status} but body is not valid JSON from ${url}\n` +
         `Parse error: ${(err as Error).message}\n` +
         `Body (${text.length} bytes): ${text.slice(0, 2000)}`,
     )
   }
+}
+
+/**
+ * Captures the bearer token from the next request the page makes, then returns
+ * `{ token, headers }` ready for use with `page.request` or `APIRequestContext`.
+ * If the page is at `about:blank` and `baseURL` is provided, navigates to it;
+ * otherwise reloads the current page to force the SPA to issue an authenticated request.
+ */
+export async function getAuthHeadersFromPage(
+  page: Page,
+  baseURL?: string,
+): Promise<{ token: string; headers: Record<string, string> }> {
+  let token = ''
+  const handler = (req: Request) => {
+    const auth = req.headers()['authorization']
+    if (auth?.startsWith('Bearer ')) token = auth.substring(7)
+  }
+  page.on('request', handler)
+  try {
+    if (page.url() === 'about:blank' && baseURL) {
+      await page.goto(baseURL)
+    } else {
+      await page.reload()
+    }
+    await page.waitForResponse(
+      (r) => r.url().includes('/api/profile') && r.status() === 200,
+      { timeout: 15000 },
+    )
+  } finally {
+    page.off('request', handler)
+  }
+  if (!token) throw new Error('Failed to capture Bearer token from page')
+  return { token, headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } }
 }
 
 // --- UI login (used only by auth/login.spec.ts) ---

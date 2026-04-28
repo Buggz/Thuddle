@@ -4,3 +4,48 @@ GET {{Thuddle.Api_HostAddress}}/weatherforecast/
 Accept: application/json
 
 ###
+
+# ─── Raffles ──────────────────────────────────────────────────────────────────
+
+@eventId = 00000000-0000-0000-0000-000000000001
+@raffleId = 00000000-0000-0000-0000-000000000002
+@userId   = 00000000-0000-0000-0000-000000000003
+
+### List raffles for an event
+GET {{Thuddle.Api_HostAddress}}/api/events/{{eventId}}/raffles
+Authorization: Bearer {{token}}
+
+### Create a raffle
+POST {{Thuddle.Api_HostAddress}}/api/events/{{eventId}}/raffles
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "name": "Mystery Box Raffle",
+  "description": "<p>Win a mystery board game bundle!</p>",
+  "pricePerTicket": 2.50,
+  "selfReportingEnabled": false
+}
+
+### Set tickets for a participant
+PUT {{Thuddle.Api_HostAddress}}/api/events/{{eventId}}/raffles/{{raffleId}}/entries/{{userId}}
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "tickets": 3
+}
+
+### Start drawing (Open → Drawing)
+POST {{Thuddle.Api_HostAddress}}/api/events/{{eventId}}/raffles/{{raffleId}}/start
+Authorization: Bearer {{token}}
+
+### Draw a winner (weighted, server-side RNG)
+POST {{Thuddle.Api_HostAddress}}/api/events/{{eventId}}/raffles/{{raffleId}}/draw
+Authorization: Bearer {{token}}
+
+### Get draw history
+GET {{Thuddle.Api_HostAddress}}/api/events/{{eventId}}/raffles/{{raffleId}}/draws
+Authorization: Bearer {{token}}
+
+###

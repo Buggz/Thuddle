@@ -2,6 +2,7 @@
 import { shallowRef, ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useApi } from '@/shared/composables/useApi'
+import { useInlineImageUpload } from '@/shared/composables/useInlineImageUpload'
 import { auctionApi } from '@/api'
 import EventForm from '@/features/events/components/EventForm.vue'
 import ImageCropper from '@/features/profile/components/ImageCropper.vue'
@@ -12,6 +13,7 @@ import { usePermissionsStore } from '@/features/auth/stores/permissions'
 import { useFeatureFlags } from '@/shared/featureFlags'
 import { useEventsStore } from '@/features/events/stores/events'
 import KickAttendeeDialog from '@/features/events/components/KickAttendeeDialog.vue'
+import RafflesSection from '@/features/events/raffles/RafflesSection.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -21,6 +23,7 @@ const eventsStore = useEventsStore()
 const { auctions: auctionsEnabled } = useFeatureFlags()
 
 const eventId = route.params.id
+const { uploadImage } = useInlineImageUpload(eventId)
 const activeTab = shallowRef('about')
 
 const manageTabs = computed(() => [
@@ -28,7 +31,8 @@ const manageTabs = computed(() => [
   { key: 'discussion', label: 'Discussion' },
   { key: 'attendees', label: 'Attendees' },
   { key: 'coadmins', label: 'Co-Admins' },
-  ...(auctionsEnabled.value ? [{ key: 'auction', label: 'Auction' }] : [])
+  ...(auctionsEnabled.value ? [{ key: 'auction', label: 'Auction' }] : []),
+  { key: 'raffles', label: 'Raffles' }
 ])
 
 // Event details (editable)
@@ -76,6 +80,7 @@ const discussionSettings = ref({
 const savingDiscussion = shallowRef(false)
 const discussionSaveSuccess = shallowRef(false)
 const discussionSaveError = shallowRef(null)
+const discussionSettingsLoaded = shallowRef(false)
 
 // Event metadata
 const eventData = ref(null)
@@ -414,16 +419,7 @@ async function removeCoAdmin(admin) {
   }
 }
 
-async function uploadDescriptionImage(file) {
-  const formData = new FormData()
-  formData.append('file', file)
-  const res = await authFetch(`/api/events/${eventId}/images`, {
-    method: 'POST',
-    body: formData
-  })
-  const data = await res.json()
-  return data.url
-}
+
 
 async function loadDiscussionSettings() {
   try {
@@ -431,6 +427,7 @@ async function loadDiscussionSettings() {
     const data = await res.json()
     discussionSettings.value = data
   } catch { /* ignore - uses defaults */ }
+  finally { discussionSettingsLoaded.value = true }
 }
 
 async function loadAuctionSettings() {
@@ -568,7 +565,7 @@ onMounted(async () => {
               v-model="form"
               :submitted="submitted"
               test-id-prefix="manage"
-              :upload-image="uploadDescriptionImage"
+              :upload-image="uploadImage"
               :show-cost="true"
             />
 
@@ -586,7 +583,8 @@ onMounted(async () => {
 
         <!-- Tab: Discussion Settings -->
         <div v-if="activeTab === 'discussion'" class="p-6">
-          <div class="space-y-4">
+          <div v-if="!discussionSettingsLoaded" data-testid="manage-discussion-loading" class="text-xs font-bold tracking-wider uppercase text-slate-400 flex items-center justify-center py-12">Loading discussion settings...</div>
+          <div v-else class="space-y-4">
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">Member posts</label>
@@ -937,6 +935,16 @@ onMounted(async () => {
               </div>
             </div>
           </template>
+        </div>
+
+        <!-- Tab: Raffles -->
+        <div v-if="activeTab === 'raffles'" class="p-6" data-testid="manage-raffles-tab">
+          <RafflesSection
+            :event-id="eventId"
+            :is-host="true"
+            :can-author="true"
+            :currency="eventData?.currency || form.currency || ''"
+          />
         </div>
       </div>
     </template>

@@ -25,6 +25,9 @@ public class ThuddleDbContext(DbContextOptions<ThuddleDbContext> options) : DbCo
     public DbSet<Notification> Notifications => Set<Notification>();
     public DbSet<BoardGame> BoardGames => Set<BoardGame>();
     public DbSet<EventBlocklistEntry> EventBlocklist => Set<EventBlocklistEntry>();
+    public DbSet<Raffle> Raffles => Set<Raffle>();
+    public DbSet<RaffleEntry> RaffleEntries => Set<RaffleEntry>();
+    public DbSet<RaffleDraw> RaffleDraws => Set<RaffleDraw>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -294,6 +297,42 @@ public class ThuddleDbContext(DbContextOptions<ThuddleDbContext> options) : DbCo
             entity.HasOne(e => e.BlockedByUser)
                 .WithMany()
                 .HasForeignKey(e => e.BlockedByUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<Raffle>(entity =>
+        {
+            entity.HasIndex(r => r.EventId);
+            entity.Property(r => r.Name).HasMaxLength(120);
+            entity.HasOne(r => r.Event)
+                .WithMany()
+                .HasForeignKey(r => r.EventId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<RaffleEntry>(entity =>
+        {
+            entity.HasIndex(e => new { e.RaffleId, e.UserId }).IsUnique();
+            entity.HasOne(e => e.Raffle)
+                .WithMany(r => r.Entries)
+                .HasForeignKey(e => e.RaffleId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(e => e.User)
+                .WithMany()
+                .HasForeignKey(e => e.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<RaffleDraw>(entity =>
+        {
+            entity.HasIndex(d => d.RaffleId);
+            entity.HasOne(d => d.Raffle)
+                .WithMany(r => r.Draws)
+                .HasForeignKey(d => d.RaffleId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(d => d.Winner)
+                .WithMany()
+                .HasForeignKey(d => d.WinnerUserId)
                 .OnDelete(DeleteBehavior.Restrict);
         });
     }

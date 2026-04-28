@@ -8,7 +8,8 @@ public enum NotificationKind
     AuctionItemPendingApproval,
     AuctionItemRejected,
     AuctionBidVoided,
-    AuctionUserBanned
+    AuctionUserBanned,
+    RaffleWon
 }
 
 public class Notification

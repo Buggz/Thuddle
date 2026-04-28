@@ -78,6 +78,12 @@ export default function initRouter() {
         meta: { requiresAuth: true, featureFlag: 'auctions' }
       },
       {
+        path: '/events/:id/raffles/:raffleId/present',
+        name: 'raffle-present',
+        component: () => import('@/features/events/raffles/RafflePresentationView.vue'),
+        meta: { requiresAuth: true, fullscreen: true }
+      },
+      {
         path: '/notifications',
         name: 'notifications',
         component: () => import('@/features/notifications/views/NotificationsView.vue'),
