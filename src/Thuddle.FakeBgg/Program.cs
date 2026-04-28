@@ -119,17 +119,25 @@ static byte[] CreatePlaceholderImage(int bggId, string name)
     {
         Color = SKColors.White,
         IsAntialias = true,
-        TextSize = defaultTitleSize,
+    };
+
+    using var titleFont = new SKFont
+    {
+        Size = defaultTitleSize,
         Typeface = SKTypeface.Default,
-        FakeBoldText = true
+        Embolden = true,
     };
 
     using var subtitlePaint = new SKPaint
     {
         Color = new SKColor(255, 255, 255, 220),
         IsAntialias = true,
-        TextSize = 30,
-        Typeface = SKTypeface.Default
+    };
+
+    using var subtitleFont = new SKFont
+    {
+        Size = 30,
+        Typeface = SKTypeface.Default,
     };
 
     var lines = name
@@ -141,31 +149,31 @@ static byte[] CreatePlaceholderImage(int bggId, string name)
         lines.Add(string.IsNullOrWhiteSpace(name) ? "Unknown Game" : name);
     }
 
-    while (titlePaint.TextSize > minTitleSize)
+    while (titleFont.Size > minTitleSize)
     {
-        var widestLine = lines.Max(line => titlePaint.MeasureText(line));
+        var widestLine = lines.Max(line => titleFont.MeasureText(line));
         if (widestLine <= safeContentWidth)
             break;
 
-        titlePaint.TextSize -= 2f;
+        titleFont.Size -= 2f;
     }
 
-    var lineHeight = titlePaint.TextSize * 1.15f;
-    var totalHeight = (lines.Count * lineHeight) + subtitleSpacing + subtitlePaint.TextSize;
-    var y = (height - totalHeight) / 2f + titlePaint.TextSize;
+    var lineHeight = titleFont.Size * 1.15f;
+    var totalHeight = (lines.Count * lineHeight) + subtitleSpacing + subtitleFont.Size;
+    var y = (height - totalHeight) / 2f + titleFont.Size;
 
     foreach (var line in lines)
     {
-        var lineWidth = titlePaint.MeasureText(line);
+        var lineWidth = titleFont.MeasureText(line);
         var x = (width - lineWidth) / 2f;
-        canvas.DrawText(line, x, y, titlePaint);
+        canvas.DrawText(line, x, y, titleFont, titlePaint);
         y += lineHeight;
     }
 
     var subtitle = $"Fake BGG #{bggId}";
-    var subtitleWidth = subtitlePaint.MeasureText(subtitle);
+    var subtitleWidth = subtitleFont.MeasureText(subtitle);
     var subtitleX = (width - subtitleWidth) / 2f;
-    canvas.DrawText(subtitle, subtitleX, y + subtitleSpacing, subtitlePaint);
+    canvas.DrawText(subtitle, subtitleX, y + subtitleSpacing, subtitleFont, subtitlePaint);
 
     using var image = surface.Snapshot();
     using var data = image.Encode(SKEncodedImageFormat.Jpeg, 88);
