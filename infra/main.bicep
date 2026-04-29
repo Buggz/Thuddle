@@ -18,6 +18,26 @@ param postgresAdminPassword string
 @description('Keycloak administrator password')
 param keycloakAdminPassword string
 
+@description('SMTP relay hostname')
+param smtpHost string = 'smtp-relay.brevo.com'
+
+@description('SMTP relay port')
+param smtpPort int = 587
+
+@secure()
+@description('SMTP relay username')
+param smtpUsername string
+
+@secure()
+@description('SMTP relay password')
+param smtpPassword string
+
+@description('From address for outbound email')
+param smtpFrom string = 'noreply@thuddle.app'
+
+@description('Public base URL of the application (used in email links)')
+param appBaseUrl string = 'https://thuddle.app'
+
 @description('Custom domain for Keycloak (e.g. auth.thuddle.app). Falls back to auto-generated FQDN if empty.')
 param keycloakCustomDomain string = ''
 
@@ -296,6 +316,14 @@ resource apiApp 'Microsoft.App/containerApps@2024-03-01' = {
           name: 'storage-connection-string'
           value: 'DefaultEndpointsProtocol=https;AccountName=${storageAccount.name};AccountKey=${storageAccount.listKeys().keys[0].value}'
         }
+        {
+          name: 'smtp-username'
+          value: smtpUsername
+        }
+        {
+          name: 'smtp-password'
+          value: smtpPassword
+        }
       ]
     }
     template: {
@@ -315,6 +343,14 @@ resource apiApp 'Microsoft.App/containerApps@2024-03-01' = {
             { name: 'Keycloak__Realm', value: 'Thuddle' }
             // CORS allowed origins — one indexed env var per origin in webAllowedOrigins
             { name: 'Cors__AllowedOrigins__0', value: webAllowedOrigins[0] }
+            // SMTP outbound email
+            { name: 'Smtp__Host', value: smtpHost }
+            { name: 'Smtp__Port', value: string(smtpPort) }
+            { name: 'Smtp__From', value: smtpFrom }
+            { name: 'Smtp__Enabled', value: 'true' }
+            { name: 'Smtp__Username', secretRef: 'smtp-username' }
+            { name: 'Smtp__Password', secretRef: 'smtp-password' }
+            { name: 'App__BaseUrl', value: appBaseUrl }
           ]
           probes: [
             {

@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.42.1.51946",
-      "templateHash": "12276772027603275571"
+      "templateHash": "10817035241104288715"
     }
   },
   "parameters": {
@@ -45,6 +45,46 @@
       "type": "securestring",
       "metadata": {
         "description": "Keycloak administrator password"
+      }
+    },
+    "smtpHost": {
+      "type": "string",
+      "defaultValue": "smtp-relay.brevo.com",
+      "metadata": {
+        "description": "SMTP relay hostname"
+      }
+    },
+    "smtpPort": {
+      "type": "int",
+      "defaultValue": 587,
+      "metadata": {
+        "description": "SMTP relay port"
+      }
+    },
+    "smtpUsername": {
+      "type": "securestring",
+      "metadata": {
+        "description": "SMTP relay username"
+      }
+    },
+    "smtpPassword": {
+      "type": "securestring",
+      "metadata": {
+        "description": "SMTP relay password"
+      }
+    },
+    "smtpFrom": {
+      "type": "string",
+      "defaultValue": "noreply@thuddle.app",
+      "metadata": {
+        "description": "From address for outbound email"
+      }
+    },
+    "appBaseUrl": {
+      "type": "string",
+      "defaultValue": "https://thuddle.app",
+      "metadata": {
+        "description": "Public base URL of the application (used in email links)"
       }
     },
     "keycloakCustomDomain": {
@@ -385,6 +425,14 @@
             {
               "name": "storage-connection-string",
               "value": "[format('DefaultEndpointsProtocol=https;AccountName={0};AccountKey={1}', format('thuddle{0}', variables('suffix')), listKeys(resourceId('Microsoft.Storage/storageAccounts', format('thuddle{0}', variables('suffix'))), '2023-05-01').keys[0].value)]"
+            },
+            {
+              "name": "smtp-username",
+              "value": "[parameters('smtpUsername')]"
+            },
+            {
+              "name": "smtp-password",
+              "value": "[parameters('smtpPassword')]"
             }
           ]
         },
@@ -421,6 +469,34 @@
                 {
                   "name": "Cors__AllowedOrigins__0",
                   "value": "[parameters('webAllowedOrigins')[0]]"
+                },
+                {
+                  "name": "Smtp__Host",
+                  "value": "[parameters('smtpHost')]"
+                },
+                {
+                  "name": "Smtp__Port",
+                  "value": "[string(parameters('smtpPort'))]"
+                },
+                {
+                  "name": "Smtp__From",
+                  "value": "[parameters('smtpFrom')]"
+                },
+                {
+                  "name": "Smtp__Enabled",
+                  "value": "true"
+                },
+                {
+                  "name": "Smtp__Username",
+                  "secretRef": "smtp-username"
+                },
+                {
+                  "name": "Smtp__Password",
+                  "secretRef": "smtp-password"
+                },
+                {
+                  "name": "App__BaseUrl",
+                  "value": "[parameters('appBaseUrl')]"
                 }
               ],
               "probes": [

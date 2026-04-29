@@ -441,8 +441,10 @@ public static class EventEndpoints
         RazorTemplateService templateService,
         IConfiguration config,
         IRealtimeNotifier realtime,
+        ILoggerFactory loggerFactory,
         CancellationToken ct)
     {
+        var logger = loggerFactory.CreateLogger(nameof(EventEndpoints));
         var keycloakId = GetKeycloakId(user);
         if (keycloakId is null) return Results.Unauthorized();
 
@@ -510,11 +512,13 @@ public static class EventEndpoints
                 };
                 string htmlBody;
                 try {
-                    htmlBody = await templateService.RenderAsync("InviteEmail.cshtml", model);
-                } catch {
+                    htmlBody = await templateService.RenderAsync("InviteEmail.html", model);
+                } catch (Exception ex) {
+                    logger.LogError(ex, "Failed to render invite email template for event {EventId}", eventId);
                     htmlBody = $"You have been invited to the event {System.Net.WebUtility.HtmlEncode(evt.Title)}. Join: {System.Net.WebUtility.HtmlEncode(joinUrl)}";
                 }
-                try { await emailSender.SendEmailAsync(inv.Email, subject, htmlBody); } catch { /* ignore errors for now */ }
+                try { await emailSender.SendEmailAsync(inv.Email, subject, htmlBody); }
+                catch (Exception ex) { logger.LogWarning(ex, "Failed to send invitation email to {Email} for event {EventId}", inv.Email, eventId); }
             }
         }
 

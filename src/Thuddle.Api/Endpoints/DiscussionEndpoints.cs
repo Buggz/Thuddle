@@ -145,8 +145,10 @@ public static class DiscussionEndpoints
         ThuddleDbContext db,
         IServiceProvider serviceProvider,
         IRealtimeNotifier realtime,
+        ILoggerFactory loggerFactory,
         CancellationToken ct)
     {
+        var logger = loggerFactory.CreateLogger(nameof(DiscussionEndpoints));
         var keycloakId = GetKeycloakId(user);
         if (keycloakId is null) return Results.Unauthorized();
 
@@ -225,7 +227,7 @@ public static class DiscussionEndpoints
                 var scopedDb = scope.ServiceProvider.GetRequiredService<ThuddleDbContext>();
                 var scopedEmailSender = scope.ServiceProvider.GetRequiredService<SmtpEmailSender>();
                 var scopedConfig = scope.ServiceProvider.GetRequiredService<IConfiguration>();
-                await SendPostEmailAsync(evt, post, dbUser, scopedDb, scopedEmailSender, scopedConfig);
+                await SendPostEmailAsync(evt, post, dbUser, scopedDb, scopedEmailSender, scopedConfig, logger);
             }, CancellationToken.None);
         }
 
@@ -245,7 +247,8 @@ public static class DiscussionEndpoints
 
     private static async Task SendPostEmailAsync(
         Event evt, DiscussionPost post, User author,
-        ThuddleDbContext db, SmtpEmailSender emailSender, IConfiguration config)
+        ThuddleDbContext db, SmtpEmailSender emailSender, IConfiguration config,
+        ILogger logger)
     {
         try
         {
@@ -321,10 +324,10 @@ public static class DiscussionEndpoints
             foreach (var email in emails)
             {
                 try { await emailSender.SendEmailAsync(email, subject, htmlBody); }
-                catch { /* ignore individual failures */ }
+                catch (Exception ex) { logger.LogWarning(ex, "Failed to send discussion email to {Email} for post {PostId} in event {EventId}", email, post.Id, evt.Id); }
             }
         }
-        catch { /* ignore */ }
+        catch (Exception ex) { logger.LogError(ex, "Failed to send discussion post emails for post {PostId} in event {EventId}", post.Id, evt.Id); }
     }
 
     // PUT /api/events/{eventId}/discussion/{postId}/approve

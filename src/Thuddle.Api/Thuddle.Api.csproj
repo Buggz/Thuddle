@@ -27,7 +27,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Content Update="EmailTemplates\**" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="EmailTemplates\**\*.html" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

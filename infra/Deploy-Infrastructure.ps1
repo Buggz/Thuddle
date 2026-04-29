@@ -31,7 +31,11 @@ param(
     [string]$Location = 'norwayeast',
     [string]$ResourceGroup = 'rg-thuddle',
     [string]$ApiCustomDomain,
-    [string]$KeycloakCustomDomain
+    [string]$KeycloakCustomDomain,
+    [string]$SmtpHost,
+    [int]$SmtpPort = 587,
+    [string]$SmtpFrom,
+    [string]$AppBaseUrl
 )
 
 $ErrorActionPreference = 'Stop'
@@ -66,6 +70,20 @@ if ($env:KEYCLOAK_ADMIN_PASSWORD) {
         [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($secureKeycloak))
 }
 
+if ($env:SMTP_USERNAME) {
+    $smtpUsername = $env:SMTP_USERNAME
+} else {
+    $smtpUsername = Read-Host "SMTP username"
+}
+
+if ($env:SMTP_PASSWORD) {
+    $smtpPassword = $env:SMTP_PASSWORD
+} else {
+    $secureSmtp = Read-Host "SMTP password" -AsSecureString
+    $smtpPassword = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto(
+        [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($secureSmtp))
+}
+
 # ─── Create resource group ────────────────────────────────────────────────────
 
 Write-Host "`nCreating resource group '$ResourceGroup' in '$Location'..." -ForegroundColor Cyan
@@ -88,8 +106,16 @@ $paramsObj = @{
         keycloakAdminPassword = @{ value = $keycloakPassword }
         keycloakCustomDomain  = @{ value = ($KeycloakCustomDomain ?? '') }
         apiCustomDomain       = @{ value = ($ApiCustomDomain ?? '') }
+        smtpUsername          = @{ value = $smtpUsername }
+        smtpPassword          = @{ value = $smtpPassword }
     }
 }
+
+# Only forward optional SMTP overrides when specified — Bicep defaults apply otherwise
+if ($SmtpHost)   { $paramsObj.parameters['smtpHost']   = @{ value = $SmtpHost } }
+if ($SmtpPort -ne 587) { $paramsObj.parameters['smtpPort'] = @{ value = $SmtpPort } }
+if ($SmtpFrom)   { $paramsObj.parameters['smtpFrom']   = @{ value = $SmtpFrom } }
+if ($AppBaseUrl) { $paramsObj.parameters['appBaseUrl'] = @{ value = $AppBaseUrl } }
 $paramsFile = Join-Path $PSScriptRoot '.deploy-params.json'
 $paramsObj | ConvertTo-Json -Depth 4 | Set-Content $paramsFile -Encoding UTF8
 
