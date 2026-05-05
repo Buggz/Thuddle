@@ -1,5 +1,5 @@
 <script setup>
-import { ref, shallowRef, onMounted, onBeforeUnmount } from 'vue'
+import { ref, shallowRef, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { useApi } from '@/shared/composables/useApi'
 import { useInlineImageUpload } from '@/shared/composables/useInlineImageUpload'
 import { useAuthStore } from '@/features/auth/stores/auth'
@@ -53,6 +53,7 @@ const commentsMap = ref({})
 const commentsLoading = ref(new Set())
 const newCommentText = ref({})
 const commentPosting = ref(new Set())
+const commentInputs = ref({})
 
 async function loadPosts() {
   loading.value = true
@@ -158,6 +159,10 @@ async function toggleComments(post) {
 async function ensureCommentsExpanded(post) {
   if (!expandedComments.value.has(post.id)) {
     await toggleComments(post)
+    await nextTick()
+    const input = commentInputs.value[post.id]
+    input?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+    input?.focus({ preventScroll: true })
   }
 }
 
@@ -510,6 +515,7 @@ onBeforeUnmount(() => {
                   </div>
                   <div class="flex-1 relative">
                     <input
+                      :ref="el => { if (el) commentInputs[post.id] = el; else delete commentInputs[post.id] }"
                       data-testid="discussion-comment-input"
                       v-model="newCommentText[post.id]"
                       @keyup.enter="addComment(post.id)"
