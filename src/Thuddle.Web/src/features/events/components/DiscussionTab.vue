@@ -155,6 +155,12 @@ async function toggleComments(post) {
   }
 }
 
+async function ensureCommentsExpanded(post) {
+  if (!expandedComments.value.has(post.id)) {
+    await toggleComments(post)
+  }
+}
+
 async function loadComments(postId) {
   commentsLoading.value.add(postId)
   commentsLoading.value = new Set(commentsLoading.value)
@@ -492,8 +498,11 @@ onBeforeUnmount(() => {
                   </div>
                 </div>
 
-                <!-- Add comment -->
-                <div v-if="auth.isAuthenticated" class="flex gap-3 pt-3 mt-4 border-t border-slate-100/80">
+              </template>
+            </div>
+
+            <!-- Add comment — always visible when authenticated -->
+            <div v-if="auth.isAuthenticated" class="flex gap-3 pt-3 mt-4 border-t border-slate-100/80">
                   <div class="shrink-0 pt-0.5 hidden sm:block">
                      <span class="w-8 h-8 rounded-full bg-slate-100 border border-slate-200/50 shadow-[inset_0_1px_1px_rgba(255,255,255,1)] text-slate-400 flex items-center justify-center">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
@@ -504,6 +513,7 @@ onBeforeUnmount(() => {
                       data-testid="discussion-comment-input"
                       v-model="newCommentText[post.id]"
                       @keyup.enter="addComment(post.id)"
+                      @focus="ensureCommentsExpanded(post)"
                       type="text"
                       placeholder="Write a comment..."
                       class="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-4 py-2.5 pr-20 text-[13px] focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 focus:bg-white transition-colors placeholder:text-slate-400 shadow-sm"
@@ -517,8 +527,6 @@ onBeforeUnmount(() => {
                       {{ commentPosting.has(post.id) ? '…' : 'Reply' }}
                     </button>
                   </div>
-                </div>
-              </template>
             </div>
           </div>
         </div>
