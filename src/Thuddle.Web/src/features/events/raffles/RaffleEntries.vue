@@ -90,7 +90,7 @@ function isDraft(userId) {
 
 async function saveTickets(userId) {
   const state = editState.value[userId]
-  if (!state || !isOpen() || !isDraft(userId)) return
+  if (!state || !isDraft(userId)) return
   state.saving = true
   state.error = null
   try {
@@ -130,32 +130,6 @@ onMounted(() => {
   <div class="space-y-4">
     <!-- Host controls: Add participant / Lock submissions -->
     <div v-if="isOpen()" class="space-y-4">
-      
-      <!-- Lock Self-Reporting banner -->
-      <div v-if="raffle.selfReportingEnabled" class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-indigo-50 border border-indigo-100 p-3 sm:px-4 rounded-xl shadow-sm">
-        <div class="text-sm">
-          <p class="font-bold text-indigo-900 flex items-center gap-1.5">
-            <span class="relative flex h-2 w-2 shrink-0">
-              <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-              <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-            </span>
-            Submissions are open
-          </p>
-          <p class="text-indigo-700/80 mt-0.5 text-xs">Participants can actively self-report their tickets.</p>
-        </div>
-        <button
-          type="button"
-          data-testid="raffle-lock-submissions-btn"
-          @click="store.patchRaffle(eventId, raffleId, { selfReportingEnabled: false })"
-          class="shrink-0 flex items-center justify-center gap-2 px-3 py-1.5 bg-white text-indigo-600 text-xs font-bold rounded-lg border border-indigo-200 hover:bg-indigo-600 hover:text-white hover:border-indigo-600 transition-colors shadow-sm"
-        >
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
-          </svg>
-          Lock Submissions
-        </button>
-      </div>
-
       <div class="space-y-2">
         <p class="text-xs font-bold uppercase tracking-widest text-gray-400">Add participant</p>
         <div data-testid="raffle-entry-add-btn">
@@ -243,9 +217,8 @@ onMounted(() => {
                 </span>
               </div>
 
-              <!-- Remove button (Open only) -->
+              <!-- Remove button -->
               <button
-                v-if="isOpen()"
                 type="button"
                 :data-testid="`raffle-entry-remove-${entry.userId}`"
                 @click="confirmRemove(entry.userId)"
@@ -262,7 +235,7 @@ onMounted(() => {
               <span class="text-xs font-bold text-gray-400 uppercase tracking-wider pl-2">Tickets</span>
 
           <!-- Ticket count input -->
-              <div v-if="editState[entry.userId] && isOpen()" class="relative flex items-center gap-1">
+              <div v-if="editState[entry.userId]" class="relative flex items-center gap-1">
                 <div class="flex items-center rounded-lg bg-white border border-gray-200 p-0.5 shadow-sm">
                   <button
                     type="button"
@@ -320,7 +293,7 @@ onMounted(() => {
                 </button>
               </div>
 
-              <!-- Tickets label (when not Open) -->
+              <!-- Tickets label (before edit state initialises) -->
               <span v-else class="text-sm font-bold text-gray-700 px-3 py-1">
                 {{ entry.tickets }}
               </span>

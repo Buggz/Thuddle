@@ -52,7 +52,7 @@ test.describe('Presentation mode', () => {
     await adminPage.getByTestId(`raffle-card-${raffleId}`).click()
 
     // Click Present button
-    await adminPage.getByTestId('raffle-present-btn').click()
+    await adminPage.getByTestId('raffle-draw-stage-btn').click()
 
     // Should navigate to presentation view
     await expect(adminPage.getByTestId('raffle-present-view')).toBeVisible({ timeout: 10000 })
@@ -119,7 +119,7 @@ test.describe('Presentation mode', () => {
     await gotoManageRafflesTab(adminPage, baseURL!, eventId)
     await adminPage.getByTestId(`raffle-card-${raffleId}`).click()
 
-    await adminPage.getByTestId('raffle-present-btn').click()
+    await adminPage.getByTestId('raffle-draw-stage-btn').click()
     await expect(adminPage.getByTestId('raffle-present-view')).toBeVisible({ timeout: 10000 })
 
     // Press Escape
@@ -149,7 +149,7 @@ test.describe('Presentation mode', () => {
     await gotoManageRafflesTab(adminPage, baseURL!, eventId)
     await adminPage.getByTestId(`raffle-card-${raffleId}`).click()
 
-    await adminPage.getByTestId('raffle-present-btn').click()
+    await adminPage.getByTestId('raffle-draw-stage-btn').click()
     await expect(adminPage.getByTestId('raffle-present-view')).toBeVisible({ timeout: 10000 })
 
     // Click Exit button
@@ -201,7 +201,7 @@ test.describe('Presentation mode', () => {
     await gotoManageRafflesTab(adminPage, baseURL!, eventId)
     await adminPage.getByTestId(`raffle-card-${raffleId}`).click()
 
-    await adminPage.getByTestId('raffle-present-btn').click()
+    await adminPage.getByTestId('raffle-draw-stage-btn').click()
     await expect(adminPage.getByTestId('raffle-present-view')).toBeVisible({ timeout: 10000 })
 
     // Draw
