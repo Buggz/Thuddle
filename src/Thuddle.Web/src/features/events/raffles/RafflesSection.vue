@@ -1,5 +1,5 @@
 <script setup>
-import { ref, shallowRef, computed, onMounted } from 'vue'
+import { ref, shallowRef, computed, onMounted, watch } from 'vue'
 import { useRafflesStore } from '../stores/raffles'
 import { useInlineImageUpload } from '@/shared/composables/useInlineImageUpload'
 import RaffleEditor from './RaffleEditor.vue'
@@ -33,6 +33,7 @@ const editLoading = shallowRef(false)
 const saving = ref(false)
 const saveError = ref(null)
 const expandedRaffleId = ref(null)
+const hasAutoExpanded = ref(false)
 const deleteDialogOpen = ref(false)
 const pendingDeleteId = ref(null)
 
@@ -146,6 +147,14 @@ function statusBadgeClass(status) {
     ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
     : 'bg-amber-50 text-amber-700 border-amber-200'
 }
+
+watch(eventRaffles, (raffles) => {
+  if (raffles.length === 1 && !hasAutoExpanded.value) {
+    hasAutoExpanded.value = true
+    expandedRaffleId.value = raffles[0].id
+    store.fetchRaffle(props.eventId, raffles[0].id).catch(() => {})
+  }
+})
 
 onMounted(() => {
   loadRaffles()

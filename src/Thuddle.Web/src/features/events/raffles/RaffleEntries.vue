@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import UserSearchComboBox from '@/shared/components/UserSearchComboBox.vue'
 import { useRafflesStore } from '../stores/raffles'
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
@@ -13,6 +13,17 @@ const props = defineProps({
 const store = useRafflesStore()
 const loading = ref(false)
 const error = ref(null)
+
+const filterText = ref('')
+const filteredEntries = computed(() => {
+  const entries = store.entries.get(props.raffleId) ?? []
+  if (!filterText.value.trim()) return entries
+  const q = filterText.value.toLowerCase()
+  return entries.filter(e =>
+    e.displayName?.toLowerCase().includes(q) ||
+    e.name?.toLowerCase().includes(q)
+  )
+})
 
 // Pending remove
 const removeDialogOpen = ref(false)
@@ -171,14 +182,48 @@ onMounted(() => {
       </div>
 
       <div v-else class="space-y-3">
+        <!-- Filter input -->
+        <div class="relative">
+          <label for="raffle-entries-filter-input" class="sr-only">Filter participants</label>
+          <input
+            id="raffle-entries-filter-input"
+            v-model="filterText"
+            type="text"
+            data-testid="raffle-entries-filter"
+            placeholder="Filter participants…"
+            class="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 pr-8 text-sm text-gray-900 placeholder-gray-400 focus:border-indigo-300 focus:outline-none focus:ring-1 focus:ring-indigo-200"
+          />
+          <button
+            v-if="filterText"
+            type="button"
+            data-testid="raffle-entries-filter-clear"
+            @click="filterText = ''"
+            class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+            aria-label="Clear filter"
+          >
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
         <p class="text-xs font-bold uppercase tracking-widest text-gray-500">
           Entries ({{ store.entries.get(raffleId)?.length ?? 0 }})
         </p>
 
+        <!-- Empty filter state -->
+        <div
+          v-if="filteredEntries.length === 0"
+          data-testid="raffle-entries-empty-filter"
+          class="text-sm text-gray-400 text-center py-4"
+        >
+          No participants match "{{ filterText }}"
+        </div>
+
         <!-- Using a grid for cleaner alignment -->
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div v-else class="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div
-            v-for="entry in store.entries.get(raffleId)"
+            v-for="entry in filteredEntries"
             :key="entry.userId"
             :data-testid="`raffle-entry-row-${entry.userId}`"
             class="group flex flex-col justify-between gap-3 rounded-xl border border-gray-100 bg-white p-3 shadow-sm hover:shadow relative transition-shadow"

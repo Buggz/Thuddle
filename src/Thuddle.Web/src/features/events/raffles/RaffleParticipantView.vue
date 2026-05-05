@@ -136,6 +136,14 @@ function decrement() {
       <div class="h-3 w-4 rounded-r-full bg-white -translate-x-1 border border-indigo-100 border-l-0"></div>
     </div>
 
+    <!-- Description -->
+    <div
+      v-if="raffle.description?.trim()"
+      data-testid="raffle-description"
+      class="prose prose-sm max-w-none text-gray-700 pl-14 pr-6 pt-5"
+      v-html="raffle.description"
+    />
+
     <div class="pl-14 pr-6 py-5 flex flex-col sm:flex-row sm:items-center justify-between gap-5">
       <!-- Left side: Status & Info -->
       <div class="flex flex-col">

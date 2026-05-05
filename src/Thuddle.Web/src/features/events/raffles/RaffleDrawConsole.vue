@@ -2,6 +2,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useRafflesStore } from '../stores/raffles'
+import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
 
 const props = defineProps({
   eventId: { type: String, required: true },
@@ -17,6 +18,7 @@ const drawing = ref(false)
 const drawError = ref(null)
 const startError = ref(null)
 const noTickets = ref(false)
+const drawDialogOpen = ref(false)
 
 const draws = computed(() => store.draws.get(props.raffleId) ?? [])
 const isOpen = computed(() => props.raffle?.status === 'Open')
@@ -55,6 +57,11 @@ async function handleDraw() {
   } finally {
     drawing.value = false
   }
+}
+
+async function confirmDraw() {
+  drawDialogOpen.value = false
+  await handleDraw()
 }
 
 function formatDrawDate(iso) {
@@ -137,7 +144,7 @@ onMounted(() => {
               type="button"
               data-testid="raffle-draw-btn"
               :disabled="drawing || noTickets"
-              @click="handleDraw"
+              @click="drawDialogOpen = true"
               class="order-1 sm:order-2 flex-[2] relative inline-flex justify-center items-center gap-3 px-6 py-4 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white text-base lg:text-lg font-black uppercase tracking-widest rounded-xl hover:from-emerald-400 hover:to-emerald-500 transition-all disabled:opacity-50 disabled:grayscale disabled:cursor-not-allowed shadow-lg hover:shadow-emerald-500/30 overflow-hidden transform active:scale-[0.98] group"
             >
               <!-- Decorative shine -->
@@ -215,4 +222,15 @@ onMounted(() => {
       <p class="text-xs text-gray-500 mt-1">Press "Draw Winner" to pick the first lucky participant.</p>
     </div>
   </div>
+
+  <ConfirmDialog
+    :open="drawDialogOpen"
+    title="Draw a winner?"
+    message="This will pick a winner at random from the eligible entries. The draw cannot be undone."
+    confirm-label="Draw winner"
+    cancel-label="Cancel"
+    variant="danger"
+    @confirm="confirmDraw"
+    @cancel="drawDialogOpen = false"
+  />
 </template>
