@@ -271,7 +271,6 @@ public static class DiscussionEndpoints
             }
 
             emails = emails.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
-            emails.Remove(author.Email);
 
             var baseUrl = config["App:BaseUrl"] ?? "https://thuddle.app";
             var eventUrl = $"{baseUrl}/events/{evt.Id}";
