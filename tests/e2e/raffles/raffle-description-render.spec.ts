@@ -79,10 +79,14 @@ test.describe('Raffle description rendering (participant)', () => {
     await alicePage.getByTestId('event-join-btn').click()
     await expect(alicePage.getByTestId('event-joined-badge')).toBeVisible({ timeout: 10000 })
 
-    // Expand the raffle so the description is in view
+    // RafflesSection only mounts when the Raffles tab is active on the participant view
+    await alicePage.getByTestId('event-tab-raffles').click()
+
+    // The single raffle is auto-expanded on initial load (issue #12) — do NOT click,
+    // that would collapse it. Just wait for an expanded-only marker.
     const raffleCard = alicePage.getByTestId(`raffle-card-${raffleId}`)
     await raffleCard.scrollIntoViewIfNeeded()
-    await raffleCard.click()
+    await expect(alicePage.getByTestId('raffle-price-display')).toBeVisible({ timeout: 10000 })
 
     // Description block should be present, contain the text, and contain an <img>
     const descBlock = alicePage.locator('[data-testid="raffle-description"]')
@@ -116,7 +120,11 @@ test.describe('Raffle description rendering (participant)', () => {
     await alicePage.getByTestId('event-join-btn').click()
     await expect(alicePage.getByTestId('event-joined-badge')).toBeVisible({ timeout: 10000 })
 
+    // RafflesSection only mounts when the Raffles tab is active on the participant view
+    await alicePage.getByTestId('event-tab-raffles').click()
+
     const raffleCard = alicePage.getByTestId(`raffle-card-${raffleId}`)
+    await expect(raffleCard).toBeVisible({ timeout: 10000 })
     await raffleCard.scrollIntoViewIfNeeded()
 
     // With a single raffle the auto-expand from issue #12 will already have

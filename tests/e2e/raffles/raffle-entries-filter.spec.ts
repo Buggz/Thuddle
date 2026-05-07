@@ -74,10 +74,9 @@ test.describe('Raffle entries filter', () => {
     await addRaffleEntryApi(adminCtxApi, eventId, raffleId, { userId: charlieId, tickets: 2 })
     await adminCtxApi.close()
 
-    // Admin opens the manage Raffles tab and expands the raffle to reveal the entries editor
+    // Admin opens the manage Raffles tab — single raffle is auto-expanded
     const { context: adminCtx, page: adminPage } = await contextAs(browser, 'admin')
     await gotoManageRafflesTab(adminPage, baseURL!, eventId)
-    await adminPage.getByTestId(`raffle-card-${raffleId}`).click()
 
     const aliceRow = adminPage.getByTestId(`raffle-entry-row-${aliceId}`)
     const bobRow = adminPage.getByTestId(`raffle-entry-row-${bobId}`)

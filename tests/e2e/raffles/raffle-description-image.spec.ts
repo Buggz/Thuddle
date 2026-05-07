@@ -86,18 +86,26 @@ test.describe('Raffle description image upload', () => {
 
     const raffleCard = adminPage.getByTestId(`raffle-card-${raffleId}`)
 
-    // Clicking the card triggers a GET for the single raffle, which is the
-    // request that actually returns the description body. The list endpoint
-    // does not include `description`, so the editor dialog will hydrate with
-    // an empty description if we click edit before this GET resolves.
+    // Auto-expand may already have fetched the single raffle. Click the card
+    // only if the expanded body (containing the edit button's panel) isn't
+    // already visible — otherwise the click would collapse it.
+    const editBtn = adminPage.getByTestId(`raffle-edit-btn-${raffleId}`)
+    await expect(editBtn).toBeVisible({ timeout: 15000 })
+
+    // Trigger a fresh fetch of the single raffle to ensure description is hydrated.
+    // Either auto-expand already fired this, or we click the card to fetch.
     const raffleDetailGet = adminPage.waitForResponse(
       (r) =>
         r.url().includes(`/api/events/${eventId}/raffles/${raffleId}`) &&
         r.request().method() === 'GET' &&
         r.status() === 200,
-      { timeout: 15000 },
-    )
-    await raffleCard.click()
+      { timeout: 5000 },
+    ).catch(() => undefined)
+    // If the body is already expanded, skip the click; otherwise click to expand.
+    const drawStageBtn = adminPage.getByTestId('raffle-draw-stage-btn')
+    if (!(await drawStageBtn.isVisible().catch(() => false))) {
+      await raffleCard.click()
+    }
     await raffleDetailGet
 
     // Pre-arm the wait for the inline image GET so we don't miss it if the
@@ -113,7 +121,7 @@ test.describe('Raffle description image upload', () => {
 
     const saveBtn = adminPage.getByTestId('raffle-save-btn')
 
-    await adminPage.getByTestId(`raffle-edit-btn-${raffleId}`).click()
+    await editBtn.click()
 
     // The raffle detail was already fetched by the card click above and is
     // cached in the store, so the editor opens with the description already

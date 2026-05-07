@@ -80,10 +80,9 @@ test.describe('Raffle entries rendered alphabetically', () => {
     await addRaffleEntryApi(adminCtxApi, eventId, raffleId, { userId: alice.id, tickets: 1 })
     await adminCtxApi.close()
 
-    // Admin opens manage Raffles tab and expands the raffle
+    // Admin opens manage Raffles tab — single raffle is auto-expanded
     const { context: adminCtx, page: adminPage } = await contextAs(browser, 'admin')
     await gotoManageRafflesTab(adminPage, baseURL!, eventId)
-    await adminPage.getByTestId(`raffle-card-${raffleId}`).click()
 
     // Wait for at least one entry row to render before reading the order
     await expect(adminPage.getByTestId(`raffle-entry-row-${alice.id}`)).toBeVisible({ timeout: 10000 })

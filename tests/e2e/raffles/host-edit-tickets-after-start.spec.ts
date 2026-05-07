@@ -75,19 +75,21 @@ test.describe('Host edits tickets after raffle start', () => {
     await startRaffleApi(adminCtxApi, eventId, raffleId)
     await adminCtxApi.close()
 
-    // Admin navigates to the manage Raffles tab and expands the raffle
+    // Admin navigates to the manage Raffles tab; auto-expand fires for the single raffle
     const { context: adminCtx, page: adminPage } = await contextAs(browser, 'admin')
     await gotoManageRafflesTab(adminPage, baseURL!, eventId)
-    await adminPage.getByTestId(`raffle-card-${raffleId}`).click()
 
     // Status badge confirms we are in Drawing
     await expect(adminPage.getByTestId(`raffle-status-badge-${raffleId}`)).toHaveText(/Drawing/i, {
       timeout: 10000,
     })
 
-    // Tickets inputs render and are enabled even though status is Drawing
+    // Single raffle is auto-expanded — do NOT click the card (would collapse it).
+    // Tickets inputs render once entries load.
     const aliceTickets = adminPage.getByTestId(`raffle-tickets-input-${aliceId}`)
     const bobTickets = adminPage.getByTestId(`raffle-tickets-input-${bobId}`)
+
+    // Tickets inputs render and are enabled even though status is Drawing
     await expect(aliceTickets).toBeVisible({ timeout: 10000 })
     await expect(aliceTickets).toBeEnabled()
     await expect(bobTickets).toBeVisible()

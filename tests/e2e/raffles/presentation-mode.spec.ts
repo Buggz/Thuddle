@@ -49,10 +49,17 @@ test.describe('Presentation mode', () => {
 
     // Admin navigates to manage > raffles and opens presentation
     await gotoManageRafflesTab(adminPage, baseURL!, eventId)
-    await adminPage.getByTestId(`raffle-card-${raffleId}`).click()
 
-    // Click Present button
-    await adminPage.getByTestId('raffle-draw-stage-btn').click()
+    // Auto-expand fires for the single raffle. Only click the card if not already expanded.
+    const drawStageBtn = adminPage.getByTestId('raffle-draw-stage-btn')
+    if (!(await drawStageBtn.isVisible().catch(() => false))) {
+      await adminPage.getByTestId(`raffle-card-${raffleId}`).click()
+    }
+    await expect(drawStageBtn).toBeVisible({ timeout: 10000 })
+
+    // Click Open Draw Stage — raffle is already in Drawing, so this only navigates
+    await drawStageBtn.click()
+    await adminPage.waitForURL(new RegExp(`/events/${eventId}/raffles/${raffleId}/present`), { timeout: 10000 })
 
     // Should navigate to presentation view
     await expect(adminPage.getByTestId('raffle-present-view')).toBeVisible({ timeout: 10000 })
@@ -117,17 +124,22 @@ test.describe('Presentation mode', () => {
     // Admin navigates to event manage view
     const { context: adminCtx, page: adminPage } = await contextAs(browser, 'admin')
     await gotoManageRafflesTab(adminPage, baseURL!, eventId)
-    await adminPage.getByTestId(`raffle-card-${raffleId}`).click()
 
-    await adminPage.getByTestId('raffle-draw-stage-btn').click()
+    const drawStageBtn = adminPage.getByTestId('raffle-draw-stage-btn')
+    if (!(await drawStageBtn.isVisible().catch(() => false))) {
+      await adminPage.getByTestId(`raffle-card-${raffleId}`).click()
+    }
+    await expect(drawStageBtn).toBeVisible({ timeout: 10000 })
+
+    await drawStageBtn.click()
+    await adminPage.waitForURL(new RegExp(`/events/${eventId}/raffles/${raffleId}/present`), { timeout: 10000 })
     await expect(adminPage.getByTestId('raffle-present-view')).toBeVisible({ timeout: 10000 })
 
     // Press Escape
     await adminPage.keyboard.press('Escape')
 
     // Should navigate back to event detail
-    await adminPage.waitForTimeout(1000)
-    await expect(adminPage.getByTestId('event-detail')).toBeVisible()
+    await adminPage.waitForURL((url) => !/\/raffles\/.+\/present/.test(url.toString()), { timeout: 10000 })
     await expect(adminPage.getByTestId('raffle-present-view')).toHaveCount(0)
 
     await adminCtx.close()
@@ -147,17 +159,22 @@ test.describe('Presentation mode', () => {
     // Admin navigates to event manage view
     const { context: adminCtx, page: adminPage } = await contextAs(browser, 'admin')
     await gotoManageRafflesTab(adminPage, baseURL!, eventId)
-    await adminPage.getByTestId(`raffle-card-${raffleId}`).click()
 
-    await adminPage.getByTestId('raffle-draw-stage-btn').click()
+    const drawStageBtn = adminPage.getByTestId('raffle-draw-stage-btn')
+    if (!(await drawStageBtn.isVisible().catch(() => false))) {
+      await adminPage.getByTestId(`raffle-card-${raffleId}`).click()
+    }
+    await expect(drawStageBtn).toBeVisible({ timeout: 10000 })
+
+    await drawStageBtn.click()
+    await adminPage.waitForURL(new RegExp(`/events/${eventId}/raffles/${raffleId}/present`), { timeout: 10000 })
     await expect(adminPage.getByTestId('raffle-present-view')).toBeVisible({ timeout: 10000 })
 
     // Click Exit button
     await adminPage.getByTestId('raffle-present-exit-btn').click()
 
     // Should navigate back to event detail
-    await adminPage.waitForTimeout(1000)
-    await expect(adminPage.getByTestId('event-detail')).toBeVisible()
+    await adminPage.waitForURL((url) => !/\/raffles\/.+\/present/.test(url.toString()), { timeout: 10000 })
     await expect(adminPage.getByTestId('raffle-present-view')).toHaveCount(0)
 
     await adminCtx.close()
@@ -199,9 +216,15 @@ test.describe('Presentation mode', () => {
 
     // Admin navigates to raffle on manage view and opens presentation
     await gotoManageRafflesTab(adminPage, baseURL!, eventId)
-    await adminPage.getByTestId(`raffle-card-${raffleId}`).click()
 
-    await adminPage.getByTestId('raffle-draw-stage-btn').click()
+    const drawStageBtn = adminPage.getByTestId('raffle-draw-stage-btn')
+    if (!(await drawStageBtn.isVisible().catch(() => false))) {
+      await adminPage.getByTestId(`raffle-card-${raffleId}`).click()
+    }
+    await expect(drawStageBtn).toBeVisible({ timeout: 10000 })
+
+    await drawStageBtn.click()
+    await adminPage.waitForURL(new RegExp(`/events/${eventId}/raffles/${raffleId}/present`), { timeout: 10000 })
     await expect(adminPage.getByTestId('raffle-present-view')).toBeVisible({ timeout: 10000 })
 
     // Draw
@@ -216,12 +239,9 @@ test.describe('Presentation mode', () => {
     // Winner animation should appear
     await expect(adminPage.getByTestId('raffle-winner-reveal')).toBeVisible({ timeout: 10000 })
 
-    // Wait for animation to complete (assume a few seconds)
-    await adminPage.waitForTimeout(4000)
-
-    // Winners list should now contain the draw
+    // Winners list should now contain the draw (poll — reveal animation may delay it)
+    await expect(adminPage.getByTestId(`raffle-winners-row-${drawBody.drawId}`)).toBeVisible({ timeout: 15000 })
     await expect(adminPage.getByTestId('raffle-winners-list')).toBeVisible()
-    await expect(adminPage.getByTestId(`raffle-winners-row-${drawBody.drawId}`)).toBeVisible()
 
     await adminCtx.close()
   })

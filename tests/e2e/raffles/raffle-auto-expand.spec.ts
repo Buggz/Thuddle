@@ -37,6 +37,9 @@ test.describe('Raffle auto-expand', () => {
     await alicePage.getByTestId('event-join-btn').click()
     await expect(alicePage.getByTestId('event-joined-badge')).toBeVisible({ timeout: 10000 })
 
+    // RafflesSection only mounts when the Raffles tab is active on the participant view
+    await alicePage.getByTestId('event-tab-raffles').click()
+
     // Wait for the raffle card to be in the DOM, but DO NOT click it.
     await expect(alicePage.getByTestId(`raffle-card-${raffleId}`)).toBeVisible({ timeout: 10000 })
 
@@ -70,6 +73,9 @@ test.describe('Raffle auto-expand', () => {
     await alicePage.getByTestId('event-join-btn').click()
     await expect(alicePage.getByTestId('event-joined-badge')).toBeVisible({ timeout: 10000 })
 
+    // RafflesSection only mounts when the Raffles tab is active on the participant view
+    await alicePage.getByTestId('event-tab-raffles').click()
+
     // Both raffle cards should render
     const cardA = alicePage.getByTestId(`raffle-card-${raffleAId}`)
     const cardB = alicePage.getByTestId(`raffle-card-${raffleBId}`)
@@ -83,8 +89,10 @@ test.describe('Raffle auto-expand', () => {
     await cardA.click()
     await expect(alicePage.getByTestId('raffle-price-display')).toHaveCount(1, { timeout: 10000 })
 
-    // Sanity: the expanded participant view sits inside card A, not card B
-    await expect(cardA.getByTestId('raffle-price-display')).toBeVisible()
+    // Sanity: card B is still collapsed. (We can't scope by cardA because the
+    // expanded panel is a sibling of the card button, not a descendant — the
+    // toHaveCount(1) above plus this assertion is sufficient to prove A is the
+    // one that's expanded.)
     await expect(cardB.getByTestId('raffle-price-display')).toHaveCount(0)
 
     await aliceCtx.close()
