@@ -10,6 +10,7 @@ import {
   createItemApi,
   publishItemApi,
 } from '../helpers/auction'
+import { enableEventFeature } from '../helpers/api'
 import { setFeatureFlagOverride } from '../helpers/featureFlags'
 
 test.describe('Auction moderation queue', () => {
@@ -27,6 +28,7 @@ test.describe('Auction moderation queue', () => {
       const eventEnd = new Date(now.getTime() + 8 * 60 * 60_000).toISOString()
       const { id: eventId } = await createEventApi(api, { start: eventStart, end: eventEnd })
       createdEvents.push(eventId)
+      await enableEventFeature(api, eventId, 'auction')
 
       await configureAuctionApi(api, eventId, {
         itemModerationPolicy: 0, // RequireApproval
@@ -51,6 +53,7 @@ test.describe('Auction moderation queue', () => {
     const eventEnd = new Date(now.getTime() + 8 * 60 * 60_000).toISOString()
     const { id: eventId } = await createEventApi(adminCtx, { start: eventStart, end: eventEnd })
     createdEvents.push(eventId)
+    await enableEventFeature(adminCtx, eventId, 'auction')
 
     await configureAuctionApi(adminCtx, eventId, {
       itemModerationPolicy: 0, // RequireApproval
@@ -81,6 +84,7 @@ test.describe('Auction moderation queue', () => {
       const eventEnd = new Date(now.getTime() + 8 * 60 * 60_000).toISOString()
       const { id: eventId } = await createEventApi(api, { start: eventStart, end: eventEnd })
       createdEvents.push(eventId)
+      await enableEventFeature(api, eventId, 'auction')
 
       await configureAuctionApi(api, eventId, {
         itemModerationPolicy: 0, // RequireApproval
@@ -109,6 +113,7 @@ test.describe('Auction moderation queue', () => {
       const eventEnd = new Date(now.getTime() + 8 * 60 * 60_000).toISOString()
       const { id: eventId } = await createEventApi(adminCtx, { start: eventStart, end: eventEnd })
       createdEvents.push(eventId)
+      await enableEventFeature(adminCtx, eventId, 'auction')
 
       await configureAuctionApi(adminCtx, eventId, {
         itemModerationPolicy: 0, // RequireApproval

@@ -9,6 +9,7 @@ import {
   getAuctionSettingsApi,
   startAuctionApi,
 } from '../helpers/auction'
+import { enableEventFeature } from '../helpers/api'
 import { setFeatureFlagOverride } from '../helpers/featureFlags'
 
 test.describe('Auction settings', () => {
@@ -30,6 +31,7 @@ test.describe('Auction settings', () => {
       const api = await adminApi(browser, baseURL!)
       const { id: eventId } = await createEventApi(api)
       createdEvents.push(eventId)
+      await enableEventFeature(api, eventId, 'auction')
 
       await page.goto(`${baseURL}/events/${eventId}/auction/settings`)
       await page.getByTestId('auction-settings-form').waitFor({ state: 'visible', timeout: 20000 })
@@ -115,6 +117,7 @@ test.describe('Auction settings', () => {
       const api = await adminApi(browser, baseURL!)
       const { id: eventId } = await createEventApi(api)
       createdEvents.push(eventId)
+      await enableEventFeature(api, eventId, 'auction')
       await api.close()
 
       await page.goto(`${baseURL}/events/${eventId}/auction/settings`)
@@ -159,6 +162,7 @@ test.describe('Auction settings', () => {
       const api = await adminApi(browser, baseURL!)
       const { id: eventId } = await createEventApi(api)
       createdEvents.push(eventId)
+      await enableEventFeature(api, eventId, 'auction')
 
       // Alice calls PUT directly → expect 403
       const aliceApi = await userApi(browser, 'alice', baseURL!)
@@ -207,6 +211,7 @@ test.describe('Auction settings', () => {
       const api = await adminApi(browser, baseURL!)
       const { id: eventId } = await createEventApi(api)
       createdEvents.push(eventId)
+      await enableEventFeature(api, eventId, 'auction')
 
       // Move event dates to encompass "now" so we can start an auction in the past
       const now = new Date()
@@ -263,6 +268,7 @@ test.describe('Auction settings', () => {
       const api = await adminApi(browser, baseURL!)
       const { id: eventId } = await createEventApi(api)
       createdEvents.push(eventId)
+      await enableEventFeature(api, eventId, 'auction')
 
       await page.goto(`${baseURL}/events/${eventId}/auction/settings`)
       await page.getByTestId('auction-settings-form').waitFor({ state: 'visible', timeout: 20000 })

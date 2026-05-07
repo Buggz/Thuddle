@@ -1,6 +1,6 @@
 import { test, expect } from '../helpers/fixtures'
 import { contextAs, uid, expectJson, getAuthHeadersFromPage } from '../helpers/auth'
-import { adminApi, createEventApi, createRaffleApi, addRaffleEntryApi, startRaffleApi } from '../helpers/api'
+import { adminApi, createEventApi, createRaffleApi, addRaffleEntryApi, startRaffleApi , enableEventFeature } from '../helpers/api'
 import { gotoManageRafflesTab } from '../helpers/events'
 
 /**
@@ -18,6 +18,7 @@ test.describe('Start and draw raffle', () => {
     const api = await adminApi(browser, baseURL!)
     const { id: eventId } = await createEventApi(api)
     createdEvents.push(eventId)
+    await enableEventFeature(api, eventId, 'raffles')
     const { id: raffleId } = await createRaffleApi(api, eventId, {
       name: `Start Raffle ${uid()}`,
       price: 10,
@@ -63,6 +64,7 @@ test.describe('Start and draw raffle', () => {
     const api = await adminApi(browser, baseURL!)
     const { id: eventId } = await createEventApi(api, { visibility: 0 })
     createdEvents.push(eventId)
+    await enableEventFeature(api, eventId, 'raffles')
     await api.close()
 
     const { context: adminCtx, page: adminPage } = await contextAs(browser, 'admin')
@@ -126,6 +128,7 @@ test.describe('Start and draw raffle', () => {
     const api = await adminApi(browser, baseURL!)
     const { id: eventId } = await createEventApi(api, { visibility: 0 })
     createdEvents.push(eventId)
+    await enableEventFeature(api, eventId, 'raffles')
     await api.close()
 
     const { context: adminCtx, page: adminPage } = await contextAs(browser, 'admin')
@@ -204,6 +207,7 @@ test.describe('Start and draw raffle', () => {
     const api = await adminApi(browser, baseURL!)
     const { id: eventId } = await createEventApi(api, { visibility: 0 })
     createdEvents.push(eventId)
+    await enableEventFeature(api, eventId, 'raffles')
     await api.close()
 
     const { context: adminCtx, page: adminPage } = await contextAs(browser, 'admin')
@@ -256,6 +260,7 @@ test.describe('Start and draw raffle', () => {
     const api = await adminApi(browser, baseURL!)
     const { id: eventId } = await createEventApi(api)
     createdEvents.push(eventId)
+    await enableEventFeature(api, eventId, 'raffles')
     const { id: raffleId } = await createRaffleApi(api, eventId, {
       name: `Double Start Raffle ${uid()}`,
       price: 10,

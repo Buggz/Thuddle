@@ -9,11 +9,15 @@ import { apiUrl } from '@/api'
 import { auctionApi } from '@/api'
 import DiscussionTab from '@/features/events/components/DiscussionTab.vue'
 import RafflesSection from '@/features/events/raffles/RafflesSection.vue'
+import ActivitiesSection from '@/features/events/activities/ActivitiesSection.vue'
 import { raffleApi } from '@/api'
 import { formatCurrency } from '@/shared/formatCurrency'
 import FunnyLoader from '@/shared/components/FunnyLoader.vue'
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
 import { usePermissionsStore } from '@/features/auth/stores/permissions'
+import EventTabBar from '@/features/events/components/EventTabBar.vue'
+import { useEventFeaturesStore } from '@/features/events/stores/eventFeatures'
+import { EVENT_FEATURES, FeatureKeys } from '@/features/events/featureCatalog'
 
 const route = useRoute()
 const router = useRouter()
@@ -22,6 +26,7 @@ const auth = useAuthStore()
 const eventsStore = useEventsStore()
 const permissions = usePermissionsStore()
 const { auctions: auctionsEnabled } = useFeatureFlags()
+const eventFeaturesStore = useEventFeaturesStore()
 
 const loading = shallowRef(true)
 const error = shallowRef(null)
@@ -64,12 +69,21 @@ const participantsLoading = shallowRef(false)
 const participantsLoaded = shallowRef(false)
 
 const auctionSettings = ref(null)
-const auctionVisible = computed(() =>
-  auctionsEnabled.value
-  && !!auctionSettings.value
-  && auctionSettings.value.configured !== false
-  && auctionSettings.value.enabled === true
-)
+const visibleTabs = computed(() => {
+  const tabs = [
+    { key: 'about', label: 'About this event' },
+    { key: 'discussion', label: 'Discussion', testid: 'event-tab-discussion' },
+    { key: 'attendees', label: 'Attendees', testid: 'event-tab-attendees' }
+  ]
+  for (const meta of EVENT_FEATURES) {
+    if (!eventFeaturesStore.isEnabled(route.params.id, meta.key)) continue
+    if (meta.key === FeatureKeys.Auction && !auctionsEnabled.value) continue
+    if ((meta.key === FeatureKeys.Raffles || meta.key === FeatureKeys.Activities) &&
+        !(auth.isAuthenticated && hasParticipantAccess.value)) continue
+    tabs.push({ key: meta.key, label: meta.label, icon: meta.icon, testid: `event-tab-${meta.key}` })
+  }
+  return tabs
+})
 const auctionStatus = computed(() => auctionSettings.value?.status || null)
 const auctionStatusBadgeClass = computed(() => {
   switch (auctionStatus.value) {
@@ -204,14 +218,26 @@ function eventImageGradient(id) {
 }
 
 // Auto-switch to raffles tab when navigated via ?raffle= deep link
+// Only if the raffles feature is enabled for this event.
 watch(() => route.query.raffle, (raffleId) => {
-  if (raffleId) activeTab.value = 'raffles'
+  if (raffleId && eventFeaturesStore.isEnabled(route.params.id, FeatureKeys.Raffles)) {
+    activeTab.value = 'raffles'
+  }
 }, { immediate: true })
 
 // Defensive: if the user loses participant access (e.g. they leave the event)
 // while a participant-only tab is active, fall back to About.
 watch(hasParticipantAccess, (hasAccess) => {
-  if (!hasAccess && activeTab.value === 'raffles') {
+  if (!hasAccess && (activeTab.value === 'raffles' || activeTab.value === 'activities')) {
+    activeTab.value = 'about'
+  }
+})
+
+// If the active tab is a feature tab (raffles/auction/activities) and that feature
+// gets disabled live (EventFeatureDisabled arrives), fall back to About.
+watch(visibleTabs, (tabs) => {
+  const keys = tabs.map((t) => t.key)
+  if (!keys.includes(activeTab.value)) {
     activeTab.value = 'about'
   }
 })
@@ -219,6 +245,7 @@ watch(hasParticipantAccess, (hasAccess) => {
 onMounted(() => {
   loadEvent()
   loadAuctionSettings()
+  eventFeaturesStore.fetchFeatures(route.params.id).catch(() => { /* best-effort */ })
 })
 
 onBeforeUnmount(() => {
@@ -231,6 +258,7 @@ watch(() => auth.isAuthenticated, (authenticated, wasAuthenticated) => {
     participantsLoaded.value = false
     loadEvent()
     loadAuctionSettings()
+    eventFeaturesStore.fetchFeatures(route.params.id).catch(() => { /* best-effort */ })
   }
 })
 
@@ -462,92 +490,45 @@ watch(() => event.value?.participantCount, (newCount, oldCount) => {
 
         <!-- Navigation Tabs -->
         <div class="px-6 py-4 border-t border-gray-100 bg-gray-50/30">
-          <nav class="flex flex-wrap gap-2 p-1.5 bg-gray-100/80 border border-gray-200/60 rounded-2xl w-fit" aria-label="Tabs">
-            <button
-              @click="selectTab('about')"
-              class="px-5 py-2.5 text-sm font-bold rounded-xl transition-all duration-200 ease-out"
-              :class="activeTab === 'about'
-                ? 'bg-white text-indigo-700 shadow-sm ring-1 ring-gray-200/50'
-                : 'text-gray-500 hover:text-gray-800 hover:bg-gray-200/50'"
-            >
-              About this event
-            </button>
-            
-            <button
-              data-testid="event-tab-discussion"
-              @click="selectTab('discussion')"
-              class="flex items-center px-5 py-2.5 text-sm font-bold rounded-xl transition-all duration-200 ease-out relative"
-              :class="activeTab === 'discussion'
-                ? 'bg-white text-indigo-700 shadow-sm ring-1 ring-gray-200/50'
-                : 'text-gray-500 hover:text-gray-800 hover:bg-gray-200/50'"
-            >
-              Discussion
-              
-              <div v-if="event.postCount" class="ml-2.5 flex items-center transition-colors">
-                <div class="relative flex items-center justify-center px-2 py-0.5 rounded-md border text-xs font-semibold shadow-sm"
-                     :class="(event.hasUnreadDiscussion && activeTab !== 'discussion') || activeTab === 'discussion' ? 'bg-indigo-50 text-indigo-700 border-indigo-100' : 'bg-white text-gray-500 border-gray-200/60'">
-                  <span v-if="event.hasUnreadDiscussion && activeTab !== 'discussion'" data-testid="discussion-unread-indicator" class="absolute -top-1 -right-1 flex h-2.5 w-2.5">
-                    <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
-                    <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-rose-500 ring-2 ring-white"></span>
-                  </span>
-                  {{ event.postCount }}
+          <EventTabBar :tabs="visibleTabs" :active-key="activeTab" @update:active-key="selectTab">
+            <template #badge="{ tab }">
+              <!-- Discussion: unread indicator + post count + pending badge -->
+              <template v-if="tab.key === 'discussion'">
+                <div v-if="event.postCount" class="ml-2.5 flex items-center transition-colors">
+                  <div class="relative flex items-center justify-center px-2 py-0.5 rounded-md border text-xs font-semibold shadow-sm"
+                       :class="(event.hasUnreadDiscussion && activeTab !== 'discussion') || activeTab === 'discussion' ? 'bg-indigo-50 text-indigo-700 border-indigo-100' : 'bg-white text-gray-500 border-gray-200/60'">
+                    <span v-if="event.hasUnreadDiscussion && activeTab !== 'discussion'" data-testid="discussion-unread-indicator" class="absolute -top-1 -right-1 flex h-2.5 w-2.5">
+                      <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                      <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-rose-500 ring-2 ring-white"></span>
+                    </span>
+                    {{ event.postCount }}
+                  </div>
                 </div>
-              </div>
+                <span v-if="event.pendingPostCount" class="ml-2 inline-flex items-center bg-amber-50 text-amber-700 px-2 py-0.5 rounded-md border border-amber-200/60 text-[10px] uppercase font-bold tracking-wider shadow-sm">
+                  {{ event.pendingPostCount }} pending
+                </span>
+              </template>
 
-              <span v-if="event.pendingPostCount" class="ml-2 inline-flex items-center bg-amber-50 text-amber-700 px-2 py-0.5 rounded-md border border-amber-200/60 text-[10px] uppercase font-bold tracking-wider shadow-sm">
-                {{ event.pendingPostCount }} pending
-              </span>
-            </button>
+              <!-- Attendees: participant count badge -->
+              <template v-else-if="tab.key === 'attendees'">
+                <div class="ml-2.5 flex items-center justify-center px-2 py-0.5 rounded-md border text-xs font-semibold shadow-sm transition-colors"
+                     :class="activeTab === 'attendees' ? 'bg-indigo-50 text-indigo-700 border-indigo-100' : 'bg-white text-gray-500 border-gray-200/60'">
+                  {{ event.participantCount || 0 }}
+                </div>
+              </template>
 
-            <button
-              data-testid="event-tab-attendees"
-              @click="selectTab('attendees')"
-              class="flex items-center px-5 py-2.5 text-sm font-bold rounded-xl transition-all duration-200 ease-out relative"
-              :class="activeTab === 'attendees'
-                ? 'bg-white text-indigo-700 shadow-sm ring-1 ring-gray-200/50'
-                : 'text-gray-500 hover:text-gray-800 hover:bg-gray-200/50'"
-            >
-              Attendees
-              <div class="ml-2.5 flex items-center justify-center px-2 py-0.5 rounded-md border text-xs font-semibold shadow-sm transition-colors"
-                   :class="activeTab === 'attendees' ? 'bg-indigo-50 text-indigo-700 border-indigo-100' : 'bg-white text-gray-500 border-gray-200/60'">
-                {{ event.participantCount || 0 }}
-              </div>
-            </button>
-
-            <button
-              v-if="auctionVisible"
-              data-testid="event-tab-auction"
-              @click="selectTab('auction')"
-              class="flex items-center px-5 py-2.5 text-sm font-bold rounded-xl transition-all duration-200 ease-out relative"
-              :class="activeTab === 'auction'
-                ? 'bg-white text-indigo-700 shadow-sm ring-1 ring-gray-200/50'
-                : 'text-gray-500 hover:text-gray-800 hover:bg-gray-200/50'"
-            >
-              <span class="mr-1.5" aria-hidden="true">🔨</span>
-              Auction
-              <span
-                v-if="auctionStatus"
-                data-testid="event-auction-tab-status"
-                class="ml-2 inline-flex items-center px-1.5 py-0.5 rounded-md border text-[10px] uppercase font-bold tracking-wider"
-                :class="auctionStatusBadgeClass"
-              >
-                {{ auctionStatus }}
-              </span>
-            </button>
-
-            <button
-              v-if="auth.isAuthenticated && hasParticipantAccess"
-              data-testid="event-tab-raffles"
-              @click="selectTab('raffles')"
-              class="flex items-center px-5 py-2.5 text-sm font-bold rounded-xl transition-all duration-200 ease-out"
-              :class="activeTab === 'raffles'
-                ? 'bg-white text-indigo-700 shadow-sm ring-1 ring-gray-200/50'
-                : 'text-gray-500 hover:text-gray-800 hover:bg-gray-200/50'"
-            >
-              <span class="mr-1.5" aria-hidden="true">🎟️</span>
-              Raffles
-            </button>
-          </nav>
+              <!-- Auction: status badge -->
+              <template v-else-if="tab.key === 'auction' && auctionStatus">
+                <span
+                  data-testid="event-auction-tab-status"
+                  class="ml-2 inline-flex items-center px-1.5 py-0.5 rounded-md border text-[10px] uppercase font-bold tracking-wider"
+                  :class="auctionStatusBadgeClass"
+                >
+                  {{ auctionStatus }}
+                </span>
+              </template>
+            </template>
+          </EventTabBar>
         </div>
 
         <!-- Tab: About -->
@@ -610,7 +591,7 @@ watch(() => event.value?.participantCount, (newCount, oldCount) => {
         </div>
 
         <!-- Tab: Raffles -->
-        <div v-if="activeTab === 'raffles' && hasParticipantAccess" class="px-6 py-5" data-testid="event-raffles-tab">
+        <div v-if="activeTab === 'raffles' && hasParticipantAccess && eventFeaturesStore.isEnabled(route.params.id, FeatureKeys.Raffles)" class="px-6 py-5" data-testid="event-raffles-tab">
           <RafflesSection
             :event-id="event.id"
             :is-host="event.isAdmin"
@@ -619,8 +600,13 @@ watch(() => event.value?.participantCount, (newCount, oldCount) => {
           />
         </div>
 
+        <!-- Tab: Activities -->
+        <div v-if="activeTab === 'activities' && eventFeaturesStore.isEnabled(route.params.id, FeatureKeys.Activities) && auth.isAuthenticated && hasParticipantAccess" class="px-6 py-5" data-testid="activities-tab">
+          <ActivitiesSection :event-id="event.id" />
+        </div>
+
         <!-- Tab: Auction -->
-        <div v-if="activeTab === 'auction' && auctionVisible" class="px-6 py-5" data-testid="event-auction-tab">
+        <div v-if="activeTab === 'auction' && eventFeaturesStore.isEnabled(route.params.id, FeatureKeys.Auction)" class="px-6 py-5" data-testid="event-auction-tab">
           <div class="rounded-2xl border border-indigo-100 bg-linear-to-br from-indigo-50/60 to-white p-6">
             <div class="flex items-start gap-4">
               <div class="w-12 h-12 rounded-xl bg-white border border-indigo-200/60 shadow-sm flex items-center justify-center shrink-0">

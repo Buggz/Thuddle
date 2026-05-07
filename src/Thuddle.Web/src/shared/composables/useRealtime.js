@@ -29,7 +29,15 @@ export const RealtimeEvents = Object.freeze({
   RaffleDeleted: 'RaffleDeleted',
   RaffleEntryChanged: 'RaffleEntryChanged',
   RaffleStarted: 'RaffleStarted',
-  RaffleWinnerRevealed: 'RaffleWinnerRevealed'
+  RaffleWinnerRevealed: 'RaffleWinnerRevealed',
+  // Event Features
+  EventFeatureEnabled: 'EventFeatureEnabled',
+  EventFeatureDisabled: 'EventFeatureDisabled',
+  // Activities
+  ActivityCreated: 'ActivityCreated',
+  ActivityUpdated: 'ActivityUpdated',
+  ActivityDeleted: 'ActivityDeleted',
+  ActivityParticipantChanged: 'ActivityParticipantChanged'
 })
 
 let connection = null

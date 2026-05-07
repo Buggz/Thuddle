@@ -6,6 +6,7 @@ import {
   createRaffleApi,
   addRaffleEntryApi,
   startRaffleApi,
+  enableEventFeature,
 } from '../helpers/api'
 import { gotoManageRafflesTab } from '../helpers/events'
 
@@ -55,6 +56,7 @@ test.describe('Draw only from presentation view', () => {
     const api = await adminApi(browser, baseURL!)
     const { id: eventId } = await createEventApi(api, { visibility: 0 })
     createdEvents.push(eventId)
+    await enableEventFeature(api, eventId, 'raffles')
     await api.close()
 
     // Alice joins so she can be a raffle entry

@@ -1,6 +1,6 @@
 import { test, expect } from '../helpers/fixtures'
 import { contextAs, uid, getAuthHeadersFromPage } from '../helpers/auth'
-import { adminApi, createEventApi } from '../helpers/api'
+import { adminApi, createEventApi , enableEventFeature } from '../helpers/api'
 import { gotoManageRafflesTab } from '../helpers/events'
 
 /**
@@ -18,6 +18,7 @@ test.describe('Create and edit raffle', () => {
     const api = await adminApi(browser, baseURL!)
     const { id: eventId } = await createEventApi(api)
     createdEvents.push(eventId)
+    await enableEventFeature(api, eventId, 'raffles')
     await api.close()
 
     // Admin navigates to the event manage view
@@ -57,6 +58,7 @@ test.describe('Create and edit raffle', () => {
     const api = await adminApi(browser, baseURL!)
     const { id: eventId } = await createEventApi(api, { visibility: 0 })
     createdEvents.push(eventId)
+    await enableEventFeature(api, eventId, 'raffles')
     await api.close()
 
     // Alice joins as a participant
@@ -84,6 +86,7 @@ test.describe('Create and edit raffle', () => {
     const api = await adminApi(browser, baseURL!)
     const { id: eventId } = await createEventApi(api)
     createdEvents.push(eventId)
+    await enableEventFeature(api, eventId, 'raffles')
     await api.close()
 
     // Admin navigates to the manage view
@@ -165,6 +168,7 @@ test.describe('Create and edit raffle', () => {
     const api = await adminApi(browser, baseURL!)
     const { id: eventId } = await createEventApi(api, { visibility: 0 })
     createdEvents.push(eventId)
+    await enableEventFeature(api, eventId, 'raffles')
     await api.close()
 
     // Admin creates raffle via GUI on the manage view

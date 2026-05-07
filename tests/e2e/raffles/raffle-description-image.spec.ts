@@ -1,6 +1,6 @@
 import { test, expect } from '../helpers/fixtures'
 import { contextAs, uid } from '../helpers/auth'
-import { adminApi, createEventApi } from '../helpers/api'
+import { adminApi, createEventApi , enableEventFeature } from '../helpers/api'
 import { gotoManageRafflesTab } from '../helpers/events'
 import path from 'path'
 
@@ -22,6 +22,7 @@ test.describe('Raffle description image upload', () => {
     const api = await adminApi(browser, baseURL!)
     const { id: eventId } = await createEventApi(api)
     createdEvents.push(eventId)
+    await enableEventFeature(api, eventId, 'raffles')
     await api.close()
 
     // Admin opens the raffle creation dialog

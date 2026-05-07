@@ -548,6 +548,73 @@ namespace Thuddle.Api.Migrations
                     b.ToTable("Events");
                 });
 
+            modelBuilder.Entity("Thuddle.Api.Data.EventActivity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("CreatedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("EndsAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("EventId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("MaxParticipants")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("StartsAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EventId", "StartsAt");
+
+                    b.ToTable("EventActivities");
+                });
+
+            modelBuilder.Entity("Thuddle.Api.Data.EventActivityParticipant", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("EventActivityId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("SignedUpAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("EventActivityId", "UserId")
+                        .IsUnique();
+
+                    b.ToTable("EventActivityParticipants");
+                });
+
             modelBuilder.Entity("Thuddle.Api.Data.EventAuctionSettings", b =>
                 {
                     b.Property<Guid>("EventId")
@@ -657,6 +724,38 @@ namespace Thuddle.Api.Migrations
                         .IsUnique();
 
                     b.ToTable("EventCoAdmins");
+                });
+
+            modelBuilder.Entity("Thuddle.Api.Data.EventFeature", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("EnabledAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("EnabledByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("EventId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("FeatureKey")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EnabledByUserId");
+
+                    b.HasIndex("EventId");
+
+                    b.HasIndex("EventId", "FeatureKey")
+                        .IsUnique();
+
+                    b.ToTable("EventFeatures");
                 });
 
             modelBuilder.Entity("Thuddle.Api.Data.EventInvitation", b =>
@@ -1137,6 +1236,36 @@ namespace Thuddle.Api.Migrations
                     b.Navigation("Owner");
                 });
 
+            modelBuilder.Entity("Thuddle.Api.Data.EventActivity", b =>
+                {
+                    b.HasOne("Thuddle.Api.Data.Event", "Event")
+                        .WithMany()
+                        .HasForeignKey("EventId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Event");
+                });
+
+            modelBuilder.Entity("Thuddle.Api.Data.EventActivityParticipant", b =>
+                {
+                    b.HasOne("Thuddle.Api.Data.EventActivity", "Activity")
+                        .WithMany("Participants")
+                        .HasForeignKey("EventActivityId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Thuddle.Api.Data.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Activity");
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("Thuddle.Api.Data.EventAuctionSettings", b =>
                 {
                     b.HasOne("Thuddle.Api.Data.Event", "Event")
@@ -1192,6 +1321,23 @@ namespace Thuddle.Api.Migrations
                     b.Navigation("Event");
 
                     b.Navigation("User");
+                });
+
+            modelBuilder.Entity("Thuddle.Api.Data.EventFeature", b =>
+                {
+                    b.HasOne("Thuddle.Api.Data.User", null)
+                        .WithMany()
+                        .HasForeignKey("EnabledByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Thuddle.Api.Data.Event", "Event")
+                        .WithMany()
+                        .HasForeignKey("EventId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Event");
                 });
 
             modelBuilder.Entity("Thuddle.Api.Data.EventInvitation", b =>
@@ -1298,6 +1444,11 @@ namespace Thuddle.Api.Migrations
             modelBuilder.Entity("Thuddle.Api.Data.AuctionItem", b =>
                 {
                     b.Navigation("BoardGames");
+                });
+
+            modelBuilder.Entity("Thuddle.Api.Data.EventActivity", b =>
+                {
+                    b.Navigation("Participants");
                 });
 
             modelBuilder.Entity("Thuddle.Api.Data.Raffle", b =>

@@ -1,6 +1,6 @@
 import { test, expect } from '../helpers/fixtures'
 import { contextAs, uid } from '../helpers/auth'
-import { adminApi, createEventApi, createRaffleApi, startRaffleApi } from '../helpers/api'
+import { adminApi, createEventApi, createRaffleApi, startRaffleApi , enableEventFeature } from '../helpers/api'
 import { gotoManageRafflesTab } from '../helpers/events'
 
 /**
@@ -17,6 +17,7 @@ test.describe('Negative permissions and error cases', () => {
     const api = await adminApi(browser, baseURL!)
     const { id: eventId } = await createEventApi(api)
     createdEvents.push(eventId)
+    await enableEventFeature(api, eventId, 'raffles')
     await api.close()
 
     // Admin creates raffle via GUI on the manage view
@@ -54,6 +55,7 @@ test.describe('Negative permissions and error cases', () => {
     const api = await adminApi(browser, baseURL!)
     const { id: eventId } = await createEventApi(api, { joinMode: 1 })
     createdEvents.push(eventId)
+    await enableEventFeature(api, eventId, 'raffles')
     await api.close()
 
     // Admin creates raffle via GUI on the manage view
@@ -111,6 +113,7 @@ test.describe('Negative permissions and error cases', () => {
     const api = await adminApi(browser, baseURL!)
     const { id: eventId } = await createEventApi(api, { visibility: 0 })
     createdEvents.push(eventId)
+    await enableEventFeature(api, eventId, 'raffles')
     await api.close()
 
     // Alice joins
@@ -176,6 +179,7 @@ test.describe('Negative permissions and error cases', () => {
     const api = await adminApi(browser, baseURL!)
     const { id: eventId } = await createEventApi(api)
     createdEvents.push(eventId)
+    await enableEventFeature(api, eventId, 'raffles')
     const { id: raffleId } = await createRaffleApi(api, eventId, {
       name: `Delete Test Raffle ${uid()}`,
     })
@@ -205,6 +209,7 @@ test.describe('Negative permissions and error cases', () => {
     const api = await adminApi(browser, baseURL!)
     const { id: eventId } = await createEventApi(api, { visibility: 0 })
     createdEvents.push(eventId)
+    await enableEventFeature(api, eventId, 'raffles')
     await api.close()
 
     // Alice joins the event but is NOT a host / co-admin

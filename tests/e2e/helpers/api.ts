@@ -209,3 +209,120 @@ export async function startRaffleApi(
   )
   if (!resp.ok()) throw new Error(`Start raffle failed: ${resp.status()} ${await resp.text()}`)
 }
+
+// ── Event Feature registry helpers ───────────────────────────────────────────
+
+/**
+ * Minimal duck-typed shape for any helper API context (works with both
+ * `helpers/api.ts` and `helpers/auction.ts` ApiContext variants).
+ */
+type FeatureApiContext = {
+  request: APIRequestContext
+  headers: Record<string, string>
+  baseURL: string
+}
+
+export type EventFeatureKey = 'raffles' | 'auction' | 'activities'
+
+/**
+ * Enable a feature on an event (owner/co-host only). Most newly created events
+ * have NO features enabled — call this immediately after `createEventApi`
+ * in tests that exercise raffles, auction, or activities UI.
+ */
+export async function enableEventFeature(
+  api: FeatureApiContext,
+  eventId: string,
+  key: EventFeatureKey,
+): Promise<void> {
+  const resp = await api.request.post(`${api.baseURL}/api/events/${eventId}/features`, {
+    headers: api.headers,
+    data: JSON.stringify({ key }),
+  })
+  if (!resp.ok()) {
+    throw new Error(`Enable feature ${key} failed: ${resp.status()} ${await resp.text()}`)
+  }
+}
+
+export async function disableEventFeature(
+  api: FeatureApiContext,
+  eventId: string,
+  key: EventFeatureKey,
+): Promise<{ ok: boolean; status: number; body: string }> {
+  const resp = await api.request.delete(
+    `${api.baseURL}/api/events/${eventId}/features/${key}`,
+    { headers: api.headers },
+  )
+  return { ok: resp.ok(), status: resp.status(), body: await resp.text() }
+}
+
+export async function listEventFeatures(
+  api: FeatureApiContext,
+  eventId: string,
+): Promise<Array<{ key: string }>> {
+  const resp = await api.request.get(`${api.baseURL}/api/events/${eventId}/features`, {
+    headers: api.headers,
+  })
+  if (!resp.ok()) throw new Error(`List features failed: ${resp.status()}`)
+  return resp.json()
+}
+
+// ── Activity API helpers ─────────────────────────────────────────────────────
+
+export interface CreateActivityPayload {
+  title: string
+  description?: string | null
+  startsAt?: string
+  endsAt?: string | null
+  maxParticipants: number
+}
+
+export async function createActivityApi(
+  api: FeatureApiContext,
+  eventId: string,
+  payload: CreateActivityPayload,
+): Promise<{ id: string }> {
+  const startsAt = payload.startsAt ?? new Date(Date.now() + 24 * 3600 * 1000).toISOString()
+  const endsAt = payload.endsAt ?? new Date(Date.now() + 26 * 3600 * 1000).toISOString()
+  const resp = await api.request.post(
+    `${api.baseURL}/api/events/${eventId}/activities`,
+    {
+      headers: api.headers,
+      data: JSON.stringify({
+        title: payload.title,
+        description: payload.description ?? null,
+        startsAt,
+        endsAt,
+        maxParticipants: payload.maxParticipants,
+      }),
+    },
+  )
+  if (resp.status() !== 201) {
+    throw new Error(`Create activity failed: ${resp.status()} ${await resp.text()}`)
+  }
+  const body = await resp.json()
+  return { id: body.id }
+}
+
+export async function signupActivityApi(
+  api: FeatureApiContext,
+  eventId: string,
+  activityId: string,
+): Promise<{ ok: boolean; status: number; body: string }> {
+  const resp = await api.request.post(
+    `${api.baseURL}/api/events/${eventId}/activities/${activityId}/signup`,
+    { headers: api.headers },
+  )
+  return { ok: resp.ok(), status: resp.status(), body: await resp.text() }
+}
+
+export async function joinEventApi(
+  api: FeatureApiContext,
+  eventId: string,
+): Promise<void> {
+  const resp = await api.request.post(`${api.baseURL}/api/events/${eventId}/join`, {
+    headers: api.headers,
+  })
+  if (!resp.ok() && resp.status() !== 409) {
+    throw new Error(`Join event failed: ${resp.status()} ${await resp.text()}`)
+  }
+}

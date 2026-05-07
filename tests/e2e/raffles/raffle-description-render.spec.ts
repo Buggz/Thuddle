@@ -1,6 +1,6 @@
 import { test, expect } from '../helpers/fixtures'
 import { contextAs, uid } from '../helpers/auth'
-import { adminApi, createEventApi, createRaffleApi } from '../helpers/api'
+import { adminApi, createEventApi, createRaffleApi , enableEventFeature } from '../helpers/api'
 import { gotoManageRafflesTab } from '../helpers/events'
 import path from 'path'
 
@@ -24,6 +24,7 @@ test.describe('Raffle description rendering (participant)', () => {
     const api = await adminApi(browser, baseURL!)
     const { id: eventId } = await createEventApi(api, { visibility: 0 })
     createdEvents.push(eventId)
+    await enableEventFeature(api, eventId, 'raffles')
     await api.close()
 
     // Admin authors a raffle through the GUI: type some plain text into the
@@ -106,6 +107,7 @@ test.describe('Raffle description rendering (participant)', () => {
     const api = await adminApi(browser, baseURL!)
     const { id: eventId } = await createEventApi(api, { visibility: 0 })
     createdEvents.push(eventId)
+    await enableEventFeature(api, eventId, 'raffles')
     const { id: raffleId } = await createRaffleApi(api, eventId, {
       name: `No Desc Raffle ${uid()}`,
       price: 5,

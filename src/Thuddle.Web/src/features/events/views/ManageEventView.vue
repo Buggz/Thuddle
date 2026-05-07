@@ -14,6 +14,11 @@ import { useFeatureFlags } from '@/shared/featureFlags'
 import { useEventsStore } from '@/features/events/stores/events'
 import KickAttendeeDialog from '@/features/events/components/KickAttendeeDialog.vue'
 import RafflesSection from '@/features/events/raffles/RafflesSection.vue'
+import ManageActivitiesSection from '@/features/events/activities/ManageActivitiesSection.vue'
+import EventTabBar from '@/features/events/components/EventTabBar.vue'
+import EventFeaturesManager from '@/features/events/components/EventFeaturesManager.vue'
+import { useEventFeaturesStore } from '@/features/events/stores/eventFeatures'
+import { EVENT_FEATURES, FeatureKeys } from '@/features/events/featureCatalog'
 
 const route = useRoute()
 const router = useRouter()
@@ -21,19 +26,28 @@ const { authFetch } = useApi()
 const permissionsStore = usePermissionsStore()
 const eventsStore = useEventsStore()
 const { auctions: auctionsEnabled } = useFeatureFlags()
+const eventFeaturesStore = useEventFeaturesStore()
 
 const eventId = route.params.id
 const { uploadImage } = useInlineImageUpload(eventId)
 const activeTab = shallowRef('about')
 
-const manageTabs = computed(() => [
-  { key: 'about', label: 'About this event' },
-  { key: 'discussion', label: 'Discussion' },
-  { key: 'attendees', label: 'Attendees' },
-  { key: 'coadmins', label: 'Co-Admins' },
-  ...(auctionsEnabled.value ? [{ key: 'auction', label: 'Auction' }] : []),
-  { key: 'raffles', label: 'Raffles' }
-])
+const manageTabs = computed(() => {
+  const base = [
+    { key: 'about', label: 'About', testid: 'manage-tab-about' },
+    { key: 'features', label: 'Features', testid: 'manage-tab-features' },
+    { key: 'discussion', label: 'Discussion', testid: 'manage-tab-discussion' },
+    { key: 'attendees', label: 'Attendees', testid: 'manage-tab-attendees' },
+    { key: 'coadmins', label: 'Co-Admins', testid: 'manage-tab-coadmins' }
+  ]
+  for (const meta of EVENT_FEATURES) {
+    if (meta.key === FeatureKeys.Auction && !auctionsEnabled.value) continue
+    if (eventFeaturesStore.isEnabled(eventId, meta.key)) {
+      base.push({ key: meta.key, label: meta.label, icon: meta.icon, testid: `manage-tab-${meta.key}` })
+    }
+  }
+  return base
+})
 
 // Event details (editable)
 const form = ref({
@@ -479,6 +493,7 @@ onMounted(async () => {
     await Promise.all([
       loadAttendees(),
       loadDiscussionSettings(),
+      eventFeaturesStore.fetchFeatures(eventId).catch(() => { /* best-effort */ }),
       ...(auctionsEnabled.value ? [loadAuctionSettings()] : [])
     ])
   }
@@ -486,6 +501,15 @@ onMounted(async () => {
 
 onUnmounted(() => {
   eventsStore.releaseEvent(eventId)
+})
+
+// If the active tab is a feature tab and that feature gets disabled live
+// (EventFeatureDisabled arrives), fall back to About.
+watch(manageTabs, (tabs) => {
+  const keys = tabs.map((t) => t.key)
+  if (!keys.includes(activeTab.value)) {
+    activeTab.value = 'about'
+  }
 })
 </script>
 
@@ -512,22 +536,24 @@ onUnmounted(() => {
 
       <!-- Tabs -->
       <div class="bg-white shadow rounded-xl overflow-hidden">
-        <div class="border-b border-gray-100">
-          <nav class="flex px-6" aria-label="Tabs">
-            <button
-              v-for="tab in manageTabs"
-              :key="tab.key"
-              :data-testid="`manage-tab-${tab.key}`"
-              @click="activeTab = tab.key"
-              class="px-4 py-3 text-sm font-medium border-b-2 transition-colors"
-              :class="activeTab === tab.key
-                ? 'border-indigo-600 text-indigo-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
-            >
-              {{ tab.label }}
-              <span v-if="tab.key === 'attendees'" class="ml-1 inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600">{{ attendees.length }}</span>
-            </button>
-          </nav>
+        <div class="border-b border-gray-100 px-6 py-4">
+          <EventTabBar
+            :tabs="manageTabs"
+            :active-key="activeTab"
+            @update:active-key="(k) => activeTab = k"
+          >
+            <template #badge="{ tab }">
+              <span
+                v-if="tab.key === 'attendees'"
+                class="ml-1 inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600"
+              >{{ attendees.length }}</span>
+            </template>
+          </EventTabBar>
+        </div>
+
+        <!-- Tab: Features -->
+        <div v-if="activeTab === 'features'" class="p-6" data-testid="manage-features-tab">
+          <EventFeaturesManager :event-id="eventId" />
         </div>
 
         <!-- Tab: About this event -->
@@ -951,6 +977,11 @@ onUnmounted(() => {
             :can-author="true"
             :currency="eventData?.currency || form.currency || ''"
           />
+        </div>
+
+        <!-- Tab: Activities -->
+        <div v-if="activeTab === 'activities'" class="p-6" data-testid="manage-activities-tab">
+          <ManageActivitiesSection :event-id="eventId" />
         </div>
       </div>
     </template>

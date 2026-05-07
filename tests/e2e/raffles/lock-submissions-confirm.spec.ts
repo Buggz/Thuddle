@@ -1,6 +1,6 @@
 import { test, expect } from '../helpers/fixtures'
 import { contextAs, uid, getAuthHeadersFromPage } from '../helpers/auth'
-import { adminApi, createEventApi, createRaffleApi } from '../helpers/api'
+import { adminApi, createEventApi, createRaffleApi , enableEventFeature } from '../helpers/api'
 import { gotoManageRafflesTab } from '../helpers/events'
 
 /**
@@ -16,6 +16,7 @@ test.describe('Lock User Submissions confirmation', () => {
     const api = await adminApi(browser, baseURL!)
     const { id: eventId } = await createEventApi(api)
     createdEvents.push(eventId)
+    await enableEventFeature(api, eventId, 'raffles')
     const { id: raffleId } = await createRaffleApi(api, eventId, {
       name: `CancelLock ${uid()}`,
       allowSelfReport: true,
@@ -65,6 +66,7 @@ test.describe('Lock User Submissions confirmation', () => {
     const api = await adminApi(browser, baseURL!)
     const { id: eventId } = await createEventApi(api)
     createdEvents.push(eventId)
+    await enableEventFeature(api, eventId, 'raffles')
     const { id: raffleId } = await createRaffleApi(api, eventId, {
       name: `ConfirmLock ${uid()}`,
       allowSelfReport: true,

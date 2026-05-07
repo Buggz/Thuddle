@@ -28,6 +28,9 @@ public class ThuddleDbContext(DbContextOptions<ThuddleDbContext> options) : DbCo
     public DbSet<Raffle> Raffles => Set<Raffle>();
     public DbSet<RaffleEntry> RaffleEntries => Set<RaffleEntry>();
     public DbSet<RaffleDraw> RaffleDraws => Set<RaffleDraw>();
+    public DbSet<EventFeature> EventFeatures => Set<EventFeature>();
+    public DbSet<EventActivity> EventActivities => Set<EventActivity>();
+    public DbSet<EventActivityParticipant> EventActivityParticipants => Set<EventActivityParticipant>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -334,6 +337,48 @@ public class ThuddleDbContext(DbContextOptions<ThuddleDbContext> options) : DbCo
                 .WithMany()
                 .HasForeignKey(d => d.WinnerUserId)
                 .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<EventFeature>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.FeatureKey).IsRequired().HasMaxLength(50);
+            entity.HasOne(e => e.Event)
+                .WithMany()
+                .HasForeignKey(e => e.EventId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne<User>()
+                .WithMany()
+                .HasForeignKey(e => e.EnabledByUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasIndex(e => e.EventId);
+            entity.HasIndex(e => new { e.EventId, e.FeatureKey }).IsUnique();
+        });
+
+        modelBuilder.Entity<EventActivity>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Title).IsRequired().HasMaxLength(120);
+            entity.Property(e => e.Description); // nvarchar/text — no length cap, validators enforce size
+            entity.HasOne(e => e.Event)
+                .WithMany()
+                .HasForeignKey(e => e.EventId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasIndex(e => new { e.EventId, e.StartsAt });
+        });
+
+        modelBuilder.Entity<EventActivityParticipant>(entity =>
+        {
+            entity.HasKey(p => p.Id);
+            entity.HasOne(p => p.Activity)
+                .WithMany(a => a.Participants)
+                .HasForeignKey(p => p.EventActivityId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(p => p.User)
+                .WithMany()
+                .HasForeignKey(p => p.UserId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasIndex(p => new { p.EventActivityId, p.UserId }).IsUnique();
         });
     }
 }
