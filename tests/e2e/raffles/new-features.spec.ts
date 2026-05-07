@@ -90,16 +90,20 @@ test.describe('Raffle improvements (winners visibility, lock toggle, avatars, li
     const { headers: adminHeaders } = await getAuthHeadersFromPage(adminPage, baseURL!)
     await gotoManageRafflesTab(adminPage, baseURL!, eventId)
 
-    await adminPage.getByTestId(`raffle-card-${raffleId}`).click()
-
+    // Single raffle is auto-expanded — no card click needed (would collapse it).
     // Lock submissions banner should be visible
     const lockBtn = adminPage.getByTestId('raffle-lock-submissions-btn')
-    await expect(lockBtn).toBeVisible()
+    await expect(lockBtn).toBeVisible({ timeout: 10000 })
+
+    // Clicking the lock button now opens a confirmation dialog
+    await lockBtn.click()
+    const confirmBtn = adminPage.getByTestId('confirm-dialog-confirm')
+    await expect(confirmBtn).toBeVisible()
 
     const patchResp = adminPage.waitForResponse(
       (r) => r.url().includes(`/api/events/${eventId}/raffles/${raffleId}`) && r.request().method() === 'PATCH'
     )
-    await lockBtn.click()
+    await confirmBtn.click()
     const patchResult = await patchResp
     expect(patchResult.status()).toBe(200)
 
@@ -112,17 +116,15 @@ test.describe('Raffle improvements (winners visibility, lock toggle, avatars, li
   })
 
   test('raffle entry payload includes profilePictureUrl field', async ({ browser, baseURL, createdEvents }) => {
-    // Admin creates event via API
+    // Pure payload contract check — no manage-view UI interaction needed
+    // (the auto-expand watcher in RafflesSection has a tendency to interfere
+    //  with raffle state if a stray click reaches raffle-draw-stage-btn).
     const api = await adminApi(browser, baseURL!)
     const { id: eventId } = await createEventApi(api, { visibility: 0 })
     createdEvents.push(eventId)
     await api.close()
 
-    const { context: adminCtx, page: adminPage } = await contextAs(browser, 'admin')
-    const { headers: adminHeaders } = await getAuthHeadersFromPage(adminPage, baseURL!)
-    await gotoManageRafflesTab(adminPage, baseURL!, eventId)
-
-    // Alice joins
+    // Alice joins via UI (only way to become a participant)
     const { context: aliceCtx, page: alicePage } = await contextAs(browser, 'alice')
     const { headers: aliceHeaders } = await getAuthHeadersFromPage(alicePage, baseURL!)
     await alicePage.goto(`${baseURL}/events/${eventId}`)
@@ -130,26 +132,23 @@ test.describe('Raffle improvements (winners visibility, lock toggle, avatars, li
     await alicePage.getByTestId('event-join-btn').click()
     await expect(alicePage.getByTestId('event-joined-badge')).toBeVisible({ timeout: 10000 })
 
-    // Get alice's userId
     const aliceProfileResp = await alicePage.request.get(`${baseURL}/api/profile`, { headers: aliceHeaders })
     const aliceProfile = await aliceProfileResp.json() as { id: string }
     const aliceUserId = aliceProfile.id
     await aliceCtx.close()
 
-    // Admin creates raffle and adds alice via API
+    // Admin creates raffle, adds alice, starts, draws — all via API
     const adminApiCtx = await adminApi(browser, baseURL!)
     const { id: raffleId } = await createRaffleApi(adminApiCtx, eventId, {
       name: `Avatar Raffle ${uid()}`,
     })
     await addRaffleEntryApi(adminApiCtx, eventId, raffleId, { userId: aliceUserId, tickets: 1 })
-    await adminApiCtx.close()
-
-    // Admin navigates to manage > raffles
-    await gotoManageRafflesTab(adminPage, baseURL!, eventId)
-    await adminPage.getByTestId(`raffle-card-${raffleId}`).click()
 
     // GET raffle should include profilePictureUrl key on each entry (may be null)
-    const raffleResp = await adminPage.request.get(`${baseURL}/api/events/${eventId}/raffles/${raffleId}`, { headers: adminHeaders })
+    const raffleResp = await adminApiCtx.request.get(
+      `${baseURL}/api/events/${eventId}/raffles/${raffleId}`,
+      { headers: adminApiCtx.headers },
+    )
     const raffleData = await raffleResp.json() as {
       entries: Array<{ userId: string; displayName: string; profilePictureUrl: string | null; tickets: number }>
     }
@@ -158,28 +157,25 @@ test.describe('Raffle improvements (winners visibility, lock toggle, avatars, li
       expect(entry).toHaveProperty('profilePictureUrl')
     }
 
-    // Start and draw via API
-    const adminApiCtx2 = await adminApi(browser, baseURL!)
-    await startRaffleApi(adminApiCtx2, eventId, raffleId)
-    const drawResp = await adminApiCtx2.request.post(
-      `${adminApiCtx2.baseURL}/api/events/${eventId}/raffles/${raffleId}/draw`,
-      { headers: adminApiCtx2.headers }
+    await startRaffleApi(adminApiCtx, eventId, raffleId)
+    const drawResp = await adminApiCtx.request.post(
+      `${adminApiCtx.baseURL}/api/events/${eventId}/raffles/${raffleId}/draw`,
+      { headers: adminApiCtx.headers }
     )
     const drawBody = await drawResp.json()
     expect(drawBody).toHaveProperty('profilePictureUrl')
 
     // Draws list endpoint should also include the field
-    const drawsResp = await adminApiCtx2.request.get(`${adminApiCtx2.baseURL}/api/events/${eventId}/raffles/${raffleId}/draws`, {
-      headers: adminApiCtx2.headers,
-    })
+    const drawsResp = await adminApiCtx.request.get(
+      `${adminApiCtx.baseURL}/api/events/${eventId}/raffles/${raffleId}/draws`,
+      { headers: adminApiCtx.headers },
+    )
     const drawsBody = await drawsResp.json() as Array<{ id: string; profilePictureUrl: string | null }>
     expect(drawsBody.length).toBeGreaterThan(0)
     for (const draw of drawsBody) {
       expect(draw).toHaveProperty('profilePictureUrl')
     }
-    await adminApiCtx2.close()
-
-    await adminCtx.close()
+    await adminApiCtx.close()
   })
 
   test('participant raffle card live-updates entry count when admin adds a participant', async ({ browser, baseURL, createdEvents }) => {

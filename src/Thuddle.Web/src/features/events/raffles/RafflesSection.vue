@@ -1,5 +1,5 @@
 <script setup>
-import { ref, shallowRef, computed, onMounted } from 'vue'
+import { ref, shallowRef, computed, onMounted, watch } from 'vue'
 import { useRafflesStore } from '../stores/raffles'
 import { useInlineImageUpload } from '@/shared/composables/useInlineImageUpload'
 import RaffleEditor from './RaffleEditor.vue'
@@ -33,6 +33,7 @@ const editLoading = shallowRef(false)
 const saving = ref(false)
 const saveError = ref(null)
 const expandedRaffleId = ref(null)
+const hasAutoExpanded = ref(false)
 const deleteDialogOpen = ref(false)
 const pendingDeleteId = ref(null)
 
@@ -147,6 +148,14 @@ function statusBadgeClass(status) {
     : 'bg-amber-50 text-amber-700 border-amber-200'
 }
 
+watch(eventRaffles, (raffles) => {
+  if (raffles.length === 1 && !hasAutoExpanded.value) {
+    hasAutoExpanded.value = true
+    expandedRaffleId.value = raffles[0].id
+    store.fetchRaffle(props.eventId, raffles[0].id).catch(() => {})
+  }
+}, { immediate: true })
+
 onMounted(() => {
   loadRaffles()
 })
@@ -204,7 +213,6 @@ onMounted(() => {
       <div
         v-for="raffle in eventRaffles"
         :key="raffle.id"
-        :data-testid="`raffle-card-${raffle.id}`"
         class="rounded-2xl border shadow-sm overflow-hidden transition-shadow hover:shadow-md"
         :class="raffle.deletedAt
           ? 'border-gray-200 bg-gray-50 opacity-75'
@@ -213,6 +221,7 @@ onMounted(() => {
         <!-- Card header (click to expand) -->
         <button
           type="button"
+          :data-testid="`raffle-card-${raffle.id}`"
           class="w-full flex items-center gap-4 px-5 py-4 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-inset"
           @click="toggleExpand(raffle.id)"
         >

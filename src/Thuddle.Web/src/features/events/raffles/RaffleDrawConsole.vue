@@ -2,6 +2,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useRafflesStore } from '../stores/raffles'
+import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
 
 const props = defineProps({
   eventId: { type: String, required: true },
@@ -12,15 +13,16 @@ const props = defineProps({
 const store = useRafflesStore()
 const router = useRouter()
 
-const starting = ref(false)
-const drawing = ref(false)
-const drawError = ref(null)
-const startError = ref(null)
-const noTickets = ref(false)
+const locking = ref(false)
+const lockError = ref(null)
+const opening = ref(false)
+const showLockConfirm = ref(false)
+const openError = ref(null)
 
 const draws = computed(() => store.draws.get(props.raffleId) ?? [])
 const isOpen = computed(() => props.raffle?.status === 'Open')
 const isDrawing = computed(() => props.raffle?.status === 'Drawing')
+const showLock = computed(() => isOpen.value && props.raffle?.selfReportingEnabled)
 
 async function loadDraws() {
   try {
@@ -28,32 +30,39 @@ async function loadDraws() {
   } catch { /* best-effort */ }
 }
 
-async function handleStart() {
-  starting.value = true
-  startError.value = null
+function requestLock() {
+  showLockConfirm.value = true
+}
+
+async function lockSubmissions() {
+  showLockConfirm.value = false
+  locking.value = true
+  lockError.value = null
   try {
-    await store.startDraw(props.eventId, props.raffleId)
+    await store.patchRaffle(props.eventId, props.raffleId, { selfReportingEnabled: false })
   } catch (err) {
-    startError.value = err.message || 'Failed to start.'
+    lockError.value = err.message || 'Failed to lock submissions.'
   } finally {
-    starting.value = false
+    locking.value = false
   }
 }
 
-async function handleDraw() {
-  drawing.value = true
-  drawError.value = null
-  noTickets.value = false
+async function openDrawStage() {
+  opening.value = true
+  openError.value = null
   try {
-    await store.drawWinner(props.eventId, props.raffleId)
-  } catch (err) {
-    if (err.message?.toLowerCase().includes('no tickets')) {
-      noTickets.value = true
-    } else {
-      drawError.value = err.message || 'Failed to draw winner.'
+    if (isOpen.value) {
+      try {
+        await store.startDraw(props.eventId, props.raffleId)
+      } catch (err) {
+        // 409 = already in Drawing state, which is fine. Anything else bubbles.
+        if (!/already.*drawing/i.test(err.message || '')) throw err
+      }
     }
-  } finally {
-    drawing.value = false
+    router.push({ name: 'raffle-present', params: { id: props.eventId, raffleId: props.raffleId } })
+  } catch (err) {
+    openError.value = err.message || 'Failed to open draw stage.'
+    opening.value = false
   }
 }
 
@@ -83,86 +92,56 @@ onMounted(() => {
         </span>
       </div>
 
-      <div class="p-6">
-        <!-- Open state: Start button -->
-        <div v-if="isOpen" class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div class="p-6 space-y-4">
+        <!-- Lock submissions (only when self-reporting is on and raffle is Open) -->
+        <div v-if="showLock" class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div class="flex-1">
-            <p class="text-sm font-semibold text-gray-900">Ready to begin drawing?</p>
+            <p class="text-sm font-semibold text-gray-900">Submissions are open</p>
             <p class="text-xs text-gray-500 mt-1 max-w-sm">
-              Lock all entries and transition the raffle into "Drawing" state when you are ready to pick winners.
+              Participants can self-report their tickets. Lock submissions when you are ready to stop changes.
             </p>
           </div>
-          
           <button
             type="button"
-            data-testid="raffle-start-btn"
-            :disabled="starting"
-            @click="handleStart"
-            class="group relative inline-flex items-center justify-center gap-2 px-6 py-3 bg-indigo-600 text-white text-sm font-bold rounded-xl hover:bg-indigo-500 transition-all disabled:opacity-60 disabled:cursor-not-allowed shadow-md hover:shadow-lg overflow-hidden shrink-0"
+            data-testid="raffle-lock-submissions-btn"
+            :disabled="locking"
+            @click="requestLock"
+            class="inline-flex items-center justify-center gap-2 px-6 py-3 bg-indigo-600 text-white text-sm font-bold rounded-xl hover:bg-indigo-500 transition-all disabled:opacity-60 disabled:cursor-not-allowed shadow-md hover:shadow-lg shrink-0"
           >
-            <div class="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300 pointer-events-none"></div>
-            <svg v-if="starting" class="animate-spin w-5 h-5 text-white" fill="none" viewBox="0 0 24 24">
+            <svg v-if="locking" class="animate-spin w-5 h-5 text-white" fill="none" viewBox="0 0 24 24">
               <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
               <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
             </svg>
-            <svg v-else class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.347a1.125 1.125 0 0 1 0 1.972l-11.54 6.347a1.125 1.125 0 0 1-1.667-.986V5.653Z" />
+            <svg v-else class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
             </svg>
-            <span v-if="starting">Locking Entries…</span>
-            <span v-else>Lock & Start Draw</span>
+            <span>{{ locking ? 'Locking…' : 'Lock User Submissions' }}</span>
           </button>
         </div>
-        <p v-if="startError" class="text-xs text-red-600 mt-2 font-medium">{{ startError }}</p>
+        <p v-if="lockError" class="text-xs text-red-600 font-medium">{{ lockError }}</p>
 
-        <!-- Drawing state: Draw + Present buttons -->
-        <div v-if="isDrawing" class="space-y-4">
-          <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-4">
-            
-            <!-- Present button - Secondary action -->
-            <button
-              type="button"
-              data-testid="raffle-present-btn"
-              title="Show on a big screen"
-              @click="router.push({ name: 'raffle-present', params: { id: eventId, raffleId } })"
-              class="order-2 sm:order-1 flex-1 sm:flex-none inline-flex justify-center items-center gap-2 px-5 py-3 lg:px-6 lg:py-4 bg-white text-gray-700 text-sm font-bold uppercase tracking-wider rounded-xl border-2 border-gray-200 hover:border-gray-300 hover:bg-gray-50 transition-all shadow-sm group"
-            >
-              <svg class="w-5 h-5 text-gray-400 group-hover:text-indigo-600 transition-colors" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L9 15M20.25 3.75h-4.5m4.5 0v4.5m0-4.5L15 9m5.25 11.25h-4.5m4.5 0v-4.5m0 4.5L15 15" />
-              </svg>
-              Presentation View
-            </button>
-
-            <!-- Draw button - Primary Action -->
-            <button
-              type="button"
-              data-testid="raffle-draw-btn"
-              :disabled="drawing || noTickets"
-              @click="handleDraw"
-              class="order-1 sm:order-2 flex-[2] relative inline-flex justify-center items-center gap-3 px-6 py-4 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white text-base lg:text-lg font-black uppercase tracking-widest rounded-xl hover:from-emerald-400 hover:to-emerald-500 transition-all disabled:opacity-50 disabled:grayscale disabled:cursor-not-allowed shadow-lg hover:shadow-emerald-500/30 overflow-hidden transform active:scale-[0.98] group"
-            >
-              <!-- Decorative shine -->
-              <div class="absolute top-0 -inset-full h-full w-1/2 z-5 block transform -skew-x-12 bg-gradient-to-r from-transparent to-white opacity-20 group-hover:translate-x-[250%] transition-transform duration-1000"></div>
-              
-              <svg v-if="drawing" class="animate-spin w-6 h-6 text-white" fill="none" viewBox="0 0 24 24">
-                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-              </svg>
-              <svg v-else class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 18.75h-9m9 0a3 3 0 0 1 3 3h-15a3 3 0 0 1 3-3m9 0v-3.375c0-.621-.503-1.125-1.125-1.125h-.871M7.5 18.75v-3.375c0-.621.504-1.125 1.125-1.125h.872m5.007 0H9.497m5.007 0a7.454 7.454 0 0 1-.982-3.172M9.497 14.25a7.454 7.454 0 0 0 .981-3.172M5.25 4.236c-.982.143-1.954.317-2.916.52A6.003 6.003 0 0 0 7.73 9.728M5.25 4.236V4.5c0 2.108.966 3.99 2.48 5.228M5.25 4.236V2.721C7.456 2.41 9.71 2.25 12 2.25c2.291 0 4.545.16 6.75.47v1.516M7.73 9.728a6.726 6.726 0 0 0 2.748 1.35m8.272-6.842V4.5c0 2.108-.966 3.99-2.48 5.228m2.48-5.492a46.32 46.32 0 0 1 2.916.52 6.003 6.003 0 0 1-5.395 4.972m0 0a6.726 6.726 0 0 1-2.749 1.35m0 0a6.772 6.772 0 0 1-3.044 0" />
-              </svg>
-              <span v-if="drawing">Spinning…</span>
-              <span v-else>Draw Winner</span>
-            </button>
-          </div>
-
-          <!-- Draw contextual messages -->
-          <div v-if="noTickets" class="flex gap-2 items-center rounded-xl bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800 font-semibold">
-            <svg class="w-5 h-5 text-amber-600 shrink-0" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+        <!-- Navigate to draw stage (always available except when self-report banner is showing) -->
+        <div v-if="!showLock" class="space-y-3">
+          <p class="text-sm text-gray-600">Winners are drawn from the presentation view — open it to begin.</p>
+          <button
+            type="button"
+            data-testid="raffle-draw-stage-btn"
+            :disabled="opening"
+            title="Open the draw stage"
+            @click="openDrawStage"
+            class="w-full relative inline-flex justify-center items-center gap-3 px-6 py-4 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white text-base lg:text-lg font-black uppercase tracking-widest rounded-xl hover:from-emerald-400 hover:to-emerald-500 transition-all disabled:opacity-60 disabled:cursor-not-allowed shadow-lg hover:shadow-emerald-500/30 overflow-hidden transform active:scale-[0.98] group"
+          >
+            <div class="absolute top-0 -inset-full h-full w-1/2 z-5 block transform -skew-x-12 bg-gradient-to-r from-transparent to-white opacity-20 group-hover:translate-x-[250%] transition-transform duration-1000"></div>
+            <svg v-if="opening" class="animate-spin w-6 h-6 text-white" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
             </svg>
-            No tickets remaining in the pool. All possible winners have been drawn!
-          </div>
-          <p v-if="drawError" class="text-xs font-bold text-red-600 bg-red-50 p-3 rounded-xl border border-red-100">{{ drawError }}</p>
+            <svg v-else class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L9 15M20.25 3.75h-4.5m4.5 0v4.5m0-4.5L15 9m5.25 11.25h-4.5m4.5 0v-4.5m0 4.5L15 15" />
+            </svg>
+            {{ opening ? 'Opening…' : 'Open Draw Stage' }}
+          </button>
+          <p v-if="openError" class="text-xs text-red-600 font-medium">{{ openError }}</p>
         </div>
       </div>
     </div>
@@ -177,9 +156,7 @@ onMounted(() => {
           :data-testid="`raffle-history-row-${draw.id}`"
           class="flex items-center p-3 rounded-xl border border-gray-100 bg-white shadow-sm hover:shadow transition-shadow relative overflow-hidden"
         >
-           <!-- Rank indicator -->
           <div class="absolute top-0 bottom-0 left-0 w-1.5 bg-gradient-to-b from-emerald-400 to-emerald-600"></div>
-          
           <div class="flex-1 min-w-0 pl-3">
             <div class="flex items-center gap-2">
               <span class="text-xs font-bold text-emerald-600 uppercase tracking-wider">#{{ draws.length - i }}</span>
@@ -194,7 +171,6 @@ onMounted(() => {
               </span>
             </div>
           </div>
-          
           <div class="shrink-0 flex flex-col items-end pl-2 border-l border-gray-100">
             <span class="text-xs font-black text-gray-400 uppercase tracking-widest">Left</span>
             <span class="text-lg font-black tracking-tighter" :class="draw.ticketsAfter > 0 ? 'text-indigo-600' : 'text-gray-300'">
@@ -204,15 +180,16 @@ onMounted(() => {
         </div>
       </div>
     </div>
-    
-    <div v-else-if="isDrawing" class="rounded-xl border border-dashed border-gray-200 p-8 text-center bg-gray-50/50">
-      <div class="mx-auto w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mb-3">
-        <svg class="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 18.75h-9m9 0a3 3 0 0 1 3 3h-15a3 3 0 0 1 3-3m9 0v-3.375c0-.621-.503-1.125-1.125-1.125h-.871M7.5 18.75v-3.375c0-.621.504-1.125 1.125-1.125h.872m5.007 0H9.497m5.007 0a7.454 7.454 0 0 1-.982-3.172M9.497 14.25a7.454 7.454 0 0 0 .981-3.172M5.25 4.236c-.982.143-1.954.317-2.916.52A6.003 6.003 0 0 0 7.73 9.728M5.25 4.236V4.5c0 2.108.966 3.99 2.48 5.228M5.25 4.236V2.721C7.456 2.41 9.71 2.25 12 2.25c2.291 0 4.545.16 6.75.47v1.516M7.73 9.728a6.726 6.726 0 0 0 2.748 1.35m8.272-6.842V4.5c0 2.108-.966 3.99-2.48 5.228m2.48-5.492a46.32 46.32 0 0 1 2.916.52 6.003 6.003 0 0 1-5.395 4.972m0 0a6.726 6.726 0 0 1-2.749 1.35m0 0a6.772 6.772 0 0 1-3.044 0" />
-        </svg>
-      </div>
-      <p class="text-sm font-bold text-gray-700">No winners drawn yet</p>
-      <p class="text-xs text-gray-500 mt-1">Press "Draw Winner" to pick the first lucky participant.</p>
-    </div>
+
+    <ConfirmDialog
+      :open="showLockConfirm"
+      variant="warning"
+      title="Lock user submissions?"
+      message="Participants will no longer be able to add or change their own ticket counts. You can still adjust ticket counts as host."
+      confirmLabel="Lock submissions"
+      cancelLabel="Keep open"
+      @confirm="lockSubmissions"
+      @cancel="showLockConfirm = false"
+    />
   </div>
 </template>

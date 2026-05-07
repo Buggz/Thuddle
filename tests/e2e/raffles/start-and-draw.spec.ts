@@ -27,22 +27,33 @@ test.describe('Start and draw raffle', () => {
     // Admin navigates to event manage view
     const { context: adminCtx, page: adminPage } = await contextAs(browser, 'admin')
     await gotoManageRafflesTab(adminPage, baseURL!, eventId)
-    await adminPage.getByTestId(`raffle-card-${raffleId}`).click()
+
+    // Auto-expand fires for the single raffle. Wait for the draw-stage button to be visible.
+    const drawStageBtn = adminPage.getByTestId('raffle-draw-stage-btn')
+    if (!(await drawStageBtn.isVisible().catch(() => false))) {
+      await adminPage.getByTestId(`raffle-card-${raffleId}`).click()
+    }
+    await expect(drawStageBtn).toBeVisible({ timeout: 10000 })
 
     // Status should be Open
-    await expect(adminPage.locator('text=/Open/i')).toBeVisible()
+    await expect(adminPage.getByTestId(`raffle-status-badge-${raffleId}`)).toHaveText(/Open/i)
 
-    // Click start
-    await adminPage.getByTestId('raffle-start-btn').click()
-    const startResp = await adminPage.waitForResponse(
+    // Click draw-stage button — for an Open raffle this calls /start then navigates to /present
+    const startRespPromise = adminPage.waitForResponse(
       (r) => r.url().includes(`/api/events/${eventId}/raffles/${raffleId}/start`) && r.status() === 200
     )
+    await drawStageBtn.click()
+    const startResp = await startRespPromise
     const startBody = await expectJson<{ started: boolean; status: string }>(startResp)
     expect(startBody.status).toBe('Drawing')
 
-    // Status should update to Drawing
-    await adminPage.waitForTimeout(1000)
-    await expect(adminPage.getByTestId(`raffle-status-badge-${raffleId}`)).toHaveText(/Drawing/i)
+    // Page navigates to presentation view
+    await adminPage.waitForURL(new RegExp(`/events/${eventId}/raffles/${raffleId}/present`), { timeout: 10000 })
+    await expect(adminPage.getByTestId('raffle-present-view')).toBeVisible({ timeout: 10000 })
+
+    // Navigate back to manage view to confirm status badge reads Drawing
+    await gotoManageRafflesTab(adminPage, baseURL!, eventId)
+    await expect(adminPage.getByTestId(`raffle-status-badge-${raffleId}`)).toHaveText(/Drawing/i, { timeout: 10000 })
 
     await adminCtx.close()
   })
@@ -83,10 +94,19 @@ test.describe('Start and draw raffle', () => {
 
     // Admin navigates to raffle (re-open manage tab so the new raffle is in view)
     await gotoManageRafflesTab(adminPage, baseURL!, eventId)
-    await adminPage.getByTestId(`raffle-card-${raffleId}`).click()
 
-    // Draw
-    await adminPage.getByTestId('raffle-draw-btn').click()
+    // Open draw stage — raffle already in Drawing, so this only navigates
+    const drawStageBtn = adminPage.getByTestId('raffle-draw-stage-btn')
+    if (!(await drawStageBtn.isVisible().catch(() => false))) {
+      await adminPage.getByTestId(`raffle-card-${raffleId}`).click()
+    }
+    await expect(drawStageBtn).toBeVisible({ timeout: 10000 })
+    await drawStageBtn.click()
+    await adminPage.waitForURL(new RegExp(`/events/${eventId}/raffles/${raffleId}/present`), { timeout: 10000 })
+    await expect(adminPage.getByTestId('raffle-present-view')).toBeVisible({ timeout: 10000 })
+
+    // Draw via the presentation-view button
+    await adminPage.getByTestId('raffle-present-draw-btn').click()
     const drawResp = await adminPage.waitForResponse(
       (r) => r.url().includes(`/api/events/${eventId}/raffles/${raffleId}/draw`)
         && r.request().method() === 'POST'
@@ -137,10 +157,21 @@ test.describe('Start and draw raffle', () => {
 
     // Admin navigates to raffle (re-open manage tab so the new raffle is in view)
     await gotoManageRafflesTab(adminPage, baseURL!, eventId)
-    await adminPage.getByTestId(`raffle-card-${raffleId}`).click()
+
+    // Open draw stage (raffle is already in Drawing, navigation only)
+    const drawStageBtn = adminPage.getByTestId('raffle-draw-stage-btn')
+    if (!(await drawStageBtn.isVisible().catch(() => false))) {
+      await adminPage.getByTestId(`raffle-card-${raffleId}`).click()
+    }
+    await expect(drawStageBtn).toBeVisible({ timeout: 10000 })
+    await drawStageBtn.click()
+    await adminPage.waitForURL(new RegExp(`/events/${eventId}/raffles/${raffleId}/present`), { timeout: 10000 })
+    await expect(adminPage.getByTestId('raffle-present-view')).toBeVisible({ timeout: 10000 })
+
+    const presentDrawBtn = adminPage.getByTestId('raffle-present-draw-btn')
 
     // Draw 1
-    await adminPage.getByTestId('raffle-draw-btn').click()
+    await presentDrawBtn.click()
     const draw1Resp = await adminPage.waitForResponse(
       (r) => r.url().includes(`/api/events/${eventId}/raffles/${raffleId}/draw`)
         && r.request().method() === 'POST'
@@ -148,13 +179,12 @@ test.describe('Start and draw raffle', () => {
     )
     const draw1Body = await expectJson<{ drawId: string }>(draw1Resp)
 
-    // History should have 1 item
-    await adminPage.waitForTimeout(500)
-    await expect(adminPage.getByTestId('raffle-history-list')).toBeVisible()
-    await expect(adminPage.getByTestId(`raffle-history-row-${draw1Body.drawId}`)).toBeVisible()
+    // Winner reveal animation appears, then resolves into the winners list
+    await expect(adminPage.getByTestId('raffle-winner-reveal')).toBeVisible({ timeout: 10000 })
+    await expect(adminPage.getByTestId(`raffle-winners-row-${draw1Body.drawId}`)).toBeVisible({ timeout: 15000 })
 
     // Draw 2
-    await adminPage.getByTestId('raffle-draw-btn').click()
+    await presentDrawBtn.click()
     const draw2Resp = await adminPage.waitForResponse(
       (r) => r.url().includes(`/api/events/${eventId}/raffles/${raffleId}/draw`)
         && r.request().method() === 'POST'
@@ -162,10 +192,9 @@ test.describe('Start and draw raffle', () => {
     )
     const draw2Body = await expectJson<{ drawId: string }>(draw2Resp)
 
-    // History should have 2 items
-    await adminPage.waitForTimeout(500)
-    await expect(adminPage.getByTestId(`raffle-history-row-${draw1Body.drawId}`)).toBeVisible()
-    await expect(adminPage.getByTestId(`raffle-history-row-${draw2Body.drawId}`)).toBeVisible()
+    // Winners list should now contain both draws
+    await expect(adminPage.getByTestId(`raffle-winners-row-${draw1Body.drawId}`)).toBeVisible({ timeout: 15000 })
+    await expect(adminPage.getByTestId(`raffle-winners-row-${draw2Body.drawId}`)).toBeVisible({ timeout: 15000 })
 
     await adminCtx.close()
   })

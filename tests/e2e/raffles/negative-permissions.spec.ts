@@ -1,6 +1,6 @@
 import { test, expect } from '../helpers/fixtures'
 import { contextAs, uid } from '../helpers/auth'
-import { adminApi, createEventApi } from '../helpers/api'
+import { adminApi, createEventApi, createRaffleApi, startRaffleApi } from '../helpers/api'
 import { gotoManageRafflesTab } from '../helpers/events'
 
 /**
@@ -172,61 +172,32 @@ test.describe('Negative permissions and error cases', () => {
 
   test('soft-deleting a raffle in Drawing state succeeds and marks it deleted', async ({ browser, baseURL, createdEvents }) => {
     // Soft-delete is allowed in any state (incl. Drawing) so hosts can review draws/refunds.
-    // Admin creates event via API
+    // Admin creates event, raffle, and starts via API (no UI start button anymore).
     const api = await adminApi(browser, baseURL!)
     const { id: eventId } = await createEventApi(api)
     createdEvents.push(eventId)
-    await api.close()
-
-    // Admin creates and starts raffle via GUI on the manage view
-    const { context: adminCtx, page: adminPage } = await contextAs(browser, 'admin')
-    await gotoManageRafflesTab(adminPage, baseURL!, eventId)
-    await adminPage.getByTestId('raffle-create-btn').click()
-
-    const raffleName = `Delete Test Raffle ${uid()}`
-    await adminPage.getByTestId('raffle-name-input').fill(raffleName)
-
-    const createResp = adminPage.waitForResponse(
-      (r) => r.url().includes(`/api/events/${eventId}/raffles`) && r.request().method() === 'POST'
-    )
-    await adminPage.getByTestId('raffle-save-btn').click()
-    const createResult = await createResp
-    const createBody = await createResult.json()
-    const raffleId = createBody.id
-
-    // Expand and start
-    await adminPage.getByTestId(`raffle-card-${raffleId}`).click()
-    await adminPage.getByTestId('raffle-start-btn').click()
-    await adminPage.waitForResponse(
-      (r) => r.url().includes(`/api/events/${eventId}/raffles/${raffleId}/start`) && r.status() === 200
-    )
-
-    // Capture token
-    let adminToken = ''
-    adminPage.on('request', (req) => {
-      const auth = req.headers()['authorization']
-      if (auth?.startsWith('Bearer ')) adminToken = auth.substring(7)
+    const { id: raffleId } = await createRaffleApi(api, eventId, {
+      name: `Delete Test Raffle ${uid()}`,
     })
-    await adminPage.reload()
-    await adminPage.waitForResponse((r) => r.url().includes('/api/profile') && r.status() === 200, { timeout: 10000 })
+    await startRaffleApi(api, eventId, raffleId)
 
     // First delete: soft-deletes successfully
-    const deleteResp = await adminPage.request.delete(
+    const deleteResp = await api.request.delete(
       `${baseURL}/api/events/${eventId}/raffles/${raffleId}`,
-      { headers: { Authorization: `Bearer ${adminToken}` } }
+      { headers: api.headers }
     )
     expect(deleteResp.status()).toBe(204)
 
     // Second delete: 409 because already deleted
-    const deleteResp2 = await adminPage.request.delete(
+    const deleteResp2 = await api.request.delete(
       `${baseURL}/api/events/${eventId}/raffles/${raffleId}`,
-      { headers: { Authorization: `Bearer ${adminToken}` } }
+      { headers: api.headers }
     )
     expect(deleteResp2.status()).toBe(409)
     const errorBody = await deleteResp2.json() as { error: string }
     expect(errorBody.error.toLowerCase()).toContain('deleted')
 
-    await adminCtx.close()
+    await api.close()
   })
 
   test('non-host visiting /events/:id/manage cannot author raffles', async ({ browser, baseURL, createdEvents }) => {

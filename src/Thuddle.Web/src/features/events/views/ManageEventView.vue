@@ -1,5 +1,5 @@
 <script setup>
-import { shallowRef, ref, computed, onMounted, watch } from 'vue'
+import { shallowRef, ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useApi } from '@/shared/composables/useApi'
 import { useInlineImageUpload } from '@/shared/composables/useInlineImageUpload'
@@ -472,6 +472,8 @@ async function saveDiscussionSettings() {
 }
 
 onMounted(async () => {
+  // Side-effect: subscribes the SignalR connection to event:{eventId} so realtime broadcasts (raffles, auctions, participants, etc.) reach this view.
+  eventsStore.loadEvent(eventId)
   await loadEvent()
   if (!error.value) {
     await Promise.all([
@@ -480,6 +482,10 @@ onMounted(async () => {
       ...(auctionsEnabled.value ? [loadAuctionSettings()] : [])
     ])
   }
+})
+
+onUnmounted(() => {
+  eventsStore.releaseEvent(eventId)
 })
 </script>
 

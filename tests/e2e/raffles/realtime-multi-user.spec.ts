@@ -117,7 +117,8 @@ test.describe('Realtime multi-user raffle updates', () => {
     // Alice navigates to raffles tab on public event view (observes realtime updates)
     await alicePage.getByTestId('event-tab-raffles').click()
     await expect(alicePage.getByTestId('raffles-section')).toBeVisible()
-    await alicePage.getByTestId(`raffle-card-${raffleId}`).click()
+    // Single raffle is auto-expanded — do NOT click (would collapse it).
+    await expect(alicePage.getByTestId(`raffle-card-${raffleId}`)).toBeVisible({ timeout: 10000 })
 
     // Admin sets tickets to 7 via API
     await addRaffleEntryApi(adminApiCtx, eventId, raffleId, { userId: aliceUserId, tickets: 7 })

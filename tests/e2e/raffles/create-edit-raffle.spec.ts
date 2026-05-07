@@ -1,5 +1,5 @@
 import { test, expect } from '../helpers/fixtures'
-import { contextAs, uid } from '../helpers/auth'
+import { contextAs, uid, getAuthHeadersFromPage } from '../helpers/auth'
 import { adminApi, createEventApi } from '../helpers/api'
 import { gotoManageRafflesTab } from '../helpers/events'
 
@@ -88,6 +88,10 @@ test.describe('Create and edit raffle', () => {
 
     // Admin navigates to the manage view
     const { context: adminCtx, page: adminPage } = await contextAs(browser, 'admin')
+    // Capture admin auth headers BEFORE navigating to the manage view: the
+    // helper reloads the page, which would reset ManageEventView's activeTab
+    // back to 'about' and unmount the raffles tab (and its status badge).
+    const { headers: adminHeaders } = await getAuthHeadersFromPage(adminPage, baseURL!)
     await gotoManageRafflesTab(adminPage, baseURL!, eventId)
     await adminPage.getByTestId('raffle-create-btn').click()
 
@@ -105,11 +109,10 @@ test.describe('Create and edit raffle', () => {
 
     await adminPage.getByTestId('manage-raffles-tab').waitFor({ state: 'visible', timeout: 10000 })
 
-    // Expand the raffle card to see edit button
-    const raffleCard = adminPage.getByTestId(`raffle-card-${raffleId}`)
-    await raffleCard.click()
-
+    // Single raffle auto-expands after save -> fetchRaffles. Edit button lives in
+    // the always-visible card header so we don't need to expand explicitly.
     const editBtn = adminPage.getByTestId(`raffle-edit-btn-${raffleId}`)
+    await expect(editBtn).toBeVisible({ timeout: 10000 })
     await editBtn.click()
 
     // Edit name and description while Open
@@ -123,14 +126,18 @@ test.describe('Create and edit raffle', () => {
     await adminPage.getByTestId('raffle-save-btn').click()
     await patchResp
 
-    // Now start the raffle
-    await adminPage.getByTestId('raffle-start-btn').click()
-    await adminPage.waitForResponse(
-      (r) => r.url().includes(`/api/events/${eventId}/raffles/${raffleId}/start`) && r.status() === 200
+    // Start the raffle via API (no UI start button anymore). Headers were
+    // captured before navigating to the manage view to avoid a reload.
+    const startResp = await adminPage.request.post(
+      `${baseURL}/api/events/${eventId}/raffles/${raffleId}/start`,
+      { headers: adminHeaders },
     )
+    expect(startResp.status()).toBe(200)
 
-    // Wait for status to update to Drawing
-    await adminPage.waitForTimeout(1000)
+    // Wait for status badge to update to Drawing on the manage page
+    await expect(adminPage.getByTestId(`raffle-status-badge-${raffleId}`)).toHaveText(/Drawing/i, {
+      timeout: 10000,
+    })
 
     // Try to edit again
     await editBtn.click()

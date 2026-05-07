@@ -129,6 +129,7 @@ public static class RaffleEndpoints
                 r.DeletedAt,
                 entries = db.RaffleEntries
                     .Where(e => e.RaffleId == r.Id)
+                    .OrderBy(e => (e.User.DisplayName ?? e.User.Email).ToLower())
                     .Select(e => new
                     {
                         e.UserId,
@@ -314,7 +315,7 @@ public static class RaffleEndpoints
         if (!isAdmin && !isSelfReport)
             return Results.Forbid();
 
-        if (raffle.Status != RaffleStatus.Open)
+        if (!isAdmin && raffle.Status != RaffleStatus.Open)
             return Results.Conflict(new { error = "Entries can only be modified when the raffle is Open." });
 
         // Validate that the target userId is an event participant
@@ -381,9 +382,6 @@ public static class RaffleEndpoints
 
         if (raffle.DeletedAt is not null)
             return Results.Conflict(new { error = "Raffle has been deleted." });
-
-        if (raffle.Status != RaffleStatus.Open)
-            return Results.Conflict(new { error = "Entries can only be removed when the raffle is Open." });
 
         var entry = await db.RaffleEntries.AsTracking()
             .FirstOrDefaultAsync(e => e.RaffleId == raffleId && e.UserId == userId, ct);
