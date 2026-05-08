@@ -66,7 +66,7 @@ public static class ActivityEndpoints
                 a.EndsAt,
                 a.MaxParticipants,
                 participantCount = a.Participants.Count,
-                isFull = a.Participants.Count >= a.MaxParticipants,
+                isFull = a.MaxParticipants.HasValue && a.Participants.Count >= a.MaxParticipants.Value,
                 mySignupAt = a.Participants
                     .Where(p => p.UserId == lookupUserId)
                     .Select(p => (DateTime?)p.SignedUpAt)
@@ -117,7 +117,7 @@ public static class ActivityEndpoints
                 a.EndsAt,
                 a.MaxParticipants,
                 participantCount = a.Participants.Count,
-                isFull = a.Participants.Count >= a.MaxParticipants,
+                isFull = a.MaxParticipants.HasValue && a.Participants.Count >= a.MaxParticipants.Value,
                 mySignupAt = a.Participants
                     .Where(p => p.UserId == lookupUserId)
                     .Select(p => (DateTime?)p.SignedUpAt)
@@ -330,7 +330,7 @@ public static class ActivityEndpoints
             activity.EndsAt,
             activity.MaxParticipants,
             participantCount,
-            isFull = participantCount >= activity.MaxParticipants,
+            isFull = activity.MaxParticipants.HasValue && participantCount >= activity.MaxParticipants.Value,
             mySignupAt = (DateTime?)null,
             activity.CreatedAt,
             activity.UpdatedAt
@@ -399,8 +399,8 @@ public static class ActivityEndpoints
 
         var currentCount = await db.EventActivityParticipants
             .CountAsync(p => p.EventActivityId == activityId, ct);
-        if (currentCount >= activity.MaxParticipants)
-            return Results.Conflict(new { error = "Activity is full." });
+        if (activity.MaxParticipants.HasValue && currentCount >= activity.MaxParticipants.Value)
+            return Results.Conflict(new { error = "This activity is full." });
 
         var now = DateTime.UtcNow;
         var participant = new EventActivityParticipant
@@ -427,11 +427,11 @@ public static class ActivityEndpoints
         var participantCount = await db.EventActivityParticipants
             .CountAsync(p => p.EventActivityId == activityId, ct);
 
-        if (participantCount > activity.MaxParticipants)
+        if (activity.MaxParticipants.HasValue && participantCount > activity.MaxParticipants.Value)
         {
             logger.LogWarning(
                 "Activity {ActivityId} in event {EventId} exceeded MaxParticipants ({Max}) after concurrent sign-up. Current count: {Count}.",
-                activityId, eventId, activity.MaxParticipants, participantCount);
+                activityId, eventId, activity.MaxParticipants.Value, participantCount);
         }
 
         await realtime.ActivityParticipantChangedAsync(eventId, activityId, dbUser.Id, joined: true, participantCount, ct);
@@ -513,7 +513,7 @@ public record CreateActivityRequest(
     string? Description,
     DateTime StartsAt,
     DateTime? EndsAt,
-    int MaxParticipants);
+    int? MaxParticipants);
 
 public record UpdateActivityRequest(
     string? Title,

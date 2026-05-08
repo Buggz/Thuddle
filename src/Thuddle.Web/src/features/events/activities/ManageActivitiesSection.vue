@@ -217,6 +217,13 @@ onMounted(() => {
                 />
               </div>
             </div>
+            <div
+              v-else
+              data-testid="activity-manage-capacity-unlimited"
+              class="text-xs text-gray-400"
+            >
+              ∞ Unlimited
+            </div>
           </div>
 
           <!-- Edit / Delete buttons -->

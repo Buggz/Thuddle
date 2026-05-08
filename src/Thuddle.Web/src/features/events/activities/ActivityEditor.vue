@@ -69,8 +69,8 @@ function validate() {
     localError.value = endsAtError.value
     return false
   }
-  if (!maxParticipants.value || Number(maxParticipants.value) < 1) {
-    localError.value = 'Max participants must be at least 1.'
+  if (maxParticipants.value !== '' && Number(maxParticipants.value) < 1) {
+    localError.value = 'Max participants must be at least 1 if specified.'
     return false
   }
   return true
@@ -82,7 +82,7 @@ function buildBody() {
     description: description.value || null,
     startsAt: new Date(startsAt.value).toISOString(),
     endsAt: endsAt.value ? new Date(endsAt.value).toISOString() : null,
-    maxParticipants: Number(maxParticipants.value)
+    maxParticipants: maxParticipants.value !== '' ? Number(maxParticipants.value) : null
   }
 }
 
@@ -196,16 +196,14 @@ function handleCancel() {
             <!-- Max participants -->
             <div>
               <label class="block text-sm font-semibold text-gray-700 mb-1.5">
-                Max participants <span class="text-red-500">*</span>
+                Max participants <span class="text-xs text-gray-400 font-normal">(optional)</span>
               </label>
               <input
                 v-model="maxParticipants"
                 data-testid="activity-form-max-participants"
                 type="number"
-                min="1"
-                max="1000"
                 inputmode="numeric"
-                placeholder="e.g. 20"
+                placeholder="Leave blank for no limit"
                 class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
               />
             </div>

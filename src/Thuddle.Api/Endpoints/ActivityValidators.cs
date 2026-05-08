@@ -16,7 +16,8 @@ public sealed class CreateActivityRequestValidator : AbstractValidator<CreateAct
             .WithMessage("EndsAt must be after StartsAt.")
             .When(x => x.EndsAt.HasValue);
         RuleFor(x => x.MaxParticipants)
-            .InclusiveBetween(1, 1000).WithMessage("MaxParticipants must be between 1 and 1000.");
+            .InclusiveBetween(1, 1000).WithMessage("MaxParticipants must be between 1 and 1000.")
+            .When(x => x.MaxParticipants.HasValue);
     }
 }
 

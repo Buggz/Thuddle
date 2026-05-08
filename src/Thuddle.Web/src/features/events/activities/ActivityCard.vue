@@ -100,6 +100,13 @@ async function handleWithdraw() {
           />
         </div>
       </div>
+      <div
+        v-else
+        data-testid="activity-card-capacity-unlimited"
+        class="text-xs text-gray-500"
+      >
+        ∞ Unlimited spots
+      </div>
 
       <!-- Description preview (truncated) -->
       <div

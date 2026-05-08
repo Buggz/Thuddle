@@ -8,7 +8,7 @@ public class EventActivity
     public string? Description { get; set; }   // rich HTML, nullable
     public required DateTime StartsAt { get; set; }
     public DateTime? EndsAt { get; set; }
-    public required int MaxParticipants { get; set; }
+    public int? MaxParticipants { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
     public required Guid CreatedByUserId { get; set; }
