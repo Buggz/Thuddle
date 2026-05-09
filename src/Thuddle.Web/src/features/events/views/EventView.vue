@@ -1,6 +1,6 @@
 <script setup>
-import { shallowRef, ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
-import { useRoute, useRouter, RouterLink } from 'vue-router'
+import { shallowRef, ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
+import { useRoute, useRouter, RouterLink, onBeforeRouteUpdate } from 'vue-router'
 import { useApi } from '@/shared/composables/useApi'
 import { useAuthStore } from '@/features/auth/stores/auth'
 import { useEventsStore } from '@/features/events/stores/events'
@@ -243,14 +243,54 @@ watch(visibleTabs, (tabs) => {
   }
 })
 
+function scrollToHash() {
+  if (!route.hash) return
+  nextTick(() => {
+    const el = document.querySelector(route.hash)
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  })
+}
+
+function applyHashNavigation() {
+  const hash = route.hash
+  if (!hash) return
+  if (hash.startsWith('#post-') || hash.startsWith('#comment-')) {
+    activeTab.value = 'discussion'
+  } else if (hash === '#raffles') {
+    activeTab.value = 'raffles'
+  } else if (hash === '#activities') {
+    activeTab.value = 'activities'
+  }
+}
+
 onMounted(() => {
   loadEvent()
   loadAuctionSettings()
   eventFeaturesStore.fetchFeatures(route.params.id).catch(() => { /* best-effort */ })
+  applyHashNavigation()
+  scrollToHash()
 })
 
 onBeforeUnmount(() => {
   eventsStore.releaseEvent(route.params.id)
+})
+
+// When the discussion tab is activated, posts load async — retry scroll once
+// they've had time to render.
+watch(activeTab, (tab) => {
+  if (tab === 'discussion') {
+    setTimeout(() => scrollToHash(), 600)
+  }
+})
+
+// Handle hash-only navigations (e.g. clicking a notification while already on the event page).
+onBeforeRouteUpdate((to) => {
+  if (to.hash) {
+    nextTick(() => {
+      const el = document.querySelector(to.hash)
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    })
+  }
 })
 
 // Re-fetch event data when auth state changes so admin/join status updates

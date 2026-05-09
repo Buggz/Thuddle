@@ -9,7 +9,13 @@ public enum NotificationKind
     AuctionItemRejected,
     AuctionBidVoided,
     AuctionUserBanned,
-    RaffleWon
+    RaffleWon,
+    EventInvitationReceived,
+    EventUpdated,
+    DiscussionReplyToYourPost,
+    DiscussionMention,
+    ContactGroupInvitation,
+    RemovedFromActivity
 }
 
 public class Notification
@@ -17,8 +23,11 @@ public class Notification
     public Guid Id { get; set; }
     public required Guid RecipientUserId { get; set; }
     public NotificationKind Kind { get; set; }
+    public required string Title { get; set; }
     public Guid? EventId { get; set; }
     public Guid? EntityId { get; set; }
+    public string? EntityType { get; set; }
+    public Guid? SecondaryEntityId { get; set; }
     public required string Message { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime? ReadAt { get; set; }

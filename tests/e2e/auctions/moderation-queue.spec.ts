@@ -94,7 +94,15 @@ test.describe('Auction moderation queue', () => {
       })
       await startAuctionApi(api, eventId)
 
+      const queueLoaded = page.waitForResponse(
+        (r) =>
+          r.url().includes(`/api/events/${eventId}/auction/items/moderation`) &&
+          r.request().method() === 'GET' &&
+          r.status() === 200,
+        { timeout: 15000 },
+      )
       await page.goto(`${baseURL}/events/${eventId}/auction/moderation`)
+      await queueLoaded
       await expect(page.getByTestId('moderation-queue-empty')).toBeVisible({ timeout: 10000 })
 
       await api.close()

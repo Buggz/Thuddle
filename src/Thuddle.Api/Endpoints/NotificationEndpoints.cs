@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using Microsoft.EntityFrameworkCore;
 using Thuddle.Api.Data;
+using Thuddle.Api.Realtime;
 
 namespace Thuddle.Api.Endpoints;
 
@@ -49,9 +50,12 @@ public static class NotificationEndpoints
             {
                 n.Id,
                 kind = n.Kind.ToString(),
+                n.Title,
+                body = n.Message,
+                n.EntityType,
                 n.EventId,
                 n.EntityId,
-                n.Message,
+                n.SecondaryEntityId,
                 n.CreatedAt,
                 n.ReadAt
             })
@@ -71,6 +75,8 @@ public static class NotificationEndpoints
         Guid id,
         ClaimsPrincipal user,
         ThuddleDbContext db,
+        IRealtimeNotifier realtime,
+        ILogger<Program> logger,
         CancellationToken ct)
     {
         var keycloakId = GetKeycloakId(user);
@@ -87,12 +93,17 @@ public static class NotificationEndpoints
         notification.ReadAt ??= DateTime.UtcNow;
         await db.SaveChangesAsync(ct);
 
+        logger.LogDebug("Notification marked read: notification_id={NotificationId} keycloak_id={KeycloakId}", id, keycloakId);
+        await realtime.NotificationReadAsync(keycloakId, id, ct);
+
         return Results.Ok(new { read = true });
     }
 
     private static async Task<IResult> MarkAllRead(
         ClaimsPrincipal user,
         ThuddleDbContext db,
+        IRealtimeNotifier realtime,
+        ILogger<Program> logger,
         CancellationToken ct)
     {
         var keycloakId = GetKeycloakId(user);
@@ -105,6 +116,9 @@ public static class NotificationEndpoints
         await db.Notifications
             .Where(n => n.RecipientUserId == dbUser.Id && n.ReadAt == null)
             .ExecuteUpdateAsync(s => s.SetProperty(n => n.ReadAt, now), ct);
+
+        logger.LogDebug("All notifications marked read: keycloak_id={KeycloakId}", keycloakId);
+        await realtime.NotificationsAllReadAsync(keycloakId, now, ct);
 
         return Results.Ok(new { readAll = true });
     }

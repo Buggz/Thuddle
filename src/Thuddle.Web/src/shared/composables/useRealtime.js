@@ -23,6 +23,8 @@ export const RealtimeEvents = Object.freeze({
   AuctionEnded: 'AuctionEnded',
   // Notifications
   NotificationCreated: 'NotificationCreated',
+  NotificationRead: 'NotificationRead',
+  NotificationsAllRead: 'NotificationsAllRead',
   // Raffle
   RaffleCreated: 'RaffleCreated',
   RaffleUpdated: 'RaffleUpdated',

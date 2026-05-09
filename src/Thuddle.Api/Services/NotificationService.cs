@@ -4,29 +4,40 @@ using Thuddle.Api.Realtime;
 
 namespace Thuddle.Api.Services;
 
-public sealed class NotificationService(ThuddleDbContext db, IRealtimeNotifier realtime)
+public sealed class NotificationService(ThuddleDbContext db, IRealtimeNotifier realtime, ILogger<NotificationService> logger)
 {
     public async Task CreateAsync(
         Guid userId,
         NotificationKind kind,
-        Guid? eventId,
-        Guid? entityId,
+        string title,
         string message,
+        string? entityType = null,
+        Guid? eventId = null,
+        Guid? entityId = null,
+        Guid? secondaryEntityId = null,
         CancellationToken ct = default)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(title);
+        ArgumentException.ThrowIfNullOrWhiteSpace(message);
+
         var notification = new Notification
         {
             Id = Guid.NewGuid(),
             RecipientUserId = userId,
             Kind = kind,
+            Title = title,
             EventId = eventId,
             EntityId = entityId,
+            EntityType = entityType,
+            SecondaryEntityId = secondaryEntityId,
             Message = message,
             CreatedAt = DateTime.UtcNow
         };
 
         db.Notifications.Add(notification);
         await db.SaveChangesAsync(ct);
+
+        logger.LogDebug("Notification created: notification_id={NotificationId} recipient_user_id={RecipientUserId}", notification.Id, userId);
 
         var keycloakId = await db.Users
             .Where(u => u.Id == userId)
@@ -51,12 +62,13 @@ public sealed class NotificationService(ThuddleDbContext db, IRealtimeNotifier r
             : $"Your auction item was rejected and cannot be resubmitted.{(reason is not null ? $" Reason: {reason}" : "")}";
 
         await CreateAsync(
-            submitterId,
-            NotificationKind.AuctionItemRejected,
-            null,
-            itemId,
-            message,
-            ct);
+            userId: submitterId,
+            kind: NotificationKind.AuctionItemRejected,
+            title: "Auction item rejected",
+            message: message,
+            entityType: "AuctionItem",
+            entityId: itemId,
+            ct: ct);
     }
 
     public async Task NotifyBidVoided(
@@ -68,12 +80,13 @@ public sealed class NotificationService(ThuddleDbContext db, IRealtimeNotifier r
         var message = $"Your bid was voided because the auction item was removed.{(reason is not null ? $" Reason: {reason}" : "")}";
 
         await CreateAsync(
-            bidderId,
-            NotificationKind.AuctionBidVoided,
-            null,
-            itemId,
-            message,
-            ct);
+            userId: bidderId,
+            kind: NotificationKind.AuctionBidVoided,
+            title: "Your bid was voided",
+            message: message,
+            entityType: "AuctionItem",
+            entityId: itemId,
+            ct: ct);
     }
 
     public async Task NotifyUserBannedFromAuction(
@@ -85,11 +98,31 @@ public sealed class NotificationService(ThuddleDbContext db, IRealtimeNotifier r
         var message = $"You have been banned from publishing in this auction.{(reason is not null ? $" Reason: {reason}" : "")}";
 
         await CreateAsync(
-            userId,
-            NotificationKind.AuctionUserBanned,
-            eventId,
-            null,
-            message,
-            ct);
+            userId: userId,
+            kind: NotificationKind.AuctionUserBanned,
+            title: "You were banned from publishing",
+            message: message,
+            entityType: "Event",
+            eventId: eventId,
+            entityId: eventId,
+            ct: ct);
+    }
+
+    public async Task NotifyRemovedFromActivity(
+        Guid userId,
+        Guid eventId,
+        Guid activityId,
+        string activityTitle,
+        CancellationToken ct = default)
+    {
+        await CreateAsync(
+            userId: userId,
+            kind: NotificationKind.RemovedFromActivity,
+            title: "Removed from activity",
+            message: $"You were removed from \"{activityTitle}\".",
+            entityType: "EventActivity",
+            eventId: eventId,
+            entityId: activityId,
+            ct: ct);
     }
 }

@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Thuddle.Api.Authorization;
 using Thuddle.Api.Data;
 using Thuddle.Api.Realtime;
+using Thuddle.Api.Services;
 
 namespace Thuddle.Api.Endpoints;
 
@@ -479,6 +480,7 @@ public static class ActivityEndpoints
         ClaimsPrincipal user,
         ThuddleDbContext db,
         IRealtimeNotifier realtime,
+        NotificationService notifications,
         CancellationToken ct)
     {
         var keycloakId = GetKeycloakId(user);
@@ -490,6 +492,12 @@ public static class ActivityEndpoints
         if (!await IsEventAdmin(db, eventId, dbUser.Id, ct))
             return Results.Forbid();
 
+        var activityTitle = await db.EventActivities
+            .Where(a => a.Id == activityId && a.EventId == eventId)
+            .Select(a => a.Title)
+            .FirstOrDefaultAsync(ct);
+        if (activityTitle is null) return Results.NotFound(new { error = "Activity not found." });
+
         var participant = await db.EventActivityParticipants.AsTracking()
             .FirstOrDefaultAsync(p => p.EventActivityId == activityId && p.UserId == userId, ct);
         if (participant is null) return Results.NotFound(new { error = "Participant not found." });
@@ -499,6 +507,9 @@ public static class ActivityEndpoints
 
         var participantCount = await db.EventActivityParticipants
             .CountAsync(p => p.EventActivityId == activityId, ct);
+
+        if (dbUser.Id != userId)
+            await notifications.NotifyRemovedFromActivity(userId, eventId, activityId, activityTitle, ct);
 
         await realtime.ActivityParticipantChangedAsync(eventId, activityId, userId, joined: false, participantCount, ct);
 

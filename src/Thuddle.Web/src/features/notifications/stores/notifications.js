@@ -7,10 +7,11 @@ import { useRealtime, RealtimeEvents } from '@/shared/composables/useRealtime'
 /**
  * Notifications store. Loads paged inbox + tracks unread count.
  *
- * On a `NotificationCreated` realtime push (which only carries the new id),
- * we refetch the first page so the prepended item is the authoritative server
- * shape — the same "realtime payloads are authoritative" rule the auction
- * store follows.
+ * `NotificationCreated` — server only sends the id; refetch page 1 so the
+ * shape is authoritative and the unread badge updates with no guesswork.
+ *
+ * `NotificationRead` / `NotificationsAllRead` — idempotent in-place updates
+ * that sync read state across devices with no refetch.
  */
 export const useNotificationsStore = defineStore('notifications', () => {
   const { authFetch } = useApi()
@@ -83,6 +84,15 @@ export const useNotificationsStore = defineStore('notifications', () => {
       // Server only sends the id; refetch the first page so the shape is
       // authoritative and the unread badge updates with no guesswork.
       load({ page: 1 })
+    })
+    realtime.on(RealtimeEvents.NotificationRead, ({ notificationId }) => {
+      const idx = list.value.findIndex((n) => n.id === notificationId)
+      if (idx === -1 || list.value[idx].readAt) return
+      list.value.splice(idx, 1, { ...list.value[idx], readAt: new Date().toISOString() })
+    })
+    realtime.on(RealtimeEvents.NotificationsAllRead, ({ readAt }) => {
+      const ts = readAt ?? new Date().toISOString()
+      list.value = list.value.map((n) => (n.readAt ? n : { ...n, readAt: ts }))
     })
     realtime.onResync(() => load({ page: 1 }))
   }

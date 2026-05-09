@@ -5,6 +5,7 @@ import { storeToRefs } from 'pinia'
 import { useNotificationsStore } from '@/features/notifications/stores/notifications'
 import { useAuthStore } from '@/features/auth/stores/auth'
 import FunnyLoader from '@/shared/components/FunnyLoader.vue'
+import { resolveNotificationTarget } from '@/features/notifications/utils/resolveTarget'
 
 const router = useRouter()
 const notifications = useNotificationsStore()
@@ -25,29 +26,7 @@ async function onNext() { if (hasNext.value) await loadPage(page.value + 1) }
 
 async function onRowClick(n) {
   if (!n.readAt) await notifications.markRead(n.id)
-  const data = n.data || {}
-  const eventId = data.eventId || data.EventId
-  const itemId = data.auctionItemId || data.AuctionItemId || data.itemId
-  const groupId = data.contactGroupId || data.GroupId
-  let target = null
-  switch (n.kind) {
-    case 'AuctionItemSubmitted':
-    case 'AuctionItemApproved':
-    case 'AuctionItemSold':
-    case 'AuctionOutbid':
-    case 'AuctionStarting':
-    case 'AuctionEnded':
-      if (eventId && itemId) target = { name: 'auction-item', params: { id: eventId, itemId } }
-      else if (eventId) target = { name: 'auction', params: { id: eventId } }
-      break
-    case 'EventInvite':
-    case 'EventUpdated':
-      if (eventId) target = { name: 'event', params: { id: eventId } }
-      break
-    case 'GroupInvite':
-      if (groupId) target = { name: 'contact-group', params: { id: groupId } }
-      break
-  }
+  const target = resolveNotificationTarget(n)
   if (target) router.push(target)
 }
 
@@ -103,7 +82,7 @@ watch(() => auth.isAuthenticated, async (isAuth) => {
       <p class="text-sm text-gray-500">Nothing to report. Your inbox is unblemished.</p>
     </div>
 
-    <ul v-else class="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm divide-y divide-gray-100">
+    <ul v-else class="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm divide-y divide-gray-100 dark:bg-gray-800 dark:border-gray-700 dark:divide-gray-700">
       <li
         v-for="n in list"
         :key="n.id"
@@ -113,19 +92,20 @@ watch(() => auth.isAuthenticated, async (isAuth) => {
         <button
           type="button"
           @click="onRowClick(n)"
-          class="flex w-full items-start gap-3 px-4 py-3 text-left hover:bg-gray-50 focus:outline-none focus:bg-gray-50"
-          :class="!n.readAt ? 'bg-indigo-50/40' : ''"
+          class="flex w-full items-start gap-3 px-4 py-3 text-left hover:bg-gray-50 focus:outline-none focus:bg-gray-50 dark:hover:bg-gray-700 dark:focus:bg-gray-700"
+          :class="!n.readAt ? 'bg-indigo-50/40 dark:bg-indigo-900/30' : ''"
         >
           <span
             v-if="!n.readAt"
+            :data-testid="`notification-row-unread-dot-${n.id}`"
             aria-hidden="true"
             class="mt-2 inline-block h-2 w-2 flex-shrink-0 rounded-full bg-indigo-500"
           />
           <span v-else class="mt-2 inline-block h-2 w-2 flex-shrink-0" />
           <div class="flex-1 min-w-0">
-            <p class="text-sm font-semibold text-gray-900">{{ n.title }}</p>
-            <p v-if="n.body" class="mt-0.5 text-sm text-gray-500">{{ n.body }}</p>
-            <p class="mt-1 text-[11px] text-gray-400">{{ fmtFull(n.createdAt) }}</p>
+            <p :data-testid="`notification-row-title-${n.id}`" class="text-sm font-semibold text-gray-900 dark:text-gray-100">{{ n.title }}</p>
+            <p v-if="n.body" :data-testid="`notification-row-body-${n.id}`" class="mt-0.5 text-sm text-gray-700 whitespace-pre-wrap break-words dark:text-gray-300">{{ n.body }}</p>
+            <p class="mt-1 text-[11px] text-gray-500 dark:text-gray-400">{{ fmtFull(n.createdAt) }}</p>
           </div>
         </button>
       </li>
