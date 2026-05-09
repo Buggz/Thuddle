@@ -74,6 +74,17 @@ export interface OutbidScenario {
 }
 
 /**
+ * Mark all notifications read for the user behind `api`. Used to give tests a
+ * clean baseline (the bell badge shows unread count, which accumulates across
+ * test runs since users persist).
+ */
+export async function clearNotificationsApi(api: ApiContext): Promise<void> {
+  await api.request.post(`${api.baseURL}/api/notifications/read-all`, {
+    headers: api.headers,
+  })
+}
+
+/**
  * Arrange a live auction with one published item where `victim` is the current
  * high bidder. Returns `triggerOutbid()` so the test can fire the notification
  * at the moment the observer page is ready.
@@ -116,6 +127,9 @@ export async function setupOutbidScenario(
 
   const victimCtx = await userApi(browser, victim, baseURL)
   await joinEventApi(victimCtx, eventId)
+  // Clear any unread notifications left over from previous test runs so the
+  // bell badge starts at 0 for the victim.
+  await clearNotificationsApi(victimCtx)
   const initial = await placeBidApi(victimCtx, eventId, item.id, initialBid)
   if (!initial.ok) {
     throw new Error(`Initial bid failed: ${initial.status} ${initial.error ?? ''}`)
@@ -125,6 +139,7 @@ export async function setupOutbidScenario(
   await joinEventApi(rivalCtx, eventId)
 
   let nextAmount = initialBid + 10
+  let rivalIsHigh = false
   const contexts: ApiContext[] = [submitterCtx, victimCtx, rivalCtx, adminCtx]
 
   return {
@@ -136,10 +151,17 @@ export async function setupOutbidScenario(
     initialBid,
     outbidAmount: nextAmount,
     triggerOutbid: async (amount?: number) => {
+      if (rivalIsHigh) {
+        const victimBid = nextAmount
+        nextAmount = victimBid + 10
+        const vr = await placeBidApi(victimCtx, eventId, item.id, victimBid)
+        if (!vr.ok) throw new Error(`Victim re-bid failed: ${vr.status} ${vr.error ?? ''}`)
+      }
       const a = amount ?? nextAmount
       nextAmount = a + 10
       const res = await placeBidApi(rivalCtx, eventId, item.id, a)
       if (!res.ok) throw new Error(`Outbid failed: ${res.status} ${res.error ?? ''}`)
+      rivalIsHigh = true
     },
     cleanup: async () => {
       for (const c of contexts) await c.close().catch(() => {})
