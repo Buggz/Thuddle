@@ -156,6 +156,8 @@ app.MapAuctionEndpoints();
 app.MapBoardGameEndpoints();
 app.MapNotificationEndpoints();
 app.MapRaffleEndpoints();
+app.MapEventFeatureEndpoints();
+app.MapActivityEndpoints();
 app.MapHub<ThuddleHub>("/hubs/thuddle");
 
 app.MapGet("/api/hello", () => Results.Ok(new { message = "Hello from Thuddle API!" }));

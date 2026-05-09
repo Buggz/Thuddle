@@ -5,6 +5,7 @@ import {
   createEventApi,
   createRaffleApi,
   addRaffleEntryApi,
+  enableEventFeature,
 } from '../helpers/api'
 import { gotoManageRafflesTab } from '../helpers/events'
 
@@ -56,6 +57,7 @@ test.describe('Raffle entries filter', () => {
     const api = await adminApi(browser, baseURL!)
     const { id: eventId } = await createEventApi(api, { visibility: 0 })
     createdEvents.push(eventId)
+    await enableEventFeature(api, eventId, 'raffles')
     const { id: raffleId } = await createRaffleApi(api, eventId, {
       name: `Filter Raffle ${uid()}`,
       price: 5,

@@ -321,3 +321,120 @@ export const raffleApi = {
     return res.json()
   }
 }
+
+// ─── Event Feature API ───────────────────────────────────────────────────────
+
+export const eventFeatureApi = {
+  // Public endpoint — authFetch used when the caller is authenticated.
+  // Anonymous callers should use plain fetch(apiUrl(...)) directly (see store).
+  async list(authFetch, eventId) {
+    const res = await authFetch(`/api/events/${eventId}/features`)
+    return res.json()
+  },
+
+  async enable(authFetch, eventId, key) {
+    const res = await authFetch(`/api/events/${eventId}/features`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key })
+    })
+    return res.json()
+  },
+
+  async disable(authFetch, eventId, key) {
+    // Returns 204 No Content on success; authFetch throws on non-OK (e.g. 409).
+    await authFetch(`/api/events/${eventId}/features/${encodeURIComponent(key)}`, {
+      method: 'DELETE'
+    })
+  }
+}
+
+// ─── Activity API ─────────────────────────────────────────────────────────────
+
+export const activityApi = {
+  async list(authFetch, eventId) {
+    const res = await authFetch(`/api/events/${eventId}/activities`)
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}))
+      throw new Error(data.error || `HTTP ${res.status}`)
+    }
+    return res.json()
+  },
+
+  async get(authFetch, eventId, activityId) {
+    const res = await authFetch(`/api/events/${eventId}/activities/${activityId}`)
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}))
+      throw new Error(data.error || `HTTP ${res.status}`)
+    }
+    return res.json()
+  },
+
+  async create(authFetch, eventId, body) {
+    const res = await authFetch(`/api/events/${eventId}/activities`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    })
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}))
+      throw new Error(data.error || `HTTP ${res.status}`)
+    }
+    return res.json()
+  },
+
+  async update(authFetch, eventId, activityId, body) {
+    const res = await authFetch(`/api/events/${eventId}/activities/${activityId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    })
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}))
+      throw new Error(data.error || `HTTP ${res.status}`)
+    }
+    return res.json()
+  },
+
+  async remove(authFetch, eventId, activityId) {
+    const res = await authFetch(`/api/events/${eventId}/activities/${activityId}`, {
+      method: 'DELETE'
+    })
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}))
+      throw new Error(data.error || `HTTP ${res.status}`)
+    }
+  },
+
+  async signup(authFetch, eventId, activityId) {
+    const res = await authFetch(`/api/events/${eventId}/activities/${activityId}/signup`, {
+      method: 'POST'
+    })
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}))
+      throw new Error(data.error || `HTTP ${res.status}`)
+    }
+    return res.json()
+  },
+
+  async withdraw(authFetch, eventId, activityId) {
+    const res = await authFetch(`/api/events/${eventId}/activities/${activityId}/signup`, {
+      method: 'DELETE'
+    })
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}))
+      throw new Error(data.error || `HTTP ${res.status}`)
+    }
+  },
+
+  async removeParticipant(authFetch, eventId, activityId, userId) {
+    const res = await authFetch(
+      `/api/events/${eventId}/activities/${activityId}/participants/${userId}`,
+      { method: 'DELETE' }
+    )
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}))
+      throw new Error(data.error || `HTTP ${res.status}`)
+    }
+  }
+}

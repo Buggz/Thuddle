@@ -6,6 +6,7 @@ import {
   createRaffleApi,
   addRaffleEntryApi,
   startRaffleApi,
+  enableEventFeature,
 } from '../helpers/api'
 import { gotoManageRafflesTab } from '../helpers/events'
 
@@ -58,6 +59,7 @@ test.describe('Host edits tickets after raffle start', () => {
     const api = await adminApi(browser, baseURL!)
     const { id: eventId } = await createEventApi(api, { visibility: 0 })
     createdEvents.push(eventId)
+    await enableEventFeature(api, eventId, 'raffles')
     await api.close()
 
     // Alice + Bob join the event so they can be added as raffle entries

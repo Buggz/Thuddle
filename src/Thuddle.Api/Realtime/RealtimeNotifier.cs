@@ -48,6 +48,17 @@ public interface IRealtimeNotifier
     Task RaffleEntryChangedAsync(Guid eventId, Guid raffleId, Guid userId, int tickets, CancellationToken ct = default);
     Task RaffleStartedAsync(Guid eventId, Guid raffleId, CancellationToken ct = default);
     Task RaffleWinnerRevealedAsync(Guid eventId, Guid raffleId, Guid drawId, Guid winnerUserId, string displayName, string? profilePictureUrl, int ticketsBefore, int ticketsAfter, DateTime drawnAt, CancellationToken ct = default);
+
+    // Event features
+
+    Task EventFeatureEnabledAsync(Guid eventId, string featureKey, CancellationToken ct = default);
+    Task EventFeatureDisabledAsync(Guid eventId, string featureKey, CancellationToken ct = default);
+
+    // Activities
+    Task ActivityCreatedAsync(Guid eventId, Guid activityId, CancellationToken ct = default);
+    Task ActivityUpdatedAsync(Guid eventId, Guid activityId, CancellationToken ct = default);
+    Task ActivityDeletedAsync(Guid eventId, Guid activityId, CancellationToken ct = default);
+    Task ActivityParticipantChangedAsync(Guid eventId, Guid activityId, Guid userId, bool joined, int participantCount, CancellationToken ct = default);
 }
 
 public sealed class RealtimeNotifier(IHubContext<ThuddleHub> hub) : IRealtimeNotifier
@@ -159,4 +170,32 @@ public sealed class RealtimeNotifier(IHubContext<ThuddleHub> hub) : IRealtimeNot
     public Task RaffleWinnerRevealedAsync(Guid eventId, Guid raffleId, Guid drawId, Guid winnerUserId, string displayName, string? profilePictureUrl, int ticketsBefore, int ticketsAfter, DateTime drawnAt, CancellationToken ct = default) =>
         hub.Clients.Group(ThuddleHub.EventGroup(eventId))
             .SendAsync(RealtimeEvents.RaffleWinnerRevealed, new { eventId, raffleId, drawId, winnerUserId, displayName, profilePictureUrl, ticketsBefore, ticketsAfter, drawnAt }, ct);
+
+    // Event features
+
+    public Task EventFeatureEnabledAsync(Guid eventId, string featureKey, CancellationToken ct = default) =>
+        hub.Clients.Group(ThuddleHub.EventGroup(eventId))
+            .SendAsync(RealtimeEvents.EventFeatureEnabled, new { eventId, key = featureKey }, ct);
+
+    public Task EventFeatureDisabledAsync(Guid eventId, string featureKey, CancellationToken ct = default) =>
+        hub.Clients.Group(ThuddleHub.EventGroup(eventId))
+            .SendAsync(RealtimeEvents.EventFeatureDisabled, new { eventId, key = featureKey }, ct);
+
+    // Activities
+
+    public Task ActivityCreatedAsync(Guid eventId, Guid activityId, CancellationToken ct = default) =>
+        hub.Clients.Group(ThuddleHub.EventGroup(eventId))
+            .SendAsync(RealtimeEvents.ActivityCreated, new { eventId, activityId }, ct);
+
+    public Task ActivityUpdatedAsync(Guid eventId, Guid activityId, CancellationToken ct = default) =>
+        hub.Clients.Group(ThuddleHub.EventGroup(eventId))
+            .SendAsync(RealtimeEvents.ActivityUpdated, new { eventId, activityId }, ct);
+
+    public Task ActivityDeletedAsync(Guid eventId, Guid activityId, CancellationToken ct = default) =>
+        hub.Clients.Group(ThuddleHub.EventGroup(eventId))
+            .SendAsync(RealtimeEvents.ActivityDeleted, new { eventId, activityId }, ct);
+
+    public Task ActivityParticipantChangedAsync(Guid eventId, Guid activityId, Guid userId, bool joined, int participantCount, CancellationToken ct = default) =>
+        hub.Clients.Group(ThuddleHub.EventGroup(eventId))
+            .SendAsync(RealtimeEvents.ActivityParticipantChanged, new { eventId, activityId, userId, joined, participantCount }, ct);
 }

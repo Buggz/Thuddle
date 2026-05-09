@@ -1,0 +1,73 @@
+SyntaxError: E:\Projects\Thuddle\tests\e2e\raffles\draw-only-from-presentation.spec.ts: Unexpected token (9:0)
+
+[0m [90m  7 |[39m   addRaffleEntryApi[33m,[39m
+ [90m  8 |[39m   startRaffleApi[33m,[39m
+[31m[1m>[22m[39m[90m  9 |[39m [33m,[39m enableEventFeature } [36mfrom[39m [32m'../helpers/api'[39m
+ [90m    |[39m [31m[1m^[22m[39m
+ [90m 10 |[39m [36mimport[39m { gotoManageRafflesTab } [36mfrom[39m [32m'../helpers/events'[39m
+ [90m 11 |[39m
+ [90m 12 |[39m [90m/**[39m[0m
+
+   at raffles\draw-only-from-presentation.spec.ts:9
+
+   7 |   addRaffleEntryApi,
+   8 |   startRaffleApi,
+>  9 | , enableEventFeature } from '../helpers/api'
+  10 | import { gotoManageRafflesTab } from '../helpers/events'
+  11 |
+  12 | /**
+SyntaxError: E:\Projects\Thuddle\tests\e2e\raffles\entries-alphabetical.spec.ts: Unexpected token (8:0)
+
+[0m [90m  6 |[39m   createRaffleApi[33m,[39m
+ [90m  7 |[39m   addRaffleEntryApi[33m,[39m
+[31m[1m>[22m[39m[90m  8 |[39m [33m,[39m enableEventFeature } [36mfrom[39m [32m'../helpers/api'[39m
+ [90m    |[39m [31m[1m^[22m[39m
+ [90m  9 |[39m [36mimport[39m { gotoManageRafflesTab } [36mfrom[39m [32m'../helpers/events'[39m
+ [90m 10 |[39m
+ [90m 11 |[39m [90m/**[39m[0m
+
+   at raffles\entries-alphabetical.spec.ts:8
+
+   6 |   createRaffleApi,
+   7 |   addRaffleEntryApi,
+>  8 | , enableEventFeature } from '../helpers/api'
+   9 | import { gotoManageRafflesTab } from '../helpers/events'
+  10 |
+  11 | /**
+SyntaxError: E:\Projects\Thuddle\tests\e2e\raffles\host-edit-tickets-after-start.spec.ts: Unexpected token (9:0)
+
+[0m [90m  7 |[39m   addRaffleEntryApi[33m,[39m
+ [90m  8 |[39m   startRaffleApi[33m,[39m
+[31m[1m>[22m[39m[90m  9 |[39m [33m,[39m enableEventFeature } [36mfrom[39m [32m'../helpers/api'[39m
+ [90m    |[39m [31m[1m^[22m[39m
+ [90m 10 |[39m [36mimport[39m { gotoManageRafflesTab } [36mfrom[39m [32m'../helpers/events'[39m
+ [90m 11 |[39m
+ [90m 12 |[39m [90m/**[39m[0m
+
+   at raffles\host-edit-tickets-after-start.spec.ts:9
+
+   7 |   addRaffleEntryApi,
+   8 |   startRaffleApi,
+>  9 | , enableEventFeature } from '../helpers/api'
+  10 | import { gotoManageRafflesTab } from '../helpers/events'
+  11 |
+  12 | /**
+SyntaxError: E:\Projects\Thuddle\tests\e2e\raffles\raffle-entries-filter.spec.ts: Unexpected token (8:0)
+
+[0m [90m  6 |[39m   createRaffleApi[33m,[39m
+ [90m  7 |[39m   addRaffleEntryApi[33m,[39m
+[31m[1m>[22m[39m[90m  8 |[39m [33m,[39m enableEventFeature } [36mfrom[39m [32m'../helpers/api'[39m
+ [90m    |[39m [31m[1m^[22m[39m
+ [90m  9 |[39m [36mimport[39m { gotoManageRafflesTab } [36mfrom[39m [32m'../helpers/events'[39m
+ [90m 10 |[39m
+ [90m 11 |[39m [90m/**[39m[0m
+
+   at raffles\raffle-entries-filter.spec.ts:8
+
+   6 |   createRaffleApi,
+   7 |   addRaffleEntryApi,
+>  8 | , enableEventFeature } from '../helpers/api'
+   9 | import { gotoManageRafflesTab } from '../helpers/events'
+  10 |
+  11 | /**
+

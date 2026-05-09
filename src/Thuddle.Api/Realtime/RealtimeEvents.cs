@@ -43,4 +43,14 @@ public static class RealtimeEvents
     public const string RaffleEntryChanged = "RaffleEntryChanged";
     public const string RaffleStarted = "RaffleStarted";
     public const string RaffleWinnerRevealed = "RaffleWinnerRevealed";
+
+    // Event feature events
+    public const string EventFeatureEnabled = "EventFeatureEnabled";
+    public const string EventFeatureDisabled = "EventFeatureDisabled";
+
+    // Activity events
+    public const string ActivityCreated = "ActivityCreated";
+    public const string ActivityUpdated = "ActivityUpdated";
+    public const string ActivityDeleted = "ActivityDeleted";
+    public const string ActivityParticipantChanged = "ActivityParticipantChanged";
 }

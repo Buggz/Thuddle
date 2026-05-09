@@ -1,6 +1,6 @@
 import { test, expect } from '../helpers/fixtures'
 import { contextAs, uid, expectJson, getAuthHeadersFromPage } from '../helpers/auth'
-import { adminApi, createEventApi, createRaffleApi, addRaffleEntryApi, userApi, startRaffleApi } from '../helpers/api'
+import { adminApi, createEventApi, createRaffleApi, addRaffleEntryApi, userApi, startRaffleApi , enableEventFeature } from '../helpers/api'
 import { gotoManageRafflesTab } from '../helpers/events'
 
 /**
@@ -19,6 +19,7 @@ test.describe('Raffle improvements (winners visibility, lock toggle, avatars, li
     const api = await adminApi(browser, baseURL!)
     const { id: eventId } = await createEventApi(api, { visibility: 0 })
     createdEvents.push(eventId)
+    await enableEventFeature(api, eventId, 'raffles')
     await api.close()
 
     const { context: adminCtx, page: adminPage } = await contextAs(browser, 'admin')
@@ -66,7 +67,7 @@ test.describe('Raffle improvements (winners visibility, lock toggle, avatars, li
     await alicePage2.goto(`${baseURL}/events/${eventId}`)
     await alicePage2.getByTestId('event-detail').waitFor({ state: 'visible', timeout: 10000 })
     await alicePage2.getByTestId('event-tab-raffles').click()
-    await alicePage2.getByTestId(`raffle-card-${raffleId}`).click()
+    // Single raffle auto-expands; clicking would collapse it.
 
     await expect(alicePage2.getByTestId('raffle-participant-winners')).toBeVisible({ timeout: 10000 })
     await expect(alicePage2.getByTestId(`raffle-participant-winner-${drawBody.drawId}`)).toBeVisible()
@@ -79,6 +80,7 @@ test.describe('Raffle improvements (winners visibility, lock toggle, avatars, li
     const api = await adminApi(browser, baseURL!)
     const { id: eventId } = await createEventApi(api)
     createdEvents.push(eventId)
+    await enableEventFeature(api, eventId, 'raffles')
     const { id: raffleId } = await createRaffleApi(api, eventId, {
       name: `Lockable ${uid()}`,
       allowSelfReport: true,
@@ -122,6 +124,7 @@ test.describe('Raffle improvements (winners visibility, lock toggle, avatars, li
     const api = await adminApi(browser, baseURL!)
     const { id: eventId } = await createEventApi(api, { visibility: 0 })
     createdEvents.push(eventId)
+    await enableEventFeature(api, eventId, 'raffles')
     await api.close()
 
     // Alice joins via UI (only way to become a participant)
@@ -183,6 +186,7 @@ test.describe('Raffle improvements (winners visibility, lock toggle, avatars, li
     const api = await adminApi(browser, baseURL!)
     const { id: eventId } = await createEventApi(api, { visibility: 0 })
     createdEvents.push(eventId)
+    await enableEventFeature(api, eventId, 'raffles')
     await api.close()
 
     const { context: adminCtx, page: adminPage } = await contextAs(browser, 'admin')

@@ -1,6 +1,6 @@
 import { test, expect } from '../helpers/fixtures'
 import { contextAs, uid } from '../helpers/auth'
-import { adminApi, createEventApi, createRaffleApi } from '../helpers/api'
+import { adminApi, createEventApi, createRaffleApi , enableEventFeature } from '../helpers/api'
 
 /**
  * Test file: Raffle list auto-expand behavior (issue #12)
@@ -25,6 +25,7 @@ test.describe('Raffle auto-expand', () => {
     const api = await adminApi(browser, baseURL!)
     const { id: eventId } = await createEventApi(api, { visibility: 0 })
     createdEvents.push(eventId)
+    await enableEventFeature(api, eventId, 'raffles')
     const { id: raffleId } = await createRaffleApi(api, eventId, {
       name: `Solo Raffle ${uid()}`,
       price: 5,
@@ -57,6 +58,7 @@ test.describe('Raffle auto-expand', () => {
     const api = await adminApi(browser, baseURL!)
     const { id: eventId } = await createEventApi(api, { visibility: 0 })
     createdEvents.push(eventId)
+    await enableEventFeature(api, eventId, 'raffles')
     const { id: raffleAId } = await createRaffleApi(api, eventId, {
       name: `Raffle A ${uid()}`,
       price: 5,
