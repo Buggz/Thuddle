@@ -1,4 +1,4 @@
-using FluentValidation;
+﻿using FluentValidation;
 
 namespace Thuddle.Api.Endpoints;
 
@@ -16,7 +16,7 @@ public sealed class CreateActivityRequestValidator : AbstractValidator<CreateAct
             .WithMessage("EndsAt must be after StartsAt.")
             .When(x => x.EndsAt.HasValue);
         RuleFor(x => x.MaxParticipants)
-            .InclusiveBetween(1, 9999).WithMessage("MaxParticipants must be between 1 and 9999.");
+            .InclusiveBetween(1, 9999).WithMessage("MaxParticipants must be between 1 and 9999")
             .When(x => x.MaxParticipants.HasValue);
     }
 }
@@ -39,3 +39,4 @@ public sealed class UpdateActivityRequestValidator : AbstractValidator<UpdateAct
             .When(x => x.MaxParticipants.HasValue);
     }
 }
+

@@ -16,6 +16,7 @@ import FunnyLoader from '@/shared/components/FunnyLoader.vue'
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
 import { usePermissionsStore } from '@/features/auth/stores/permissions'
 import EventTabBar from '@/features/events/components/EventTabBar.vue'
+import AddToCalendarButton from '@/features/events/components/AddToCalendarButton.vue'
 import { useEventFeaturesStore } from '@/features/events/stores/eventFeatures'
 import { EVENT_FEATURES, FeatureKeys } from '@/features/events/featureCatalog'
 
@@ -471,6 +472,17 @@ watch(() => event.value?.participantCount, (newCount, oldCount) => {
               >
                 Leave Event
               </button>
+              <AddToCalendarButton
+                v-if="event?.hasJoined"
+                data-testid="event-add-to-calendar-btn"
+                :uid="`event-${event.id}@thuddle.app`"
+                :title="event.title"
+                :description="event.description"
+                :location="event.location"
+                :start="event.start"
+                :end="event.end"
+                :filename="`thuddle-event-${event.id}.ics`"
+              />
             </template>
           </div>
           <div class="flex items-center justify-end w-full sm:w-auto">

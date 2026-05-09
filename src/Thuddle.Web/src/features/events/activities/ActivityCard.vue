@@ -1,10 +1,12 @@
 <script setup>
 import { ref } from 'vue'
 import { useActivitiesStore } from './store'
+import AddToCalendarButton from '@/features/events/components/AddToCalendarButton.vue'
 
 const props = defineProps({
   activity: { type: Object, required: true },
-  eventId: { type: String, required: true }
+  eventId: { type: String, required: true },
+  parentEventLocation: { type: String, default: null }
 })
 
 const store = useActivitiesStore()
@@ -122,18 +124,29 @@ async function handleWithdraw() {
           {{ signupError }}
         </p>
 
-        <!-- Already signed up → Withdraw -->
-        <button
-          v-if="activity.mySignupAt"
-          type="button"
-          :data-testid="`activity-withdraw-button-${activity.id}`"
-          :disabled="signupLoading"
-          @click="handleWithdraw"
-          class="w-full sm:w-auto inline-flex items-center justify-center px-4 py-3 min-h-11 text-sm font-semibold rounded-lg bg-red-50 text-red-700 border border-red-200 hover:bg-red-100 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
-        >
-          <span v-if="signupLoading">Withdrawing…</span>
-          <span v-else>Withdraw</span>
-        </button>
+        <!-- Already signed up → Withdraw + Add to calendar -->
+        <div v-if="activity.mySignupAt" class="flex flex-col sm:flex-row gap-2">
+          <button
+            type="button"
+            :data-testid="`activity-withdraw-button-${activity.id}`"
+            :disabled="signupLoading"
+            @click="handleWithdraw"
+            class="w-full sm:w-auto inline-flex items-center justify-center px-4 py-3 min-h-11 text-sm font-semibold rounded-lg bg-red-50 text-red-700 border border-red-200 hover:bg-red-100 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            <span v-if="signupLoading">Withdrawing…</span>
+            <span v-else>Withdraw</span>
+          </button>
+          <AddToCalendarButton
+            :data-testid="`activity-add-to-calendar-btn-${activity.id}`"
+            :uid="`activity-${activity.id}@thuddle.app`"
+            :title="activity.title"
+            :description="activity.description"
+            :location="parentEventLocation"
+            :start="activity.startsAt"
+            :end="activity.endsAt"
+            :filename="`thuddle-activity-${activity.id}.ics`"
+          />
+        </div>
 
         <!-- Activity full → disabled button + badge -->
         <div v-else-if="activity.isFull" class="flex items-center gap-2">

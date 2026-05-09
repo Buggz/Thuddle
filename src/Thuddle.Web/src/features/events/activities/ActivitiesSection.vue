@@ -1,6 +1,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useActivitiesStore } from './store'
+import { useEventsStore } from '@/features/events/stores/events'
 import { useRealtime } from '@/shared/composables/useRealtime'
 import ActivityCard from './ActivityCard.vue'
 
@@ -9,7 +10,12 @@ const props = defineProps({
 })
 
 const store = useActivitiesStore()
+const eventsStore = useEventsStore()
 const realtime = useRealtime()
+
+const parentEventLocation = computed(
+  () => eventsStore.byId?.[props.eventId]?.location ?? null
+)
 const loading = ref(false)
 const error = ref(null)
 
@@ -71,6 +77,7 @@ onMounted(() => {
         :key="activity.id"
         :activity="activity"
         :event-id="eventId"
+        :parent-event-location="parentEventLocation"
       />
     </div>
   </div>
