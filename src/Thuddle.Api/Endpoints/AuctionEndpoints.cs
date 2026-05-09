@@ -1247,12 +1247,14 @@ public static class AuctionEndpoints
             if (evt is not null)
             {
                 await notifications.CreateAsync(
-                    evt.OwnerId,
-                    NotificationKind.AuctionItemPendingApproval,
-                    eventId,
-                    item.Id,
-                    $"New auction item \"{item.Name}\" needs approval.",
-                    ct);
+                    userId: evt.OwnerId,
+                    kind: NotificationKind.AuctionItemPendingApproval,
+                    title: "Auction item pending approval",
+                    message: $"New auction item \"{item.Name}\" needs approval.",
+                    entityType: "AuctionItem",
+                    eventId: eventId,
+                    entityId: item.Id,
+                    ct: ct);
             }
         }
 
@@ -1828,12 +1830,14 @@ public static class AuctionEndpoints
             if (currentHigh is not null && currentHigh.BidderUserId != dbUser.Id)
             {
                 await notifications.CreateAsync(
-                    currentHigh.BidderUserId,
-                    NotificationKind.OutbidOnAuctionItem,
-                    eventId,
-                    itemId,
-                    $"You've been outbid on \"{item.Name}\". New high: {amount:N2}.",
-                    ct);
+                    userId: currentHigh.BidderUserId,
+                    kind: NotificationKind.OutbidOnAuctionItem,
+                    title: "You were outbid",
+                    message: $"You've been outbid on \"{item.Name}\". New high: {amount:N2}.",
+                    entityType: "AuctionItem",
+                    eventId: eventId,
+                    entityId: itemId,
+                    ct: ct);
             }
 
             if (isBuyout)

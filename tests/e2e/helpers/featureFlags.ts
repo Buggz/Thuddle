@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test'
 
-export type FeatureFlagName = 'VITE_FEATURE_AUCTIONS' | 'VITE_FEATURE_NOTIFICATIONS'
+export type FeatureFlagName = 'VITE_FEATURE_AUCTIONS'
 
 /**
  * Seeds a feature-flag override into localStorage BEFORE the SPA boots.

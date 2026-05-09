@@ -370,7 +370,8 @@ onBeforeUnmount(() => {
         <div
           v-for="post in posts"
           :key="post.id"
-          data-testid="discussion-post"
+          :id="`post-${post.id}`"
+          :data-testid="`discussion-post-${post.id}`"
           class="rounded-2xl border bg-white shadow-sm overflow-hidden"
           :class="post.isApproved ? 'border-slate-200/80' : 'border-amber-200/80 bg-amber-50/20'"
         >
@@ -449,6 +450,8 @@ onBeforeUnmount(() => {
                 <div
                   v-for="comment in (commentsMap[post.id] || [])"
                   :key="comment.id"
+                  :id="`comment-${comment.id}`"
+                  :data-testid="`discussion-comment-${comment.id}`"
                   class="flex flex-col gap-1 pl-2 sm:flex-row sm:gap-3 sm:pl-4 relative group/comment"
                 >
                   <div class="hidden sm:flex shrink-0">

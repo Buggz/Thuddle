@@ -40,6 +40,8 @@ public interface IRealtimeNotifier
 
     // Notifications (per-user)
     Task NotificationCreatedAsync(string keycloakId, Guid notificationId, CancellationToken ct = default);
+    Task NotificationReadAsync(string keycloakId, Guid notificationId, CancellationToken ct = default);
+    Task NotificationsAllReadAsync(string keycloakId, DateTime readAt, CancellationToken ct = default);
 
     // Raffle
     Task RaffleCreatedAsync(Guid eventId, Guid raffleId, CancellationToken ct = default);
@@ -144,6 +146,14 @@ public sealed class RealtimeNotifier(IHubContext<ThuddleHub> hub) : IRealtimeNot
     public Task NotificationCreatedAsync(string keycloakId, Guid notificationId, CancellationToken ct = default) =>
         hub.Clients.Group(ThuddleHub.UserGroup(keycloakId))
             .SendAsync(RealtimeEvents.NotificationCreated, new { notificationId }, ct);
+
+    public Task NotificationReadAsync(string keycloakId, Guid notificationId, CancellationToken ct = default) =>
+        hub.Clients.Group(ThuddleHub.UserGroup(keycloakId))
+            .SendAsync(RealtimeEvents.NotificationRead, new { notificationId }, ct);
+
+    public Task NotificationsAllReadAsync(string keycloakId, DateTime readAt, CancellationToken ct = default) =>
+        hub.Clients.Group(ThuddleHub.UserGroup(keycloakId))
+            .SendAsync(RealtimeEvents.NotificationsAllRead, new { readAt }, ct);
 
     // Raffle
 

@@ -35,6 +35,8 @@ public static class RealtimeEvents
 
     // Notifications
     public const string NotificationCreated = "NotificationCreated";
+    public const string NotificationRead = "NotificationRead";
+    public const string NotificationsAllRead = "NotificationsAllRead";
 
     // Raffle events
     public const string RaffleCreated = "RaffleCreated";

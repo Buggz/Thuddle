@@ -4,6 +4,7 @@ import { useRouter, RouterLink } from 'vue-router'
 import { storeToRefs } from 'pinia'
 import { useNotificationsStore } from '@/features/notifications/stores/notifications'
 import { useAuthStore } from '@/features/auth/stores/auth'
+import { resolveNotificationTarget } from '@/features/notifications/utils/resolveTarget'
 
 const router = useRouter()
 const notifications = useNotificationsStore()
@@ -73,43 +74,11 @@ function relTime(iso) {
   return new Date(iso).toLocaleDateString()
 }
 
-function deepLinkFor(notification) {
-  const data = notification.data || {}
-  const eventId = data.eventId || data.EventId
-  const itemId = data.auctionItemId || data.AuctionItemId || data.itemId
-  const postId = data.discussionPostId || data.PostId
-  const groupId = data.contactGroupId || data.GroupId
-
-  switch (notification.kind) {
-    case 'AuctionItemSubmitted':
-    case 'AuctionItemApproved':
-    case 'AuctionItemSold':
-    case 'AuctionOutbid':
-    case 'AuctionStarting':
-    case 'AuctionEnded':
-      if (eventId && itemId) return { name: 'auction-item', params: { id: eventId, itemId } }
-      if (eventId) return { name: 'auction', params: { id: eventId } }
-      break
-    case 'EventInvite':
-    case 'EventUpdated':
-      if (eventId) return { name: 'event', params: { id: eventId } }
-      break
-    case 'DiscussionReply':
-    case 'DiscussionMention':
-      if (eventId) return { name: 'event', params: { id: eventId } }
-      break
-    case 'GroupInvite':
-      if (groupId) return { name: 'contact-group', params: { id: groupId } }
-      break
-  }
-  return null
-}
-
 async function activate(notification) {
   if (!notification.readAt) {
     await notifications.markRead(notification.id)
   }
-  const target = deepLinkFor(notification)
+  const target = resolveNotificationTarget(notification)
   close()
   if (target) router.push(target)
 }
@@ -147,24 +116,24 @@ async function onMarkAll() {
       <div
         v-if="open"
         data-testid="notification-bell-panel"
-        class="absolute right-0 z-50 mt-2 w-80 origin-top-right rounded-2xl border border-gray-200 bg-white shadow-xl ring-1 ring-black/5"
+        class="absolute right-0 z-50 mt-2 w-80 origin-top-right rounded-2xl border border-gray-200 bg-white shadow-xl ring-1 ring-black/5 dark:bg-gray-800 dark:border-gray-700"
         role="menu"
       >
-        <div class="flex items-center justify-between px-4 py-3 border-b border-gray-100">
-          <h3 class="text-sm font-bold text-gray-900">Notifications</h3>
+        <div class="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-gray-700">
+          <h3 class="text-sm font-bold text-gray-900 dark:text-gray-100">Notifications</h3>
           <button
             v-if="unreadCount > 0"
             type="button"
             data-testid="notification-mark-all-read-btn"
             @click="onMarkAll"
-            class="text-xs font-bold text-indigo-600 hover:text-indigo-700"
+            class="text-xs font-bold text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300"
           >
             Mark all read
           </button>
         </div>
 
         <div class="max-h-96 overflow-y-auto">
-          <ul v-if="recent.length" class="divide-y divide-gray-100">
+          <ul v-if="recent.length" class="divide-y divide-gray-100 dark:divide-gray-700">
             <li
               v-for="n in recent"
               :key="n.id"
@@ -174,36 +143,37 @@ async function onMarkAll() {
               <button
                 type="button"
                 @click="activate(n)"
-                class="block w-full px-4 py-3 text-left hover:bg-gray-50 focus:outline-none focus:bg-gray-50"
-                :class="!n.readAt ? 'bg-indigo-50/40' : ''"
+                class="block w-full px-4 py-3 text-left hover:bg-gray-50 focus:outline-none focus:bg-gray-50 dark:hover:bg-gray-700 dark:focus:bg-gray-700"
+                :class="!n.readAt ? 'bg-indigo-50/40 dark:bg-indigo-900/30' : ''"
               >
                 <div class="flex items-start gap-2">
                   <span
                     v-if="!n.readAt"
+                    :data-testid="`notification-row-unread-dot-${n.id}`"
                     aria-hidden="true"
                     class="mt-1.5 inline-block h-2 w-2 flex-shrink-0 rounded-full bg-indigo-500"
                   />
                   <span v-else class="mt-1.5 inline-block h-2 w-2 flex-shrink-0" />
                   <div class="flex-1 min-w-0">
-                    <p class="text-sm font-semibold text-gray-900 truncate">{{ n.title }}</p>
-                    <p v-if="n.body" class="mt-0.5 text-xs text-gray-500 line-clamp-2">{{ n.body }}</p>
-                    <p class="mt-1 text-[11px] text-gray-400">{{ relTime(n.createdAt) }}</p>
+                    <p :data-testid="`notification-row-title-${n.id}`" class="text-sm font-semibold text-gray-900 truncate dark:text-gray-100">{{ n.title }}</p>
+                    <p v-if="n.body" :data-testid="`notification-row-body-${n.id}`" class="mt-0.5 text-xs text-gray-700 line-clamp-2 dark:text-gray-300">{{ n.body }}</p>
+                    <p class="mt-1 text-[11px] text-gray-500 dark:text-gray-400">{{ relTime(n.createdAt) }}</p>
                   </div>
                 </div>
               </button>
             </li>
           </ul>
-          <div v-else class="px-4 py-10 text-center text-sm text-gray-400">
+          <div v-else class="px-4 py-10 text-center text-sm text-gray-500 dark:text-gray-400">
             No notifications yet.
           </div>
         </div>
 
-        <div class="border-t border-gray-100 px-4 py-2 text-right">
+        <div class="border-t border-gray-100 px-4 py-2 text-right dark:border-gray-700">
           <RouterLink
             :to="{ name: 'notifications' }"
             data-testid="notification-bell-view-all"
             @click="close"
-            class="inline-block text-xs font-bold text-indigo-600 hover:text-indigo-700"
+            class="inline-block text-xs font-bold text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300"
           >
             View all
           </RouterLink>

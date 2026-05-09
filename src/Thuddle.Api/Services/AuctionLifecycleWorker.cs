@@ -147,12 +147,14 @@ public sealed class AuctionLifecycleWorker(
                 foreach (var item in items.Where(i => i.Status == AuctionItemStatus.Sold))
                 {
                     await notifications.CreateAsync(
-                        item.WinnerUserId!.Value,
-                        NotificationKind.AuctionWonItem,
-                        auction.EventId,
-                        item.Id,
-                        $"You won \"{item.Name}\" for {item.FinalPrice:N2}!",
-                        ct);
+                        userId: item.WinnerUserId!.Value,
+                        kind: NotificationKind.AuctionWonItem,
+                        title: "You won an auction item",
+                        message: $"You won \"{item.Name}\" for {item.FinalPrice:N2}!",
+                        entityType: "AuctionItem",
+                        eventId: auction.EventId,
+                        entityId: item.Id,
+                        ct: ct);
 
                     await realtime.AuctionItemSoldAsync(auction.EventId, item.Id, ct);
                 }
@@ -218,12 +220,14 @@ public sealed class AuctionLifecycleWorker(
         foreach (var bidderId in bidderIds)
         {
             await notifications.CreateAsync(
-                bidderId,
-                NotificationKind.AuctionEndingSoon,
-                eventId,
-                null,
-                $"Auction ending in about {timeLeft}!",
-                ct);
+                userId: bidderId,
+                kind: NotificationKind.AuctionEndingSoon,
+                title: "Auction ending soon",
+                message: $"Auction ending in about {timeLeft}!",
+                entityType: "Event",
+                eventId: eventId,
+                entityId: eventId,
+                ct: ct);
         }
     }
 }

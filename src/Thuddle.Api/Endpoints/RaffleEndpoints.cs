@@ -531,12 +531,14 @@ public static class RaffleEndpoints
             draw.TicketsBefore, draw.TicketsAfter, draw.DrawnAt, ct);
 
         await notifications.CreateAsync(
-            winner.UserId,
-            NotificationKind.RaffleWon,
-            eventId,
-            raffleId,
-            $"You won the {raffle.Name} raffle!",
-            ct);
+            userId: winner.UserId,
+            kind: NotificationKind.RaffleWon,
+            title: "You won a raffle",
+            message: $"You won the {raffle.Name} raffle!",
+            entityType: "Raffle",
+            eventId: eventId,
+            entityId: raffleId,
+            ct: ct);
 
         return Results.Ok(new
         {
