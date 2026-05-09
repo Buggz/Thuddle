@@ -473,7 +473,6 @@ watch(() => event.value?.participantCount, (newCount, oldCount) => {
                 Leave Event
               </button>
               <AddToCalendarButton
-                v-if="event?.hasJoined"
                 data-testid="event-add-to-calendar-btn"
                 :uid="`event-${event.id}@thuddle.app`"
                 :title="event.title"
