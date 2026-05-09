@@ -22,7 +22,11 @@ test.describe('notifications · bell and list', () => {
     baseURL,
     createdEvents,
   }) => {
-    const scenario = await setupOutbidScenario(browser, baseURL!)
+    const scenario = await setupOutbidScenario(browser, baseURL!, {
+      submitter: 'alice',
+      victim: 'bob',
+      rival: 'charlie',
+    })
     createdEvents.push(scenario.eventId)
 
     // Victim opens the dashboard and waits for the realtime hub to be ready

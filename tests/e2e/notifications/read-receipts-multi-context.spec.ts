@@ -15,7 +15,11 @@ test.describe('notifications · cross-device read sync', () => {
     baseURL,
     createdEvents,
   }) => {
-    const scenario = await setupOutbidScenario(browser, baseURL!)
+    const scenario = await setupOutbidScenario(browser, baseURL!, {
+      submitter: 'charlie',
+      victim: 'bob',
+      rival: 'diana',
+    })
     createdEvents.push(scenario.eventId)
 
     // Two contexts, same user (victim). Both authenticate via the shared
@@ -23,6 +27,10 @@ test.describe('notifications · cross-device read sync', () => {
     // in the same SignalR user group.
     const phone = await openWithRealtime(browser, scenario.victim, baseURL!)
     const laptop = await openWithRealtime(browser, scenario.victim, baseURL!)
+
+    // Both contexts must start clean — no stale unread badge from a previous run.
+    await expect(phone.page.getByTestId('notification-bell-badge')).toHaveCount(0)
+    await expect(laptop.page.getByTestId('notification-bell-badge')).toHaveCount(0)
 
     // ── First outbid: both contexts must show the badge ──
     await scenario.triggerOutbid()

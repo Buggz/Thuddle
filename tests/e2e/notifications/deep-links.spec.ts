@@ -16,7 +16,11 @@ test.describe('notifications · deep links', () => {
     baseURL,
     createdEvents,
   }) => {
-    const scenario = await setupOutbidScenario(browser, baseURL!)
+    const scenario = await setupOutbidScenario(browser, baseURL!, {
+      submitter: 'alice',
+      victim: 'charlie',
+      rival: 'diana',
+    })
     createdEvents.push(scenario.eventId)
 
     const { context, page } = await openWithRealtime(browser, scenario.victim, baseURL!)

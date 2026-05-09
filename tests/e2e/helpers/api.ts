@@ -44,7 +44,9 @@ export async function userApi(
   return {
     close: () => context.close(),
     request: page.request,
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    get headers() {
+      return { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
+    },
     baseURL,
   }
 }

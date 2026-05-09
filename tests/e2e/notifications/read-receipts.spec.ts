@@ -14,7 +14,11 @@ test.describe('notifications · read receipts (single user)', () => {
     baseURL,
     createdEvents,
   }) => {
-    const scenario = await setupOutbidScenario(browser, baseURL!)
+    const scenario = await setupOutbidScenario(browser, baseURL!, {
+      submitter: 'alice',
+      victim: 'diana',
+      rival: 'bob',
+    })
     createdEvents.push(scenario.eventId)
 
     const { context, page } = await openWithRealtime(browser, scenario.victim, baseURL!)
