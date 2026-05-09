@@ -107,4 +107,22 @@ public sealed class NotificationService(ThuddleDbContext db, IRealtimeNotifier r
             entityId: eventId,
             ct: ct);
     }
+
+    public async Task NotifyRemovedFromActivity(
+        Guid userId,
+        Guid eventId,
+        Guid activityId,
+        string activityTitle,
+        CancellationToken ct = default)
+    {
+        await CreateAsync(
+            userId: userId,
+            kind: NotificationKind.RemovedFromActivity,
+            title: "Removed from activity",
+            message: $"You were removed from \"{activityTitle}\".",
+            entityType: "EventActivity",
+            eventId: eventId,
+            entityId: activityId,
+            ct: ct);
+    }
 }

@@ -1,6 +1,7 @@
 <script setup>
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useActivitiesStore } from './store'
+import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
 
 const props = defineProps({
   eventId: { type: String, required: true },
@@ -22,7 +23,23 @@ function formatDate(iso) {
   })
 }
 
-async function handleRemove(userId) {
+const pendingRemoval = ref(null)
+const removeDialogOpen = ref(false)
+
+function confirmRemove(userId, displayName) {
+  pendingRemoval.value = { userId, displayName }
+  removeDialogOpen.value = true
+}
+
+function cancelRemove() {
+  removeDialogOpen.value = false
+  pendingRemoval.value = null
+}
+
+async function executeRemove() {
+  const { userId } = pendingRemoval.value
+  removeDialogOpen.value = false
+  pendingRemoval.value = null
   try {
     await store.removeParticipant(props.eventId, props.activityId, userId)
   } catch { /* best-effort; caller can surface errors if needed */ }
@@ -65,12 +82,21 @@ async function handleRemove(userId) {
         <button
           type="button"
           :data-testid="`activity-remove-participant-${p.userId}`"
-          @click="handleRemove(p.userId)"
+          @click="confirmRemove(p.userId, p.displayName)"
           class="shrink-0 px-3 py-2 min-h-11 text-xs font-semibold text-red-600 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition-colors"
         >
           Remove
         </button>
       </li>
     </ul>
+
+    <ConfirmDialog
+      :open="removeDialogOpen"
+      title="Remove participant"
+      :message="pendingRemoval ? `Remove ${pendingRemoval.displayName} from this activity? They will be notified.` : ''"
+      confirm-label="Remove"
+      @confirm="executeRemove"
+      @cancel="cancelRemove"
+    />
   </div>
 </template>

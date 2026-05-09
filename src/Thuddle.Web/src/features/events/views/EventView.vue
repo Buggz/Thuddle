@@ -258,6 +258,8 @@ function applyHashNavigation() {
     activeTab.value = 'discussion'
   } else if (hash === '#raffles') {
     activeTab.value = 'raffles'
+  } else if (hash === '#activities') {
+    activeTab.value = 'activities'
   }
 }
 

@@ -53,6 +53,13 @@ export function resolveNotificationTarget(notification) {
       }
       return { name: 'event', params: { id: eventId }, hash: '#raffles' }
 
+    case 'EventActivity':
+      if (!eventId) {
+        console.warn('[resolveNotificationTarget] EventActivity missing eventId', notification)
+        return null
+      }
+      return { name: 'event', params: { id: eventId }, hash: '#activities' }
+
     default:
       return null
   }

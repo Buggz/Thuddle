@@ -14,7 +14,8 @@ public enum NotificationKind
     EventUpdated,
     DiscussionReplyToYourPost,
     DiscussionMention,
-    ContactGroupInvitation
+    ContactGroupInvitation,
+    RemovedFromActivity
 }
 
 public class Notification

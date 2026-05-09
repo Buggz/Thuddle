@@ -4,6 +4,7 @@ import { activityApi } from '@/api'
 import { useApi } from '@/shared/composables/useApi'
 import { useRealtime, RealtimeEvents } from '@/shared/composables/useRealtime'
 import { useEventFeaturesStore } from '@/features/events/stores/eventFeatures'
+import { usePermissionsStore } from '@/features/auth/stores/permissions'
 
 /**
  * Activities store, keyed by activityId.
@@ -189,12 +190,20 @@ export const useActivitiesStore = defineStore('activities', () => {
   }
 
   async function applyRealtimeParticipantChanged({ eventId, activityId, userId, joined, participantCount }) {
+    const permissions = usePermissionsStore()
     const current = activities.value.get(activityId)
     if (current) {
+      const isMe = userId === permissions.userId
+      const mySignupPatch = isMe
+        ? joined
+          ? { mySignupAt: new Date().toISOString() }
+          : { mySignupAt: null, isFull: false }
+        : {}
       activities.value.set(activityId, {
         ...current,
         participantCount,
-        isFull: current.maxParticipants != null && participantCount >= current.maxParticipants
+        isFull: current.maxParticipants != null && participantCount >= current.maxParticipants,
+        ...mySignupPatch
       })
       bumpActivitySeq(activityId)
     }
