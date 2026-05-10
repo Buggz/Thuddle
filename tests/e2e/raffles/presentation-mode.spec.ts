@@ -60,7 +60,7 @@ test.describe('Presentation mode', () => {
 
     // Click Open Draw Stage — raffle is already in Drawing, so this only navigates
     await drawStageBtn.click()
-    await adminPage.waitForURL(new RegExp(`/events/${eventId}/raffles/${raffleId}/present`), { timeout: 10000 })
+    await adminPage.waitForURL(new RegExp(`/events/[^/]+/raffles/${raffleId}/present`), { timeout: 10000 })
 
     // Should navigate to presentation view
     await expect(adminPage.getByTestId('raffle-present-view')).toBeVisible({ timeout: 10000 })
@@ -135,7 +135,7 @@ test.describe('Presentation mode', () => {
     await expect(drawStageBtn).toBeVisible({ timeout: 10000 })
 
     await drawStageBtn.click()
-    await adminPage.waitForURL(new RegExp(`/events/${eventId}/raffles/${raffleId}/present`), { timeout: 10000 })
+    await adminPage.waitForURL(new RegExp(`/events/[^/]+/raffles/${raffleId}/present`), { timeout: 10000 })
     await expect(adminPage.getByTestId('raffle-present-view')).toBeVisible({ timeout: 10000 })
 
     // Press Escape
@@ -171,7 +171,7 @@ test.describe('Presentation mode', () => {
     await expect(drawStageBtn).toBeVisible({ timeout: 10000 })
 
     await drawStageBtn.click()
-    await adminPage.waitForURL(new RegExp(`/events/${eventId}/raffles/${raffleId}/present`), { timeout: 10000 })
+    await adminPage.waitForURL(new RegExp(`/events/[^/]+/raffles/${raffleId}/present`), { timeout: 10000 })
     await expect(adminPage.getByTestId('raffle-present-view')).toBeVisible({ timeout: 10000 })
 
     // Click Exit button
@@ -229,7 +229,7 @@ test.describe('Presentation mode', () => {
     await expect(drawStageBtn).toBeVisible({ timeout: 10000 })
 
     await drawStageBtn.click()
-    await adminPage.waitForURL(new RegExp(`/events/${eventId}/raffles/${raffleId}/present`), { timeout: 10000 })
+    await adminPage.waitForURL(new RegExp(`/events/[^/]+/raffles/${raffleId}/present`), { timeout: 10000 })
     await expect(adminPage.getByTestId('raffle-present-view')).toBeVisible({ timeout: 10000 })
 
     // Draw

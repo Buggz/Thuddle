@@ -49,7 +49,7 @@ test.describe('Start and draw raffle', () => {
     expect(startBody.status).toBe('Drawing')
 
     // Page navigates to presentation view
-    await adminPage.waitForURL(new RegExp(`/events/${eventId}/raffles/${raffleId}/present`), { timeout: 10000 })
+    await adminPage.waitForURL(new RegExp(`/events/[^/]+/raffles/${raffleId}/present`), { timeout: 10000 })
     await expect(adminPage.getByTestId('raffle-present-view')).toBeVisible({ timeout: 10000 })
 
     // Navigate back to manage view to confirm status badge reads Drawing
@@ -104,7 +104,7 @@ test.describe('Start and draw raffle', () => {
     }
     await expect(drawStageBtn).toBeVisible({ timeout: 10000 })
     await drawStageBtn.click()
-    await adminPage.waitForURL(new RegExp(`/events/${eventId}/raffles/${raffleId}/present`), { timeout: 10000 })
+    await adminPage.waitForURL(new RegExp(`/events/[^/]+/raffles/${raffleId}/present`), { timeout: 10000 })
     await expect(adminPage.getByTestId('raffle-present-view')).toBeVisible({ timeout: 10000 })
 
     // Draw via the presentation-view button
@@ -168,7 +168,7 @@ test.describe('Start and draw raffle', () => {
     }
     await expect(drawStageBtn).toBeVisible({ timeout: 10000 })
     await drawStageBtn.click()
-    await adminPage.waitForURL(new RegExp(`/events/${eventId}/raffles/${raffleId}/present`), { timeout: 10000 })
+    await adminPage.waitForURL(new RegExp(`/events/[^/]+/raffles/${raffleId}/present`), { timeout: 10000 })
     await expect(adminPage.getByTestId('raffle-present-view')).toBeVisible({ timeout: 10000 })
 
     const presentDrawBtn = adminPage.getByTestId('raffle-present-draw-btn')

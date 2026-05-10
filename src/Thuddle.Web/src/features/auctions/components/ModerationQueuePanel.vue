@@ -9,6 +9,10 @@ const props = defineProps({
   eventId: {
     type: String,
     required: true
+  },
+  eventSlug: {
+    type: String,
+    required: true
   }
 })
 
@@ -96,7 +100,7 @@ function getThumbnail(item) {
         <div class="flex-1 min-w-0">
           <div class="flex items-center gap-2">
             <RouterLink 
-              :to="{ name: 'auction-item', params: { id: eventId, itemId: item.id } }"
+              :to="{ name: 'auction-item', params: { slug: eventSlug, itemId: item.id } }"
               class="font-bold text-gray-900 hover:text-indigo-600 truncate"
             >
               {{ item.name }}

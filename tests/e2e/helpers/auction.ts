@@ -79,7 +79,7 @@ export function adminApi(browser: Browser, baseURL: string) {
 export async function createEventApi(
   api: ApiContext,
   opts: { title?: string; currency?: string; cost?: number | null; start?: string; end?: string } = {},
-): Promise<{ id: string; title: string }> {
+): Promise<{ id: string; title: string; slug: string }> {
   const title = opts.title ?? `Auction ${uid()}`
   const dates = futureDates(10)
   const start = opts.start ?? new Date(dates.start).toISOString()
@@ -101,7 +101,7 @@ export async function createEventApi(
   })
   if (resp.status() !== 201) throw new Error(`Create event failed: ${resp.status()} ${await resp.text()}`)
   const body = await resp.json()
-  return { id: body.id, title }
+  return { id: body.id, title, slug: body.slug }
 }
 
 export async function deleteEventApi(api: ApiContext, eventId: string): Promise<void> {

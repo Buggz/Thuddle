@@ -6,7 +6,10 @@ import { useRouter, RouterLink } from 'vue-router'
 import PublishItemDialog from './PublishItemDialog.vue'
 import UnpublishDialog from './UnpublishDialog.vue'
 
-const props = defineProps({ eventId: { type: String, required: true } })
+const props = defineProps({
+  eventId: { type: String, required: true },
+  eventSlug: { type: String, required: true }
+})
 const auctionStore = useAuctionStore()
 const router = useRouter()
 const { myItemsByEvent, settingsByEvent } = storeToRefs(auctionStore)
@@ -82,7 +85,7 @@ async function confirmUnpublish() {
 
 async function handleResubmit(item) {
   await auctionStore.resubmitItem(props.eventId, item.id)
-  router.push({ name: 'auction-edit', params: { id: props.eventId, itemId: item.id } })
+  router.push({ name: 'auction-edit', params: { slug: props.eventSlug, itemId: item.id } })
 }
 
 onMounted(() => {
@@ -117,7 +120,7 @@ onBeforeUnmount(() => {
           <div v-else class="h-10 w-10 rounded-lg bg-gray-200" />
           <div class="flex-1 min-w-0">
             <p class="font-bold text-gray-900 text-sm truncate">{{ item.name }}</p>
-            <RouterLink :to="{ name: 'auction-edit', params: { id: eventId, itemId: item.id } }" class="text-xs text-amber-700 hover:underline">Continue editing →</RouterLink>
+            <RouterLink :to="{ name: 'auction-edit', params: { slug: eventSlug, itemId: item.id } }" class="text-xs text-amber-700 hover:underline">Continue editing →</RouterLink>
           </div>
           <span data-testid="item-status-badge" :data-status="item.status" class="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-700 uppercase tracking-wide">Draft</span>
           <button type="button" @click="openPublishDialog(item)" data-testid="publish-button" class="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-indigo-700">Publish</button>

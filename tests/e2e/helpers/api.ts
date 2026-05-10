@@ -86,7 +86,7 @@ export interface CreateEventPayload {
 export async function createEventApi(
   api: ApiContext,
   payload: CreateEventPayload = {},
-): Promise<{ id: string; title: string }> {
+): Promise<{ id: string; title: string; slug: string }> {
   const title = payload.title ?? `Event ${Date.now()}`
   const dates = futureDates(10)
   const resp = await api.request.post(`${api.baseURL}/api/events`, {
@@ -107,7 +107,7 @@ export async function createEventApi(
     throw new Error(`Create event failed: ${resp.status()} ${await resp.text()}`)
   }
   const body = await resp.json()
-  return { id: body.id, title }
+  return { id: body.id, title, slug: body.slug }
 }
 
 export async function updateEventApi(

@@ -4,6 +4,7 @@ import { useRoute, RouterLink } from 'vue-router'
 import { storeToRefs } from 'pinia'
 import { useAuctionStore } from '@/features/auctions/stores/auction'
 import { useAuthStore } from '@/features/auth/stores/auth'
+import { useEventsStore } from '@/features/events/stores/events'
 import AuctionTimeline from '@/features/auctions/components/AuctionTimeline.vue'
 import AuctionItemCard from '@/features/auctions/components/AuctionItemCard.vue'
 import MyItemsPanel from '@/features/auctions/components/MyItemsPanel.vue'
@@ -12,8 +13,10 @@ import FunnyLoader from '@/shared/components/FunnyLoader.vue'
 const route = useRoute()
 const auctionStore = useAuctionStore()
 const auth = useAuthStore()
+const eventsStore = useEventsStore()
 
-const eventId = computed(() => String(route.params.id))
+const slug = computed(() => String(route.params.slug))
+const eventId = computed(() => eventsStore.slugToId[slug.value] ?? null)
 
 const { settingsByEvent, itemsByEvent, loadingByEvent, errorByEvent } = storeToRefs(auctionStore)
 
@@ -70,6 +73,9 @@ async function refresh() {
 }
 
 onMounted(async () => {
+  if (!eventId.value) {
+    await eventsStore.loadEventBySlug(slug.value)
+  }
   await refresh()
   if (auth.isAuthenticated) {
     await auctionStore.subscribeRealtime(eventId.value)
@@ -89,7 +95,7 @@ onBeforeUnmount(() => {
 <template>
   <div class="max-w-6xl mx-auto">
     <RouterLink
-      :to="{ name: 'event', params: { id: eventId } }"
+      :to="{ name: 'event', params: { slug: slug } }"
       class="mb-6 inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700"
     >
       <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
@@ -98,7 +104,7 @@ onBeforeUnmount(() => {
       Back to event
     </RouterLink>
 
-    <div v-if="loading && !settings" class="py-16">
+    <div v-if="!eventId || (loading && !settings)" class="py-16">
       <FunnyLoader title="Loading auction" />
     </div>
 
@@ -136,7 +142,7 @@ onBeforeUnmount(() => {
         <div class="flex flex-wrap items-center gap-2">
           <RouterLink
             v-if="canSubmit"
-            :to="{ name: 'auction-submit', params: { id: eventId } }"
+            :to="{ name: 'auction-submit', params: { slug: slug } }"
             class="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-bold text-white shadow-sm hover:bg-indigo-700 transition-colors"
           >
             <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
@@ -146,7 +152,7 @@ onBeforeUnmount(() => {
           </RouterLink>
           <RouterLink
             v-if="auth.isAuthenticated && isAdmin"
-            :to="{ name: 'auction-moderation', params: { id: eventId } }"
+            :to="{ name: 'auction-moderation', params: { slug: slug } }"
             data-testid="auction-moderation-link"
             class="inline-flex items-center gap-1.5 rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm font-bold text-gray-700 hover:bg-gray-50"
           >
@@ -157,7 +163,7 @@ onBeforeUnmount(() => {
           </RouterLink>
           <RouterLink
             v-if="auth.isAuthenticated && isAdmin"
-            :to="{ name: 'auction-settings', params: { id: eventId } }"
+            :to="{ name: 'auction-settings', params: { slug: slug } }"
             class="inline-flex items-center gap-1.5 rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm font-bold text-gray-700 hover:bg-gray-50"
           >
             <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">

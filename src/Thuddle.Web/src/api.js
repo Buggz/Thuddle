@@ -4,6 +4,10 @@ export function apiUrl(path) {
   return `${API_BASE}${path}`
 }
 
+export function getEventBySlug(authFetch, slug) {
+  return authFetch(`/api/events/by-slug/${encodeURIComponent(slug)}`).then((r) => r.json())
+}
+
 // ─── Auction API ────────────────────────────────────────────────────────────
 //
 // Each function accepts the caller's `authFetch` (from `useApi()`) so the

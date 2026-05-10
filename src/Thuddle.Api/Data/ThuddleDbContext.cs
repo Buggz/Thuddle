@@ -51,6 +51,13 @@ public class ThuddleDbContext(DbContextOptions<ThuddleDbContext> options) : DbCo
                 .WithMany()
                 .HasForeignKey(e => e.OwnerId)
                 .OnDelete(DeleteBehavior.Cascade);
+
+            // Slug is nullable in the DB during the transition period (backfill runs in
+            // MigrationService after AddEventSlug migration). The conditional unique index
+            // allows NULLs during backfill. MakeEventSlugRequired (future migration) will
+            // drop this filter and add a plain unique index once all rows are populated.
+            entity.Property(e => e.Slug).HasMaxLength(80).IsRequired(false);
+            entity.HasIndex(e => e.Slug).IsUnique().HasFilter("\"Slug\" IS NOT NULL");
         });
 
         modelBuilder.Entity<UserPermission>(entity =>

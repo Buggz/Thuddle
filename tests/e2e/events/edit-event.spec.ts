@@ -284,8 +284,8 @@ test.describe('Edit event details', () => {
       await saveResp
       await expect(page.getByTestId('manage-save-success')).toBeVisible({ timeout: 5000 })
 
-      // Reload and verify the value stuck
-      await page.reload()
+      // Navigate via guid URL so the router resolves the current slug after rename
+      await page.goto(`${baseURL}/events/${eventId}/manage`)
       await page.getByTestId('manage-title-input').waitFor({ state: 'visible', timeout: 10000 })
       await expect(page.getByTestId('manage-title-input')).toHaveValue(newTitle)
 

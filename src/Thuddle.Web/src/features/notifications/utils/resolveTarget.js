@@ -11,28 +11,30 @@ export function resolveNotificationTarget(notification) {
         console.warn('[resolveNotificationTarget] AuctionItem missing eventId or entityId', notification)
         return null
       }
-      return { name: 'auction-item', params: { id: eventId, itemId: entityId } }
+      // Notification payload carries only GUIDs; route through the guid→slug shim.
+      // Deep link to the specific item is not possible without the slug.
+      return { path: `/events/${eventId}` }
 
     case 'Event':
       if (!entityId) {
         console.warn('[resolveNotificationTarget] Event missing entityId', notification)
         return null
       }
-      return { name: 'event', params: { id: entityId } }
+      return { path: `/events/${entityId}` }
 
     case 'DiscussionPost':
       if (!eventId || !entityId) {
         console.warn('[resolveNotificationTarget] DiscussionPost missing eventId or entityId', notification)
         return null
       }
-      return { name: 'event', params: { id: eventId }, hash: `#post-${entityId}` }
+      return { path: `/events/${eventId}`, hash: `#post-${entityId}` }
 
     case 'DiscussionComment':
       if (!eventId || !secondaryEntityId) {
         console.warn('[resolveNotificationTarget] DiscussionComment missing eventId or secondaryEntityId', notification)
         return null
       }
-      return { name: 'event', params: { id: eventId }, hash: `#comment-${secondaryEntityId}` }
+      return { path: `/events/${eventId}`, hash: `#comment-${secondaryEntityId}` }
 
     case 'EventInvitation':
       if (!entityId) {
@@ -40,7 +42,7 @@ export function resolveNotificationTarget(notification) {
         return null
       }
       // No dedicated event-invitation route exists; navigate to the event itself.
-      return { name: 'event', params: { id: entityId } }
+      return { path: `/events/${entityId}` }
 
     case 'ContactGroup':
       // No per-group route exists in the router; navigate to the groups listing.
@@ -51,14 +53,14 @@ export function resolveNotificationTarget(notification) {
         console.warn('[resolveNotificationTarget] Raffle missing eventId', notification)
         return null
       }
-      return { name: 'event', params: { id: eventId }, hash: '#raffles' }
+      return { path: `/events/${eventId}`, hash: '#raffles' }
 
     case 'EventActivity':
       if (!eventId) {
         console.warn('[resolveNotificationTarget] EventActivity missing eventId', notification)
         return null
       }
-      return { name: 'event', params: { id: eventId }, hash: '#activities' }
+      return { path: `/events/${eventId}`, hash: '#activities' }
 
     default:
       return null

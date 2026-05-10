@@ -88,7 +88,7 @@ test.describe('Draw only from presentation view', () => {
     // Click it -> navigates to the presentation route
     await drawStageBtn.click()
     await adminPage.waitForURL(
-      new RegExp(`/events/${eventId}/raffles/${raffleId}/present`),
+      new RegExp(`/events/[^/]+/raffles/${raffleId}/present`),
       { timeout: 10000 },
     )
     await expect(adminPage.getByTestId('raffle-present-view')).toBeVisible({ timeout: 10000 })

@@ -2,6 +2,10 @@ import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '@/features/auth/stores/auth'
 import { usePermissionsStore } from '@/features/auth/stores/permissions'
 import { useFeatureFlags } from '@/shared/featureFlags'
+import { useEventsStore } from '@/features/events/stores/events'
+
+// Matches /events/{uuid} optionally followed by any deeper path.
+const GUID_EVENT_RE = /^\/events\/([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})(\/.*)?$/
 
 export default function initRouter() {
   const router = createRouter({
@@ -31,54 +35,54 @@ export default function initRouter() {
         meta: { requiresAuth: true }
       },
       {
-        path: '/events/:id',
+        path: '/events/:slug',
         name: 'event',
         component: () => import('@/features/events/views/EventView.vue')
       },
       {
-        path: '/events/:id/manage',
+        path: '/events/:slug/manage',
         name: 'manage-event',
         component: () => import('@/features/events/views/ManageEventView.vue'),
         meta: { requiresAuth: true }
       },
       {
-        path: '/events/:id/auction',
+        path: '/events/:slug/auction',
         name: 'auction',
         component: () => import('@/features/auctions/views/AuctionView.vue'),
         meta: { featureFlag: 'auctions' }
       },
       {
-        path: '/events/:id/auction/items/new',
+        path: '/events/:slug/auction/items/new',
         name: 'auction-submit',
         component: () => import('@/features/auctions/views/SubmitAuctionItemView.vue'),
         meta: { requiresAuth: true, featureFlag: 'auctions' }
       },
       {
-        path: '/events/:id/auction/items/:itemId/edit',
+        path: '/events/:slug/auction/items/:itemId/edit',
         name: 'auction-edit',
         component: () => import('@/features/auctions/views/SubmitAuctionItemView.vue'),
         meta: { requiresAuth: true, featureFlag: 'auctions' }
       },
       {
-        path: '/events/:id/auction/items/:itemId',
+        path: '/events/:slug/auction/items/:itemId',
         name: 'auction-item',
         component: () => import('@/features/auctions/views/AuctionItemView.vue'),
         meta: { featureFlag: 'auctions' }
       },
       {
-        path: '/events/:id/auction/settings',
+        path: '/events/:slug/auction/settings',
         name: 'auction-settings',
         component: () => import('@/features/auctions/views/AuctionSettingsView.vue'),
         meta: { requiresAuth: true, featureFlag: 'auctions' }
       },
       {
-        path: '/events/:id/auction/moderation',
+        path: '/events/:slug/auction/moderation',
         name: 'auction-moderation',
         component: () => import('@/features/auctions/views/ModerationQueueView.vue'),
         meta: { requiresAuth: true, featureFlag: 'auctions' }
       },
       {
-        path: '/events/:id/raffles/:raffleId/present',
+        path: '/events/:slug/raffles/:raffleId/present',
         name: 'raffle-present',
         component: () => import('@/features/events/raffles/RafflePresentationView.vue'),
         meta: { requiresAuth: true, fullscreen: true }
@@ -96,6 +100,22 @@ export default function initRouter() {
         meta: { requiresAuth: true, requiredPermission: 'admin:access' }
       }
     ]
+  })
+
+  // Guid-based event URLs — redirect to slug-based URLs for any depth.
+  // e.g. /events/{guid}/manage → /events/{slug}/manage
+  router.beforeEach(async (to) => {
+    const m = GUID_EVENT_RE.exec(to.path)
+    if (m) {
+      const guid = m[1]
+      const tail = m[2] || ''
+      const eventsStore = useEventsStore()
+      const event = await eventsStore.loadEvent(guid)
+      if (event?.slug) {
+        return { path: '/events/' + event.slug + tail, query: to.query, hash: to.hash, replace: true }
+      }
+      return { path: '/' }
+    }
   })
 
   router.beforeEach(async (to) => {

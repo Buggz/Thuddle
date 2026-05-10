@@ -6,7 +6,8 @@ import { formatCurrency } from '@/shared/formatCurrency'
 const props = defineProps({
   item: { type: Object, required: true },
   currency: { type: String, default: '' },
-  eventId: { type: String, required: true }
+  eventId: { type: String, required: true },
+  eventSlug: { type: String, required: true }
 })
 
 const thumbnail = computed(() => props.item.imageUrls?.[0] || props.item.games?.[0]?.imageUrl || null)
@@ -36,7 +37,7 @@ const statusBadge = computed(() => {
 <template>
   <RouterLink
     :data-testid="`auction-item-card-${item.id}`"
-    :to="{ name: 'auction-item', params: { id: eventId, itemId: item.id } }"
+    :to="{ name: 'auction-item', params: { slug: eventSlug, itemId: item.id } }"
     class="group flex flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
   >
     <div class="relative aspect-[4/3] w-full overflow-hidden bg-gradient-to-br from-indigo-50 to-purple-50">

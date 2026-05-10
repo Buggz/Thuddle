@@ -12,6 +12,7 @@ public static class EventEndpoints
     public static void MapEventEndpoints(this WebApplication app)
     {
         app.MapGet("/api/events", GetEvents).AllowAnonymous();
+        app.MapGet("/api/events/by-slug/{slug}", GetEventBySlug).AllowAnonymous();
         app.MapGet("/api/events/{eventId:guid}", GetEvent).AllowAnonymous();
         app.MapPost("/api/events", CreateEvent).RequireAuthorization("events:write");
         app.MapPut("/api/events/{eventId:guid}", UpdateEvent).RequireAuthorization();
@@ -129,12 +130,21 @@ public static class EventEndpoints
     private static async Task<IResult> GetEvents(
         int? page,
         int? pageSize,
+        string? filter,
+        bool? mine,
         ClaimsPrincipal user,
         ThuddleDbContext db,
         CancellationToken ct)
     {
         var p = Math.Max(page ?? 1, 1);
         var size = Math.Clamp(pageSize ?? 20, 1, 100);
+        var filterValue = filter?.ToLowerInvariant() switch
+        {
+            "past" => "past",
+            "all" => "all",
+            _ => "upcoming" // unknown values treated as upcoming
+        };
+        var mineOnly = mine ?? false;
 
         var keycloakId = GetKeycloakId(user);
         var dbUser = keycloakId is not null
@@ -145,26 +155,51 @@ public static class EventEndpoints
         var userId = dbUser?.Id ?? Guid.Empty;
         var userEmail = dbUser?.Email?.ToLower() ?? "";
 
+        if (mineOnly && isAnonymous)
+            return Results.Unauthorized();
+
         var query = db.Events.AsNoTracking();
-        if (isAnonymous)
+
+        if (mineOnly)
+        {
+            // TODO: include event-level waitlist members once that feature exists (issue #5 task 3 follow-up).
+            query = query.Where(e => db.EventParticipants.Any(ep => ep.EventId == e.Id && ep.UserId == userId));
+        }
+        else if (isAnonymous)
+        {
             query = query.Where(e => e.Visibility == EventVisibility.Public);
+        }
         else
+        {
             query = query.Where(e =>
                 e.Visibility == EventVisibility.Public
                 || e.OwnerId == userId
                 || db.EventParticipants.Any(ep => ep.EventId == e.Id && ep.UserId == userId)
                 || db.EventCoAdmins.Any(ca => ca.EventId == e.Id && ca.UserId == userId)
                 || db.EventInvitations.Any(i => i.EventId == e.Id && i.Email.ToLower() == userEmail));
+        }
+
+        var now = DateTime.UtcNow;
+        query = filterValue switch
+        {
+            "past" => query.Where(e => e.End < now),
+            "upcoming" => query.Where(e => e.End >= now),
+            _ => query // "all" — no time filter
+        };
 
         var totalCount = await query.CountAsync(ct);
 
-        var events = await query
-            .OrderBy(e => e.Start)
+        var orderedQuery = filterValue == "past"
+            ? query.OrderByDescending(e => e.End)
+            : query.OrderBy(e => e.Start);
+
+        var events = await orderedQuery
             .Skip((p - 1) * size)
             .Take(size)
             .Select(e => new
             {
                 e.Id,
+                e.Slug,
                 e.Title,
                 e.Location,
                 e.Description,
@@ -212,6 +247,7 @@ public static class EventEndpoints
             return new
             {
                 e.Id,
+                e.Slug,
                 e.Title,
                 e.Location,
                 e.Description,
@@ -248,7 +284,28 @@ public static class EventEndpoints
         });
     }
 
-    private static async Task<IResult> GetEvent(
+    private static Task<IResult> GetEvent(Guid eventId, ClaimsPrincipal user, ThuddleDbContext db, CancellationToken ct)
+        => GetEventCoreAsync(eventId, user, db, ct);
+
+    private static async Task<IResult> GetEventBySlug(
+        string slug,
+        ClaimsPrincipal user,
+        ThuddleDbContext db,
+        CancellationToken ct)
+    {
+        var eventId = await db.Events
+            .AsNoTracking()
+            .Where(e => e.Slug == slug)
+            .Select(e => (Guid?)e.Id)
+            .FirstOrDefaultAsync(ct);
+
+        if (eventId is null)
+            return Results.NotFound(new { error = "Event not found." });
+
+        return await GetEventCoreAsync(eventId.Value, user, db, ct);
+    }
+
+    private static async Task<IResult> GetEventCoreAsync(
         Guid eventId,
         ClaimsPrincipal user,
         ThuddleDbContext db,
@@ -259,6 +316,7 @@ public static class EventEndpoints
             .Select(e => new
             {
                 e.Id,
+                e.Slug,
                 e.Title,
                 e.Location,
                 e.Description,
@@ -345,6 +403,7 @@ public static class EventEndpoints
         return Results.Ok(new
         {
             evt.Id,
+            evt.Slug,
             evt.Title,
             evt.Location,
             evt.Description,
@@ -375,6 +434,7 @@ public static class EventEndpoints
         CreateEventRequest request,
         IValidator<CreateEventRequest> validator,
         ThuddleDbContext db,
+        SlugService slugService,
         IRealtimeNotifier realtime,
         CancellationToken ct)
     {
@@ -392,11 +452,15 @@ public static class EventEndpoints
             ? JoinMode.InviteOnly
             : request.JoinMode;
 
+        var title = request.Title.Trim();
+        var slug = await slugService.EnsureUniqueAsync(slugService.Slugify(title), excludeEventId: null, ct);
+
         var evt = new Event
         {
             Id = Guid.NewGuid(),
             OwnerId = dbUser.Id,
-            Title = request.Title.Trim(),
+            Title = title,
+            Slug = slug,
             Location = request.Location.Trim(),
             Description = request.Description,
             Start = request.Start,
@@ -418,6 +482,7 @@ public static class EventEndpoints
         return Results.Created($"/api/events/{evt.Id}", new
         {
             evt.Id,
+            evt.Slug,
             evt.Title,
             evt.Location,
             evt.Description,
@@ -741,6 +806,7 @@ public static class EventEndpoints
         IValidator<UpdateEventRequest> validator,
         ClaimsPrincipal user,
         ThuddleDbContext db,
+        SlugService slugService,
         IRealtimeNotifier realtime,
         CancellationToken ct)
     {
@@ -764,7 +830,11 @@ public static class EventEndpoints
             ? JoinMode.InviteOnly
             : request.JoinMode;
 
-        evt.Title = request.Title.Trim();
+        var newTitle = request.Title.Trim();
+        if (newTitle != evt.Title)
+            evt.Slug = await slugService.EnsureUniqueAsync(slugService.Slugify(newTitle), excludeEventId: evt.Id, ct);
+
+        evt.Title = newTitle;
         evt.Location = request.Location.Trim();
         evt.Description = request.Description;
         evt.Start = request.Start;
@@ -784,6 +854,7 @@ public static class EventEndpoints
         return Results.Ok(new
         {
             evt.Id,
+            evt.Slug,
             evt.Title,
             evt.Location,
             evt.Description,
