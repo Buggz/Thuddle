@@ -1,23 +1,29 @@
 <script setup>
 import { shallowRef, onMounted, onBeforeUnmount, computed } from 'vue'
 import { storeToRefs } from 'pinia'
-import { RouterLink } from 'vue-router'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/features/auth/stores/auth'
 import { usePermissionsStore } from '@/features/auth/stores/permissions'
 import { useEventsStore } from '@/features/events/stores/events'
 import { formatCurrency } from '@/shared/formatCurrency'
 import FunnyLoader from '@/shared/components/FunnyLoader.vue'
+import EventTabBar from '@/features/events/components/EventTabBar.vue'
 
 const auth = useAuthStore()
 const perms = usePermissionsStore()
 const eventsStore = useEventsStore()
+
+const route = useRoute()
+const router = useRouter()
 
 const {
   items: events,
   page,
   totalPages,
   loadingDashboard: loading,
-  dashboardError: error
+  dashboardError: error,
+  view,
+  myFilter,
 } = storeToRefs(eventsStore)
 
 const hintDismissed = shallowRef(localStorage.getItem('thuddle:profile-hint-dismissed') === 'true')
@@ -43,8 +49,49 @@ function dismissProfileHint() {
 const hasPrev = computed(() => page.value > 1)
 const hasNext = computed(() => page.value < totalPages.value)
 
+// ── Tab strip ──────────────────────────────────────────────────────────────
+
+const VALID_VIEWS = ['upcoming', 'past', 'my']
+
+const dashboardTabs = computed(() => {
+  const tabs = [
+    { key: 'upcoming', label: 'Upcoming', testid: 'dashboard-tab-upcoming' },
+    { key: 'past', label: 'Past', testid: 'dashboard-tab-past' },
+  ]
+  if (auth.isAuthenticated) {
+    tabs.push({ key: 'my', label: 'My events', testid: 'dashboard-tab-my-events' })
+  }
+  return tabs
+})
+
+const MY_FILTERS = [
+  { key: 'upcoming', label: 'Upcoming', testid: 'my-events-filter-upcoming' },
+  { key: 'past', label: 'Past', testid: 'my-events-filter-past' },
+  { key: 'all', label: 'All', testid: 'my-events-filter-all' },
+]
+
+function selectTab(key) {
+  router.replace({ query: { ...route.query, view: key } })
+  eventsStore.loadDashboard({ view: key, page: 1 })
+}
+
+function selectMyFilter(key) {
+  myFilter.value = key
+  eventsStore.loadDashboard({ view: 'my', page: 1 })
+}
+
+const emptyStateMessage = computed(() => {
+  if (view.value === 'past') return 'No past events.'
+  if (view.value === 'my') return "You haven't joined any events yet."
+  return 'No events yet.'
+})
+
+// ──────────────────────────────────────────────────────────────────────────
+
 async function loadEvents() {
-  await eventsStore.loadDashboard({ page: page.value })
+  const urlView = route.query.view
+  const seedView = VALID_VIEWS.includes(urlView) ? urlView : undefined
+  await eventsStore.loadDashboard({ page: page.value, view: seedView })
 }
 
 function prevPage() {
@@ -126,8 +173,33 @@ onBeforeUnmount(() => {
       </button>
     </div>
 
-    <div class="flex items-center justify-between mb-8">
+    <div class="flex items-center justify-between mb-6">
       <h2 data-testid="events-heading" class="text-3xl font-extrabold text-gray-900 tracking-tight">Events</h2>
+    </div>
+
+    <!-- Tab strip -->
+    <div class="mb-6">
+      <EventTabBar
+        :tabs="dashboardTabs"
+        :active-key="view"
+        @update:active-key="selectTab"
+      />
+      <!-- My events sub-filter -->
+      <div v-if="view === 'my'" class="mt-3 flex gap-1">
+        <button
+          v-for="f in MY_FILTERS"
+          :key="f.key"
+          :data-testid="f.testid"
+          type="button"
+          @click="selectMyFilter(f.key)"
+          class="px-3 py-1 text-xs font-semibold rounded-full border transition-colors"
+          :class="myFilter === f.key
+            ? 'bg-indigo-600 text-white border-indigo-600'
+            : 'bg-white text-gray-600 border-gray-300 hover:border-indigo-400 hover:text-indigo-600'"
+        >
+          {{ f.label }}
+        </button>
+      </div>
     </div>
 
     <div v-if="loading" class="py-12">
@@ -139,8 +211,8 @@ onBeforeUnmount(() => {
     </div>
 
     <div v-else-if="events.length === 0" class="text-center py-12">
-      <p class="text-gray-500 text-lg">No events yet.</p>
-      <p class="text-gray-400 text-sm mt-1">Create one to get started!</p>
+      <p class="text-gray-500 text-lg">{{ emptyStateMessage }}</p>
+      <p v-if="view === 'upcoming'" class="text-gray-400 text-sm mt-1">Create one to get started!</p>
     </div>
 
     <template v-else>

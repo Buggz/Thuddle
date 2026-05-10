@@ -18,6 +18,8 @@ export const useEventsStore = defineStore('events', () => {
   const totalPages = shallowRef(1)
   const loadingDashboard = shallowRef(false)
   const dashboardError = shallowRef(null)
+  const view = shallowRef('upcoming') // 'upcoming' | 'past' | 'my'
+  const myFilter = shallowRef('upcoming') // used when view === 'my': 'upcoming' | 'past' | 'all'
 
   // Single-event cache
   const byId = ref({})
@@ -65,14 +67,29 @@ export const useEventsStore = defineStore('events', () => {
     return res.json()
   }
 
-  async function loadDashboard({ page: targetPage = page.value, pageSize: size = pageSize.value } = {}) {
+  async function loadDashboard({ page: targetPage, pageSize: size = pageSize.value, view: targetView } = {}) {
+    // If a new view is requested, update state and reset page
+    if (targetView !== undefined && targetView !== view.value) {
+      view.value = targetView
+      if (targetPage === undefined) targetPage = 1
+    }
+    // Guard: 'my' view requires authentication
+    if (view.value === 'my' && !auth.isAuthenticated) {
+      view.value = 'upcoming'
+    }
+    if (targetPage === undefined) targetPage = page.value
+
     dashboardActive = true
     loadingDashboard.value = true
     dashboardError.value = null
     page.value = targetPage
     pageSize.value = size
+
+    const filter = view.value === 'my' ? myFilter.value : view.value
+    const mine = view.value === 'my'
+
     try {
-      const data = await fetchJson(`/api/events?page=${targetPage}&pageSize=${size}`)
+      const data = await fetchJson(`/api/events?page=${targetPage}&pageSize=${size}&filter=${filter}&mine=${mine}`)
       items.value = data.items
       totalPages.value = data.totalPages
       installRealtime()
@@ -289,6 +306,8 @@ export const useEventsStore = defineStore('events', () => {
     totalPages,
     loadingDashboard,
     dashboardError,
+    view,
+    myFilter,
     byId,
     eventError,
     // actions

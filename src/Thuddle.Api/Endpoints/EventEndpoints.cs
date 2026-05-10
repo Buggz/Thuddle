@@ -129,12 +129,21 @@ public static class EventEndpoints
     private static async Task<IResult> GetEvents(
         int? page,
         int? pageSize,
+        string? filter,
+        bool? mine,
         ClaimsPrincipal user,
         ThuddleDbContext db,
         CancellationToken ct)
     {
         var p = Math.Max(page ?? 1, 1);
         var size = Math.Clamp(pageSize ?? 20, 1, 100);
+        var filterValue = filter?.ToLowerInvariant() switch
+        {
+            "past" => "past",
+            "all" => "all",
+            _ => "upcoming" // unknown values treated as upcoming
+        };
+        var mineOnly = mine ?? false;
 
         var keycloakId = GetKeycloakId(user);
         var dbUser = keycloakId is not null
@@ -145,21 +154,45 @@ public static class EventEndpoints
         var userId = dbUser?.Id ?? Guid.Empty;
         var userEmail = dbUser?.Email?.ToLower() ?? "";
 
+        if (mineOnly && isAnonymous)
+            return Results.Unauthorized();
+
         var query = db.Events.AsNoTracking();
-        if (isAnonymous)
+
+        if (mineOnly)
+        {
+            // TODO: include event-level waitlist members once that feature exists (issue #5 task 3 follow-up).
+            query = query.Where(e => db.EventParticipants.Any(ep => ep.EventId == e.Id && ep.UserId == userId));
+        }
+        else if (isAnonymous)
+        {
             query = query.Where(e => e.Visibility == EventVisibility.Public);
+        }
         else
+        {
             query = query.Where(e =>
                 e.Visibility == EventVisibility.Public
                 || e.OwnerId == userId
                 || db.EventParticipants.Any(ep => ep.EventId == e.Id && ep.UserId == userId)
                 || db.EventCoAdmins.Any(ca => ca.EventId == e.Id && ca.UserId == userId)
                 || db.EventInvitations.Any(i => i.EventId == e.Id && i.Email.ToLower() == userEmail));
+        }
+
+        var now = DateTime.UtcNow;
+        query = filterValue switch
+        {
+            "past" => query.Where(e => e.End < now),
+            "upcoming" => query.Where(e => e.End >= now),
+            _ => query // "all" — no time filter
+        };
 
         var totalCount = await query.CountAsync(ct);
 
-        var events = await query
-            .OrderBy(e => e.Start)
+        var orderedQuery = filterValue == "past"
+            ? query.OrderByDescending(e => e.End)
+            : query.OrderBy(e => e.Start);
+
+        var events = await orderedQuery
             .Skip((p - 1) * size)
             .Take(size)
             .Select(e => new
