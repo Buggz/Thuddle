@@ -6,7 +6,6 @@ import { useInlineImageUpload } from '@/shared/composables/useInlineImageUpload'
 import { auctionApi } from '@/api'
 import EventForm from '@/features/events/components/EventForm.vue'
 import ImageCropper from '@/features/profile/components/ImageCropper.vue'
-import Spinner from '@/shared/components/Spinner.vue'
 import UserSearchComboBox from '@/shared/components/UserSearchComboBox.vue'
 import GroupSelectorPopover from '@/features/groups/components/GroupSelectorPopover.vue'
 import { usePermissionsStore } from '@/features/auth/stores/permissions'
@@ -125,20 +124,12 @@ const auctionStatusBadgeClass = computed(() => {
 const hasCost = computed(() => eventData.value?.cost != null && eventData.value.cost > 0)
 
 const eventOwnerId = computed(() => eventData.value?.ownerId ?? null)
-const eventIsInviteOnly = computed(() => (eventData.value?.joinMode ?? 0) === 1)
 
 const coAdminUserIds = computed(() => new Set(coAdmins.value.map(c => c.userId)))
 
 // Kick attendee dialog
 const kickDialogOpen = ref(false)
 const kickTarget = ref(null)
-
-const kickTargetHasInvitation = computed(() => {
-  if (!kickTarget.value) return false
-  if (eventIsInviteOnly.value) return true
-  const email = (kickTarget.value.email || '').toLowerCase()
-  return pendingInvitations.value.some(i => i.email?.toLowerCase() === email)
-})
 
 function openKickDialog(attendee) {
   kickTarget.value = attendee

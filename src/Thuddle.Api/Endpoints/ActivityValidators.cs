@@ -40,3 +40,11 @@ public sealed class UpdateActivityRequestValidator : AbstractValidator<UpdateAct
     }
 }
 
+public sealed class PromoteWaitlistRequestValidator : AbstractValidator<PromoteWaitlistRequest>
+{
+    public PromoteWaitlistRequestValidator()
+    {
+        RuleFor(x => x.UserId).NotEmpty().WithMessage("UserId is required.");
+    }
+}
+

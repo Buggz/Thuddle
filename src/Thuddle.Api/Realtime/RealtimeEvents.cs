@@ -55,4 +55,5 @@ public static class RealtimeEvents
     public const string ActivityUpdated = "ActivityUpdated";
     public const string ActivityDeleted = "ActivityDeleted";
     public const string ActivityParticipantChanged = "ActivityParticipantChanged";
+    public const string ActivityWaitlistChanged = "ActivityWaitlistChanged";
 }

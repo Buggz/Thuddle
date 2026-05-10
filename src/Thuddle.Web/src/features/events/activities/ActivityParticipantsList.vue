@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue'
 import { useActivitiesStore } from './store'
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
+import ParticipantChip from '@/shared/components/ParticipantChip.vue'
 
 const props = defineProps({
   eventId: { type: String, required: true },
@@ -61,24 +62,12 @@ async function executeRemove() {
         :data-testid="`activity-participant-${p.userId}`"
         class="flex items-center justify-between gap-3 py-1.5"
       >
-        <div class="flex items-center gap-3 min-w-0">
-          <img
-            v-if="p.profilePictureUrl"
-            :src="p.profilePictureUrl"
-            :alt="p.displayName"
-            class="w-8 h-8 rounded-full object-cover shrink-0"
-          />
-          <span
-            v-else
-            class="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-xs font-bold text-gray-500 shrink-0"
-          >
-            {{ p.displayName?.charAt(0)?.toUpperCase() ?? '?' }}
-          </span>
-          <div class="min-w-0">
-            <p class="text-sm font-semibold text-gray-900 truncate">{{ p.displayName }}</p>
-            <p class="text-xs text-gray-400">Signed up {{ formatDate(p.signedUpAt) }}</p>
-          </div>
-        </div>
+        <ParticipantChip
+          :user-id="p.userId"
+          :display-name="p.displayName"
+          :profile-picture-url="p.profilePictureUrl"
+          :subline="`Signed up ${formatDate(p.signedUpAt)}`"
+        />
         <button
           type="button"
           :data-testid="`activity-remove-participant-${p.userId}`"

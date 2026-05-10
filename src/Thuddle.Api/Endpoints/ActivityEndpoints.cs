@@ -17,9 +17,13 @@ public static class ActivityEndpoints
         app.MapPost("/api/events/{eventId:guid}/activities", CreateActivity).RequireAuthorization();
         app.MapPut("/api/events/{eventId:guid}/activities/{activityId:guid}", UpdateActivity).RequireAuthorization();
         app.MapDelete("/api/events/{eventId:guid}/activities/{activityId:guid}", DeleteActivity).RequireAuthorization();
+        app.MapPost("/api/events/{eventId:guid}/activities/description-images", UploadDescriptionImage).RequireAuthorization().DisableAntiforgery();
         app.MapPost("/api/events/{eventId:guid}/activities/{activityId:guid}/signup", SignUp).RequireAuthorization();
         app.MapDelete("/api/events/{eventId:guid}/activities/{activityId:guid}/signup", WithdrawSignup).RequireAuthorization();
         app.MapDelete("/api/events/{eventId:guid}/activities/{activityId:guid}/participants/{userId:guid}", RemoveParticipant).RequireAuthorization();
+        app.MapPost("/api/events/{eventId:guid}/activities/{activityId:guid}/waitlist", JoinWaitlist).RequireAuthorization();
+        app.MapDelete("/api/events/{eventId:guid}/activities/{activityId:guid}/waitlist", LeaveWaitlist).RequireAuthorization();
+        app.MapPost("/api/events/{eventId:guid}/activities/{activityId:guid}/waitlist/promote", PromoteWaitlist).RequireAuthorization();
     }
 
     private static string? GetKeycloakId(ClaimsPrincipal user) => EventAuthorization.GetKeycloakId(user);
@@ -42,6 +46,7 @@ public static class ActivityEndpoints
     {
         // Guid.Empty is a safe sentinel: no participant row will ever have that userId.
         var lookupUserId = Guid.Empty;
+        var isParticipant = false;
         var keycloakId = GetKeycloakId(user);
         if (keycloakId is not null)
         {
@@ -49,12 +54,21 @@ public static class ActivityEndpoints
                 .Where(u => u.KeycloakId == keycloakId)
                 .Select(u => (Guid?)u.Id)
                 .FirstOrDefaultAsync(ct);
-            if (userId.HasValue) lookupUserId = userId.Value;
+            if (userId.HasValue)
+            {
+                lookupUserId = userId.Value;
+                isParticipant = await IsEventParticipant(db, eventId, lookupUserId, ct);
+            }
         }
 
-        var activities = await db.EventActivities
+        var query = db.EventActivities
             .AsNoTracking()
-            .Where(a => a.EventId == eventId)
+            .Where(a => a.EventId == eventId);
+
+        if (!isParticipant)
+            query = query.Where(a => !a.HiddenFromNonParticipants);
+
+        var activities = await query
             .OrderBy(a => a.StartsAt)
             .ThenBy(a => a.CreatedAt)
             .Select(a => new
@@ -66,11 +80,17 @@ public static class ActivityEndpoints
                 a.StartsAt,
                 a.EndsAt,
                 a.MaxParticipants,
+                a.HiddenFromNonParticipants,
                 participantCount = a.Participants.Count,
                 isFull = a.MaxParticipants.HasValue && a.Participants.Count >= a.MaxParticipants.Value,
                 mySignupAt = a.Participants
                     .Where(p => p.UserId == lookupUserId)
                     .Select(p => (DateTime?)p.SignedUpAt)
+                    .FirstOrDefault(),
+                waitlistCount = a.WaitlistEntries.Count,
+                myWaitlistAt = a.WaitlistEntries
+                    .Where(w => w.UserId == lookupUserId)
+                    .Select(w => (DateTime?)w.JoinedWaitlistAt)
                     .FirstOrDefault(),
                 a.CreatedAt,
                 a.UpdatedAt
@@ -91,6 +111,7 @@ public static class ActivityEndpoints
     {
         var lookupUserId = Guid.Empty;
         var isAdmin = false;
+        var isParticipant = false;
         var keycloakId = GetKeycloakId(user);
         if (keycloakId is not null)
         {
@@ -102,6 +123,8 @@ public static class ActivityEndpoints
             {
                 lookupUserId = dbUser.Id;
                 isAdmin = await IsEventAdmin(db, eventId, dbUser.Id, ct);
+                isParticipant = isAdmin || await db.EventParticipants
+                    .AnyAsync(p => p.EventId == eventId && p.UserId == dbUser.Id, ct);
             }
         }
 
@@ -117,11 +140,17 @@ public static class ActivityEndpoints
                 a.StartsAt,
                 a.EndsAt,
                 a.MaxParticipants,
+                a.HiddenFromNonParticipants,
                 participantCount = a.Participants.Count,
                 isFull = a.MaxParticipants.HasValue && a.Participants.Count >= a.MaxParticipants.Value,
                 mySignupAt = a.Participants
                     .Where(p => p.UserId == lookupUserId)
                     .Select(p => (DateTime?)p.SignedUpAt)
+                    .FirstOrDefault(),
+                waitlistCount = a.WaitlistEntries.Count,
+                myWaitlistAt = a.WaitlistEntries
+                    .Where(w => w.UserId == lookupUserId)
+                    .Select(w => (DateTime?)w.JoinedWaitlistAt)
                     .FirstOrDefault(),
                 a.CreatedAt,
                 a.UpdatedAt
@@ -130,7 +159,11 @@ public static class ActivityEndpoints
 
         if (activity is null) return Results.NotFound(new { error = "Activity not found." });
 
-        if (!isAdmin)
+        // Hidden activities are invisible to non-participants — return 404 to avoid leaking existence.
+        if (activity.HiddenFromNonParticipants && !isParticipant)
+            return Results.NotFound(new { error = "Activity not found." });
+
+        if (!isParticipant)
         {
             return Results.Ok(new
             {
@@ -141,12 +174,16 @@ public static class ActivityEndpoints
                 activity.StartsAt,
                 activity.EndsAt,
                 activity.MaxParticipants,
+                activity.HiddenFromNonParticipants,
                 activity.participantCount,
                 activity.isFull,
                 activity.mySignupAt,
+                activity.waitlistCount,
+                activity.myWaitlistAt,
                 activity.CreatedAt,
                 activity.UpdatedAt,
-                participants = (object?)null
+                participants = (object?)null,
+                waitlist = (object?)null
             });
         }
 
@@ -165,6 +202,45 @@ public static class ActivityEndpoints
             })
             .ToListAsync(ct);
 
+        if (!isAdmin)
+        {
+            return Results.Ok(new
+            {
+                activity.Id,
+                activity.EventId,
+                activity.Title,
+                activity.Description,
+                activity.StartsAt,
+                activity.EndsAt,
+                activity.MaxParticipants,
+                activity.HiddenFromNonParticipants,
+                activity.participantCount,
+                activity.isFull,
+                activity.mySignupAt,
+                activity.waitlistCount,
+                activity.myWaitlistAt,
+                activity.CreatedAt,
+                activity.UpdatedAt,
+                participants,
+                waitlist = (object?)null
+            });
+        }
+
+        var waitlist = await db.EventActivityWaitlistEntries
+            .AsNoTracking()
+            .Where(w => w.EventActivityId == activityId)
+            .OrderBy(w => w.JoinedWaitlistAt)
+            .Select(w => new
+            {
+                w.UserId,
+                displayName = w.User.DisplayName ?? w.User.Email,
+                profilePictureUrl = w.User.ScaledPicturePath != null
+                    ? $"/api/profile/picture/{w.User.KeycloakId}"
+                    : null,
+                w.JoinedWaitlistAt
+            })
+            .ToListAsync(ct);
+
         return Results.Ok(new
         {
             activity.Id,
@@ -174,12 +250,16 @@ public static class ActivityEndpoints
             activity.StartsAt,
             activity.EndsAt,
             activity.MaxParticipants,
+            activity.HiddenFromNonParticipants,
             activity.participantCount,
             activity.isFull,
             activity.mySignupAt,
+            activity.waitlistCount,
+            activity.myWaitlistAt,
             activity.CreatedAt,
             activity.UpdatedAt,
-            participants
+            participants,
+            waitlist
         });
     }
 
@@ -216,6 +296,7 @@ public static class ActivityEndpoints
             StartsAt = request.StartsAt,
             EndsAt = request.EndsAt,
             MaxParticipants = request.MaxParticipants,
+            HiddenFromNonParticipants = request.HiddenFromNonParticipants,
             CreatedAt = now,
             UpdatedAt = now,
             CreatedByUserId = dbUser.Id
@@ -269,9 +350,12 @@ public static class ActivityEndpoints
                 activity.StartsAt,
                 activity.EndsAt,
                 activity.MaxParticipants,
+                activity.HiddenFromNonParticipants,
                 participantCount = 0,
                 isFull = false,
                 mySignupAt = (DateTime?)null,
+                waitlistCount = 0,
+                myWaitlistAt = (DateTime?)null,
                 activity.CreatedAt,
                 activity.UpdatedAt
             });
@@ -316,10 +400,14 @@ public static class ActivityEndpoints
         if (request.StartsAt.HasValue) activity.StartsAt = request.StartsAt.Value;
         if (request.EndsAt.HasValue) activity.EndsAt = request.EndsAt.Value;
         if (request.MaxParticipants.HasValue) activity.MaxParticipants = request.MaxParticipants.Value;
+        if (request.HiddenFromNonParticipants.HasValue) activity.HiddenFromNonParticipants = request.HiddenFromNonParticipants.Value;
         activity.UpdatedAt = DateTime.UtcNow;
 
         await db.SaveChangesAsync(ct);
         await realtime.ActivityUpdatedAsync(eventId, activityId, ct);
+
+        var waitlistCount = await db.EventActivityWaitlistEntries
+            .CountAsync(w => w.EventActivityId == activityId, ct);
 
         return Results.Ok(new
         {
@@ -330,9 +418,12 @@ public static class ActivityEndpoints
             activity.StartsAt,
             activity.EndsAt,
             activity.MaxParticipants,
+            activity.HiddenFromNonParticipants,
             participantCount,
             isFull = activity.MaxParticipants.HasValue && participantCount >= activity.MaxParticipants.Value,
             mySignupAt = (DateTime?)null,
+            waitlistCount,
+            myWaitlistAt = (DateTime?)null,
             activity.CreatedAt,
             activity.UpdatedAt
         });
@@ -515,6 +606,225 @@ public static class ActivityEndpoints
 
         return Results.NoContent();
     }
+
+    // ─── POST /api/events/{eventId}/activities/description-images ─────────────
+
+    private static async Task<IResult> UploadDescriptionImage(
+        Guid eventId,
+        HttpRequest request,
+        ClaimsPrincipal user,
+        ThuddleDbContext db,
+        ActivityDescriptionImageStorage imageStorage,
+        CancellationToken ct)
+    {
+        var keycloakId = GetKeycloakId(user);
+        if (keycloakId is null) return Results.Unauthorized();
+
+        var dbUser = await db.Users.FirstOrDefaultAsync(u => u.KeycloakId == keycloakId, ct);
+        if (dbUser is null) return Results.Unauthorized();
+
+        if (!await IsEventAdmin(db, eventId, dbUser.Id, ct))
+            return Results.Forbid();
+
+        var form = await request.ReadFormAsync(ct);
+        var file = form.Files.GetFile("image");
+        if (file is null || file.Length == 0)
+            return Results.BadRequest(new { error = "No image uploaded." });
+
+        // TODO: orphan blobs from deleted activity descriptions are accepted for now.
+        try
+        {
+            await using var stream = file.OpenReadStream();
+            var url = await imageStorage.UploadAsync(eventId, stream, file.ContentType, ct);
+            return Results.Ok(new { url });
+        }
+        catch (ArgumentException ex)
+        {
+            return Results.BadRequest(new { error = ex.Message });
+        }
+    }
+
+    // ─── POST /api/events/{eventId}/activities/{activityId}/waitlist ──────────
+
+    private static async Task<IResult> JoinWaitlist(
+        Guid eventId,
+        Guid activityId,
+        ClaimsPrincipal user,
+        ThuddleDbContext db,
+        IRealtimeNotifier realtime,
+        CancellationToken ct)
+    {
+        var keycloakId = GetKeycloakId(user);
+        if (keycloakId is null) return Results.Unauthorized();
+
+        var dbUser = await db.Users.FirstOrDefaultAsync(u => u.KeycloakId == keycloakId, ct);
+        if (dbUser is null) return Results.Unauthorized();
+
+        if (!await IsEventParticipant(db, eventId, dbUser.Id, ct))
+            return Results.Forbid();
+
+        var activity = await db.EventActivities.AsNoTracking()
+            .FirstOrDefaultAsync(a => a.Id == activityId && a.EventId == eventId, ct);
+        if (activity is null) return Results.NotFound(new { error = "Activity not found." });
+
+        var alreadySignedUp = await db.EventActivityParticipants
+            .AnyAsync(p => p.EventActivityId == activityId && p.UserId == dbUser.Id, ct);
+        if (alreadySignedUp)
+            return Results.Conflict(new { error = "Already signed up for this activity." });
+
+        var alreadyOnWaitlist = await db.EventActivityWaitlistEntries
+            .AnyAsync(w => w.EventActivityId == activityId && w.UserId == dbUser.Id, ct);
+        if (alreadyOnWaitlist)
+            return Results.Conflict(new { error = "Already on the waitlist." });
+
+        var currentCount = await db.EventActivityParticipants
+            .CountAsync(p => p.EventActivityId == activityId, ct);
+        if (!activity.MaxParticipants.HasValue || currentCount < activity.MaxParticipants.Value)
+            return Results.Conflict(new { error = "Activity is not full. Sign up directly." });
+
+        var now = DateTime.UtcNow;
+        var entry = new EventActivityWaitlistEntry
+        {
+            Id = Guid.NewGuid(),
+            EventActivityId = activityId,
+            UserId = dbUser.Id,
+            JoinedWaitlistAt = now
+        };
+
+        db.EventActivityWaitlistEntries.Add(entry);
+
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException)
+        {
+            // Unique index fired — concurrent double-join race lost.
+            return Results.Conflict(new { error = "Already on the waitlist." });
+        }
+
+        var waitlistCount = await db.EventActivityWaitlistEntries
+            .CountAsync(w => w.EventActivityId == activityId, ct);
+
+        // Position is 1-based; since we just joined we are at the back.
+        var position = waitlistCount;
+
+        await realtime.ActivityWaitlistChangedAsync(eventId, activityId, dbUser.Id, joined: true, waitlistCount, ct);
+
+        return Results.Ok(new { userId = dbUser.Id, joinedWaitlistAt = now, waitlistCount, position });
+    }
+
+    // ─── DELETE /api/events/{eventId}/activities/{activityId}/waitlist ────────
+
+    private static async Task<IResult> LeaveWaitlist(
+        Guid eventId,
+        Guid activityId,
+        ClaimsPrincipal user,
+        ThuddleDbContext db,
+        IRealtimeNotifier realtime,
+        CancellationToken ct)
+    {
+        var keycloakId = GetKeycloakId(user);
+        if (keycloakId is null) return Results.Unauthorized();
+
+        var dbUser = await db.Users.FirstOrDefaultAsync(u => u.KeycloakId == keycloakId, ct);
+        if (dbUser is null) return Results.Unauthorized();
+
+        var activityExists = await db.EventActivities
+            .AnyAsync(a => a.Id == activityId && a.EventId == eventId, ct);
+        if (!activityExists) return Results.NotFound(new { error = "Activity not found." });
+
+        var entry = await db.EventActivityWaitlistEntries.AsTracking()
+            .FirstOrDefaultAsync(w => w.EventActivityId == activityId && w.UserId == dbUser.Id, ct);
+        if (entry is null) return Results.NotFound(new { error = "Not on the waitlist for this activity." });
+
+        db.EventActivityWaitlistEntries.Remove(entry);
+        await db.SaveChangesAsync(ct);
+
+        var waitlistCount = await db.EventActivityWaitlistEntries
+            .CountAsync(w => w.EventActivityId == activityId, ct);
+
+        await realtime.ActivityWaitlistChangedAsync(eventId, activityId, dbUser.Id, joined: false, waitlistCount, ct);
+
+        return Results.NoContent();
+    }
+
+    // ─── POST /api/events/{eventId}/activities/{activityId}/waitlist/promote ──
+
+    private static async Task<IResult> PromoteWaitlist(
+        Guid eventId,
+        Guid activityId,
+        PromoteWaitlistRequest request,
+        IValidator<PromoteWaitlistRequest> validator,
+        ClaimsPrincipal user,
+        ThuddleDbContext db,
+        IRealtimeNotifier realtime,
+        NotificationService notifications,
+        ILoggerFactory loggerFactory,
+        CancellationToken ct)
+    {
+        var logger = loggerFactory.CreateLogger("ActivityEndpoints");
+        var keycloakId = GetKeycloakId(user);
+        if (keycloakId is null) return Results.Unauthorized();
+
+        var dbUser = await db.Users.FirstOrDefaultAsync(u => u.KeycloakId == keycloakId, ct);
+        if (dbUser is null) return Results.Unauthorized();
+
+        if (!await IsEventAdmin(db, eventId, dbUser.Id, ct))
+            return Results.Forbid();
+
+        if (ValidationError(await validator.ValidateAsync(request, ct)) is { } err)
+            return err;
+
+        var activity = await db.EventActivities.AsTracking()
+            .FirstOrDefaultAsync(a => a.Id == activityId && a.EventId == eventId, ct);
+        if (activity is null) return Results.NotFound(new { error = "Activity not found." });
+
+        var waitlistEntry = await db.EventActivityWaitlistEntries.AsTracking()
+            .FirstOrDefaultAsync(w => w.EventActivityId == activityId && w.UserId == request.UserId, ct);
+        if (waitlistEntry is null) return Results.NotFound(new { error = "User is not on the waitlist." });
+
+        var currentCount = await db.EventActivityParticipants
+            .CountAsync(p => p.EventActivityId == activityId, ct);
+        var isFull = activity.MaxParticipants.HasValue && currentCount >= activity.MaxParticipants.Value;
+
+        if (isFull && !request.AllowOverflow)
+            return Results.Conflict(new { error = "This activity is full.", code = "activity_full" });
+
+        if (isFull && request.AllowOverflow && activity.MaxParticipants.HasValue)
+        {
+            activity.MaxParticipants += 1;
+            logger.LogWarning(
+                "Activity {ActivityId} in event {EventId} had MaxParticipants bumped to {NewMax} due to waitlist overflow promotion of user {UserId}.",
+                activityId, eventId, activity.MaxParticipants.Value, request.UserId);
+        }
+
+        var now = DateTime.UtcNow;
+        var participant = new EventActivityParticipant
+        {
+            Id = Guid.NewGuid(),
+            EventActivityId = activityId,
+            UserId = request.UserId,
+            SignedUpAt = now
+        };
+
+        db.EventActivityWaitlistEntries.Remove(waitlistEntry);
+        db.EventActivityParticipants.Add(participant);
+
+        await db.SaveChangesAsync(ct);
+
+        var participantCount = await db.EventActivityParticipants
+            .CountAsync(p => p.EventActivityId == activityId, ct);
+        var waitlistCount = await db.EventActivityWaitlistEntries
+            .CountAsync(w => w.EventActivityId == activityId, ct);
+
+        await notifications.NotifyPromotedFromWaitlist(request.UserId, eventId, activityId, activity.Title, ct);
+        await realtime.ActivityWaitlistChangedAsync(eventId, activityId, request.UserId, joined: false, waitlistCount, ct);
+        await realtime.ActivityParticipantChangedAsync(eventId, activityId, request.UserId, joined: true, participantCount, ct);
+        await realtime.ActivityUpdatedAsync(eventId, activityId, ct);
+
+        return Results.Ok(new { userId = request.UserId, signedUpAt = now, participantCount, waitlistCount });
+    }
 }
 
 // ─── Request records ──────────────────────────────────────────────────────────
@@ -524,11 +834,15 @@ public record CreateActivityRequest(
     string? Description,
     DateTime StartsAt,
     DateTime? EndsAt,
-    int? MaxParticipants);
+    int? MaxParticipants,
+    bool HiddenFromNonParticipants = false);
 
 public record UpdateActivityRequest(
     string? Title,
     string? Description,
     DateTime? StartsAt,
     DateTime? EndsAt,
-    int? MaxParticipants);
+    int? MaxParticipants,
+    bool? HiddenFromNonParticipants);
+
+public record PromoteWaitlistRequest(Guid UserId, bool AllowOverflow);

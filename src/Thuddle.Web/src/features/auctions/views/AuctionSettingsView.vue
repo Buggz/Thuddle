@@ -21,7 +21,6 @@ const settings = computed(() => settingsByEvent.value[eventId.value] || null)
 const loadError = computed(() => errorByEvent.value[eventId.value])
 
 // Enum integer mappings (server has no JsonStringEnumConverter)
-const STATUS_INT = { Draft: 0, Scheduled: 1, Live: 2, Ended: 3 }
 const SUB_MODE_INT = { AdminsOnly: 0, SelectedAttendees: 1, AllAttendees: 2 }
 const MOD_POLICY_INT = { RequireApproval: 0, AutoApprove: 1 }
 

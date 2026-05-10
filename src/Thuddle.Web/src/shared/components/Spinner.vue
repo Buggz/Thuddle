@@ -1,3 +1,4 @@
+<!-- eslint-disable vue/multi-word-component-names -->
 <template>
   <span class="inline-block animate-spin text-gray-400">
     <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24">

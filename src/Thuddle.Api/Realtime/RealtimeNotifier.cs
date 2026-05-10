@@ -61,6 +61,7 @@ public interface IRealtimeNotifier
     Task ActivityUpdatedAsync(Guid eventId, Guid activityId, CancellationToken ct = default);
     Task ActivityDeletedAsync(Guid eventId, Guid activityId, CancellationToken ct = default);
     Task ActivityParticipantChangedAsync(Guid eventId, Guid activityId, Guid userId, bool joined, int participantCount, CancellationToken ct = default);
+    Task ActivityWaitlistChangedAsync(Guid eventId, Guid activityId, Guid userId, bool joined, int waitlistCount, CancellationToken ct = default);
 }
 
 public sealed class RealtimeNotifier(IHubContext<ThuddleHub> hub) : IRealtimeNotifier
@@ -208,4 +209,8 @@ public sealed class RealtimeNotifier(IHubContext<ThuddleHub> hub) : IRealtimeNot
     public Task ActivityParticipantChangedAsync(Guid eventId, Guid activityId, Guid userId, bool joined, int participantCount, CancellationToken ct = default) =>
         hub.Clients.Group(ThuddleHub.EventGroup(eventId))
             .SendAsync(RealtimeEvents.ActivityParticipantChanged, new { eventId, activityId, userId, joined, participantCount }, ct);
+
+    public Task ActivityWaitlistChangedAsync(Guid eventId, Guid activityId, Guid userId, bool joined, int waitlistCount, CancellationToken ct = default) =>
+        hub.Clients.Group(ThuddleHub.EventGroup(eventId))
+            .SendAsync(RealtimeEvents.ActivityWaitlistChanged, new { eventId, activityId, userId, joined, waitlistCount }, ct);
 }

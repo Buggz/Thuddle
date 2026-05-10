@@ -1,6 +1,6 @@
 import { computed } from 'vue'
 
-export function usePublishOutcome(auctionStatus, moderationPolicy, isAdmin, secondsToStart) {
+export function usePublishOutcome(auctionStatus, moderationPolicy, isAdmin) {
   const resultingStatus = computed(() => {
     const status = auctionStatus.value
     const policy = moderationPolicy.value
