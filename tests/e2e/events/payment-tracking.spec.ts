@@ -271,10 +271,10 @@ test.describe('Payment tracking', () => {
       await page.goto(`${baseURL}/`)
       await page.getByTestId('event-list').waitFor({ state: 'visible', timeout: 20000 })
 
-      // Find the card for this event by href
-      const cardByHref = page.locator(`[data-testid="event-card"][href*="${eventId}"]`)
-      await expect(cardByHref.getByTestId('event-card-payment-badge')).toBeVisible({ timeout: 10000 })
-      await expect(cardByHref.getByTestId('event-card-payment-badge')).toContainText(/payment not yet registered/i)
+      // Find the card for this event by id
+      const card = page.locator(`[data-testid="event-card"][data-event-id="${eventId}"]`)
+      await expect(card.getByTestId('event-card-payment-badge')).toBeVisible({ timeout: 10000 })
+      await expect(card.getByTestId('event-card-payment-badge')).toContainText(/payment not yet registered/i)
 
       await context.close()
     })
@@ -304,9 +304,9 @@ test.describe('Payment tracking', () => {
       await page.goto(`${baseURL}/`)
       await page.getByTestId('event-list').waitFor({ state: 'visible', timeout: 20000 })
 
-      const cardByHref = page.locator(`[data-testid="event-card"][href*="${eventId}"]`)
-      await expect(cardByHref.getByTestId('event-card-payment-badge')).toBeVisible({ timeout: 10000 })
-      await expect(cardByHref.getByTestId('event-card-payment-badge')).toContainText('Paid')
+      const card = page.locator(`[data-testid="event-card"][data-event-id="${eventId}"]`)
+      await expect(card.getByTestId('event-card-payment-badge')).toBeVisible({ timeout: 10000 })
+      await expect(card.getByTestId('event-card-payment-badge')).toContainText('Paid')
 
       await context.close()
     })

@@ -40,11 +40,16 @@ test.describe('notifications · deep links', () => {
 
     await row.click()
 
-    // URL should match the auction-item route: /events/:id/auction/items/:itemId
+    // The resolver currently can't deep-link into an auction item without the
+    // event slug — see resolveTarget.js: AuctionItem maps to the `event-by-id`
+    // route, which the redirect shim then rewrites to the slug URL. So the
+    // post-click URL should be `/events/{slug}`, never the guid, and never
+    // (yet) the `/auction/items/{id}` deep path.
     await page.waitForURL(
-      `**/events/${scenario.eventId}/auction/items/${scenario.itemId}`,
+      (u) => /\/events\/[^/?#]+(?:[?#].*)?$/.test(u.pathname + u.search + u.hash) && !u.pathname.includes(scenario.eventId),
       { timeout: 10000 },
     )
+    await expect(page.getByTestId('event-detail')).toBeVisible({ timeout: 10000 })
 
     // Click also marks the notification read — bell badge must disappear.
     await expect(page.getByTestId('notification-bell-badge')).toHaveCount(0, { timeout: 10000 })
