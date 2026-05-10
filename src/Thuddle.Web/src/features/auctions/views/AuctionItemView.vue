@@ -5,6 +5,7 @@ import { storeToRefs } from 'pinia'
 import { useAuctionStore } from '@/features/auctions/stores/auction'
 import { useAuthStore } from '@/features/auth/stores/auth'
 import { usePermissionsStore } from '@/features/auth/stores/permissions'
+import { useEventsStore } from '@/features/events/stores/events'
 import { formatCurrency } from '@/shared/formatCurrency'
 import AuctionItemImageCarousel from '@/features/auctions/components/AuctionItemImageCarousel.vue'
 import AuctionTimeline from '@/features/auctions/components/AuctionTimeline.vue'
@@ -22,8 +23,10 @@ const auctionStore = useAuctionStore()
 const permissions = usePermissionsStore()
 const auth = useAuthStore()
 const router = useRouter()
+const eventsStore = useEventsStore()
 
-const eventId = computed(() => String(route.params.id))
+const slug = computed(() => String(route.params.slug))
+const eventId = computed(() => eventsStore.slugToId[slug.value] ?? null)
 const itemId = computed(() => String(route.params.itemId))
 
 const { settingsByEvent, itemsByEvent, bidsByItem } = storeToRefs(auctionStore)
@@ -145,7 +148,7 @@ async function handleResubmit() {
   resubmitting.value = true
   try {
     await auctionStore.resubmitItem(eventId.value, itemId.value)
-    router.push({ name: 'auction-edit', params: { id: eventId.value, itemId: itemId.value } })
+    router.push({ name: 'auction-edit', params: { slug: slug.value, itemId: itemId.value } })
   } catch (err) {
     placeError.value = err.message || 'Failed to resubmit item.'
   } finally {
@@ -212,6 +215,9 @@ async function onBuyout({ idempotencyKey }) {
 }
 
 onMounted(async () => {
+  if (!eventId.value) {
+    await eventsStore.loadEventBySlug(slug.value)
+  }
   await refresh()
   if (auth.isAuthenticated) await auctionStore.subscribeRealtime(eventId.value)
   countdownInterval = setInterval(() => {
@@ -229,7 +235,7 @@ onBeforeUnmount(() => {
 <template>
   <div class="max-w-6xl mx-auto">
     <RouterLink
-      :to="{ name: 'auction', params: { id: eventId } }"
+      :to="{ name: 'auction', params: { slug: slug } }"
       class="mb-6 inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700"
     >
       <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
@@ -247,7 +253,7 @@ onBeforeUnmount(() => {
         </div>
         <div class="sticky bottom-0 -mx-4 sm:mx-0 mt-6 bg-white/95 backdrop-blur border-t sm:border border-gray-200 sm:rounded-2xl px-4 py-3 sm:py-4 sm:shadow-lg flex flex-col-reverse sm:flex-row sm:items-center sm:justify-end gap-2 sm:gap-3 z-10">
           <RouterLink
-            :to="{ name: 'auction-edit', params: { id: eventId, itemId: itemId } }"
+            :to="{ name: 'auction-edit', params: { slug: slug, itemId: itemId } }"
             class="inline-flex items-center justify-center gap-1.5 rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-sm font-bold text-gray-700 hover:bg-gray-50 transition-colors"
           >
             Edit draft

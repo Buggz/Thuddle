@@ -219,9 +219,11 @@ onBeforeUnmount(() => {
       <div data-testid="event-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         <RouterLink
           data-testid="event-card"
+          :data-event-slug="event.slug"
+          :data-event-id="event.id"
           v-for="(event, idx) in events"
           :key="event.id"
-          :to="{ name: 'event', params: { id: event.id } }"
+          :to="{ name: 'event', params: { slug: event.slug } }"
           class="group relative flex flex-col overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-gray-200/60 hover:shadow-lg hover:ring-gray-300 transition-all duration-200"
           :class="{
             'ring-2 ring-amber-400 shadow-amber-100': event.hasInvitation && !event.hasJoined,

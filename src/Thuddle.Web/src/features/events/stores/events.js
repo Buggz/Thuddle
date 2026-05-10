@@ -23,6 +23,8 @@ export const useEventsStore = defineStore('events', () => {
 
   // Single-event cache
   const byId = ref({})
+  // slug → guid lookup so slug-based routes can resolve the cache key
+  const slugToId = ref({})
   const loadingById = ref(new Set())
   const eventError = shallowRef(null)
 
@@ -108,6 +110,7 @@ export const useEventsStore = defineStore('events', () => {
     try {
       const data = await fetchJson(`/api/events/${id}`)
       byId.value[id] = data
+      if (data?.slug) slugToId.value[data.slug] = id
       installRealtime()
       syncSubscriptions([id, ...detailSubs].filter((x, i, arr) => arr.indexOf(x) === i), detailSubs)
       return data
@@ -117,6 +120,36 @@ export const useEventsStore = defineStore('events', () => {
     } finally {
       loadingById.value.delete(id)
     }
+  }
+
+  async function loadEventBySlug(slug) {
+    if (!slug) return null
+    // Return from cache if we already have the GUID and the event data
+    const cachedId = slugToId.value[slug]
+    if (cachedId && byId.value[cachedId]) return byId.value[cachedId]
+
+    const tempKey = `slug:${slug}`
+    if (loadingById.value.has(tempKey)) return null
+    loadingById.value.add(tempKey)
+    eventError.value = null
+    try {
+      const data = await fetchJson(`/api/events/by-slug/${encodeURIComponent(slug)}`)
+      byId.value[data.id] = data
+      slugToId.value[slug] = data.id
+      installRealtime()
+      syncSubscriptions([data.id, ...detailSubs].filter((x, i, arr) => arr.indexOf(x) === i), detailSubs)
+      return data
+    } catch (err) {
+      eventError.value = err.message || 'Failed to load event.'
+      return null
+    } finally {
+      loadingById.value.delete(tempKey)
+    }
+  }
+
+  function eventBySlug(slug) {
+    const id = slugToId.value[slug]
+    return id ? byId.value[id] : null
   }
 
   /**
@@ -309,10 +342,13 @@ export const useEventsStore = defineStore('events', () => {
     view,
     myFilter,
     byId,
+    slugToId,
     eventError,
     // actions
     loadDashboard,
     loadEvent,
+    loadEventBySlug,
+    eventBySlug,
     releaseEvent,
     releaseDashboard,
     joinEvent,

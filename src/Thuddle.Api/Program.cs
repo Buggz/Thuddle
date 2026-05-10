@@ -87,6 +87,7 @@ builder.Services.AddSingleton<AuctionImageStorage>();
 builder.Services.AddSingleton<ActivityDescriptionImageStorage>();
 builder.Services.AddSingleton<BggApiClient>();
 builder.Services.AddScoped<NotificationService>();
+builder.Services.AddScoped<SlugService>();
 builder.Services.AddHostedService<AuctionLifecycleWorker>();
 builder.Services.AddMemoryCache();
 builder.Services.AddSingleton<SmtpEmailSender>();

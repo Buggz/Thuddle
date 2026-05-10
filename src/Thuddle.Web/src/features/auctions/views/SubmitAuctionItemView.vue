@@ -3,6 +3,7 @@ import { ref, computed, shallowRef, onMounted, onBeforeUnmount, watch } from 'vu
 import { useRoute, useRouter, RouterLink } from 'vue-router'
 import { storeToRefs } from 'pinia'
 import { useAuctionStore } from '@/features/auctions/stores/auction'
+import { useEventsStore } from '@/features/events/stores/events'
 import { parseDecimalInput, formatCurrency } from '@/shared/formatCurrency'
 import ImageCropper from '@/features/profile/components/ImageCropper.vue'
 import BggSearchInput from '@/features/auctions/components/BggSearchInput.vue'
@@ -11,8 +12,10 @@ import { buildAutoDescription, sortGamesByBggRank } from '@/features/auctions/co
 const route = useRoute()
 const router = useRouter()
 const auctionStore = useAuctionStore()
+const eventsStore = useEventsStore()
 
-const eventId = computed(() => String(route.params.id))
+const slug = computed(() => String(route.params.slug))
+const eventId = computed(() => eventsStore.slugToId[slug.value] ?? null)
 const isEditing = computed(() => !!route.params.itemId)
 const itemId = computed(() => route.params.itemId)
 
@@ -167,7 +170,7 @@ async function submit() {
         selectedImages.value.map((img) => img.file)
       )
     }
-    router.push({ name: 'auction-item', params: { id: eventId.value, itemId: savedItem.id } })
+    router.push({ name: 'auction-item', params: { slug: slug.value, itemId: savedItem.id } })
   } catch (err) {
     error.value = err.message || 'Failed to submit item.'
   } finally {
@@ -176,6 +179,9 @@ async function submit() {
 }
 
 onMounted(async () => {
+  if (!eventId.value) {
+    await eventsStore.loadEventBySlug(slug.value)
+  }
   if (!settings.value) await auctionStore.loadAuction(eventId.value)
   
   if (isEditing.value) {
@@ -196,7 +202,7 @@ onMounted(async () => {
 <template>
   <div class="max-w-3xl mx-auto">
     <RouterLink
-      :to="{ name: 'auction', params: { id: eventId } }"
+      :to="{ name: 'auction', params: { slug: slug } }"
       class="mb-6 inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700"
     >
       <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
@@ -410,7 +416,7 @@ onMounted(async () => {
           {{ submitting ? 'Saving…' : (isEditing ? 'Save changes' : 'Save draft') }}
         </button>
         <RouterLink
-          :to="{ name: 'auction', params: { id: eventId } }"
+          :to="{ name: 'auction', params: { slug: slug } }"
           class="text-sm text-gray-500 hover:text-gray-700"
         >
           Cancel

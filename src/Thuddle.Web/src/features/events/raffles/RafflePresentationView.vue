@@ -10,7 +10,7 @@ const router = useRouter()
 const store = useRafflesStore()
 const eventsStore = useEventsStore()
 
-const eventId = route.params.id
+const slug = route.params.slug
 const raffleId = route.params.raffleId
 
 const loading = ref(true)
@@ -22,7 +22,10 @@ const raffle = computed(() => store.raffles.get(raffleId))
 const draws = computed(() => store.draws.get(raffleId) ?? [])
 const pendingReveal = computed(() => store.pendingReveal.get(raffleId) ?? null)
 
-const event = computed(() => eventsStore.byId[eventId] ?? null)
+const event = computed(() => {
+  const id = eventsStore.slugToId[slug]
+  return id ? eventsStore.byId[id] ?? null : null
+})
 const isHost = computed(() => event.value?.isAdmin ?? false)
 const isDrawing = computed(() => raffle.value?.status === 'Drawing')
 
@@ -32,13 +35,17 @@ async function load() {
   
   try {
     store.installRealtime()
-    await Promise.all([
-      store.fetchRaffle(eventId, raffleId),
-      store.fetchDraws(eventId, raffleId)
-    ])
-    if (!eventsStore.byId[eventId]) {
-      await eventsStore.loadEvent(eventId)
+    // Resolve the event GUID from the slug (API calls need the GUID).
+    let id = eventsStore.slugToId[slug]
+    if (!id) {
+      await eventsStore.loadEventBySlug(slug)
+      id = eventsStore.slugToId[slug]
     }
+    if (!id) throw new Error('Event not found')
+    await Promise.all([
+      store.fetchRaffle(id, raffleId),
+      store.fetchDraws(id, raffleId)
+    ])
   } catch { /* render what we have */ }
   finally { loading.value = false }
 }
@@ -48,7 +55,8 @@ async function handleDraw() {
   drawError.value = null
   noTickets.value = false
   try {
-    await store.drawWinner(eventId, raffleId)
+    const id = eventsStore.slugToId[slug]
+    await store.drawWinner(id, raffleId)
   } catch (err) {
     if (err.message?.toLowerCase().includes('no tickets')) {
       noTickets.value = true
@@ -65,7 +73,7 @@ function handleRevealed() {
 }
 
 function exit() {
-  router.push({ name: 'event', params: { id: eventId } })
+  router.push({ name: 'event', params: { slug } })
 }
 
 function handleKeydown(e) {

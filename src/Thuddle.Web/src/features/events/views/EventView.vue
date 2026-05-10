@@ -25,6 +25,10 @@ const router = useRouter()
 const { authFetch } = useApi()
 const auth = useAuthStore()
 const eventsStore = useEventsStore()
+
+// The slug is the URL param; eventId is the GUID resolved from the cache.
+const slug = computed(() => route.params.slug)
+const eventId = computed(() => eventsStore.slugToId[slug.value] ?? null)
 const permissions = usePermissionsStore()
 const { auctions: auctionsEnabled } = useFeatureFlags()
 const eventFeaturesStore = useEventFeaturesStore()
@@ -53,7 +57,7 @@ async function openLeaveDialog() {
   leaveDialogOpen.value = true
   if (!auth.isAuthenticated) return
   try {
-    const raffles = await raffleApi.list(authFetch, route.params.id)
+    const raffles = await raffleApi.list(authFetch, eventId.value)
     const total = (raffles || []).reduce((sum, r) => sum + (r.myTickets || 0), 0)
     if (total > 0) {
       const raffleCount = raffles.filter(r => (r.myTickets || 0) > 0).length
@@ -77,7 +81,7 @@ const visibleTabs = computed(() => {
     { key: 'attendees', label: 'Attendees', testid: 'event-tab-attendees' }
   ]
   for (const meta of EVENT_FEATURES) {
-    if (!eventFeaturesStore.isEnabled(route.params.id, meta.key)) continue
+    if (!eventId.value || !eventFeaturesStore.isEnabled(eventId.value, meta.key)) continue
     if (meta.key === FeatureKeys.Auction && !auctionsEnabled.value) continue
     if (meta.key === FeatureKeys.Raffles && !(auth.isAuthenticated && hasParticipantAccess.value)) continue
     tabs.push({ key: meta.key, label: meta.label, icon: meta.icon, testid: `event-tab-${meta.key}` })
@@ -95,13 +99,13 @@ const auctionStatusBadgeClass = computed(() => {
   }
 })
 
-const event = computed(() => eventsStore.byId[route.params.id] ?? null)
+const event = computed(() => eventId.value ? eventsStore.byId[eventId.value] : null)
 
 async function loadEvent() {
   loading.value = true
   error.value = null
   try {
-    const data = await eventsStore.loadEvent(route.params.id)
+    const data = await eventsStore.loadEventBySlug(slug.value)
     if (!data) error.value = eventsStore.eventError
   } catch (err) {
     error.value = err.message || 'Failed to load event.'
@@ -115,13 +119,14 @@ async function loadAuctionSettings() {
     auctionSettings.value = { configured: false }
     return
   }
+  if (!eventId.value) return
   try {
     // Use authFetch when authenticated, fall back to plain fetch for guests so
     // unauthenticated visitors still see public auction info.
     if (auth.isAuthenticated) {
-      auctionSettings.value = await auctionApi.getSettings(authFetch, route.params.id)
+      auctionSettings.value = await auctionApi.getSettings(authFetch, eventId.value)
     } else {
-      const res = await fetch(apiUrl(`/api/events/${route.params.id}/auction`))
+      const res = await fetch(apiUrl(`/api/events/${eventId.value}/auction`))
       auctionSettings.value = res.ok ? await res.json() : { configured: false }
     }
   } catch {
@@ -133,12 +138,13 @@ async function loadAuctionSettings() {
 async function loadParticipants() {
   if (participantsLoaded.value) return
   participantsLoading.value = true
+  if (!eventId.value) return
   try {
     let res
     if (auth.isAuthenticated) {
-      res = await authFetch(`/api/events/${route.params.id}/participants`)
+      res = await authFetch(`/api/events/${eventId.value}/participants`)
     } else {
-      res = await fetch(apiUrl(`/api/events/${route.params.id}/participants`))
+      res = await fetch(apiUrl(`/api/events/${eventId.value}/participants`))
       if (!res.ok) {
         const data = await res.json().catch(() => ({}))
         throw new Error(data.error || `HTTP ${res.status}`)
@@ -155,8 +161,8 @@ async function loadParticipants() {
 
 function selectTab(tab) {
   activeTab.value = tab
-  if (tab === 'discussion') {
-    eventsStore.markDiscussionRead(route.params.id)
+  if (tab === 'discussion' && eventId.value) {
+    eventsStore.markDiscussionRead(eventId.value)
   }
   if (tab === 'attendees' && !participantsLoaded.value) {
     loadParticipants()
@@ -164,12 +170,12 @@ function selectTab(tab) {
 }
 
 function goToAuction() {
-  router.push({ name: 'auction', params: { id: route.params.id } })
+  router.push({ name: 'auction', params: { slug: slug.value } })
 }
 
 async function confirmLeave() {
   try {
-    await eventsStore.leaveEvent(route.params.id)
+    await eventsStore.leaveEvent(eventId.value)
   } catch (err) {
     error.value = err.message || 'Failed to leave event.'
   } finally {
@@ -181,7 +187,7 @@ async function joinEvent() {
   joining.value = true
   error.value = null
   try {
-    await eventsStore.joinEvent(route.params.id)
+    await eventsStore.joinEvent(eventId.value)
     // Refresh attendee list if already loaded / currently viewing
     participantsLoaded.value = false
     if (activeTab.value === 'attendees') loadParticipants()
@@ -220,7 +226,7 @@ function eventImageGradient(id) {
 // Auto-switch to raffles tab when navigated via ?raffle= deep link
 // Only if the raffles feature is enabled for this event.
 watch(() => route.query.raffle, (raffleId) => {
-  if (raffleId && eventFeaturesStore.isEnabled(route.params.id, FeatureKeys.Raffles)) {
+  if (raffleId && eventId.value && eventFeaturesStore.isEnabled(eventId.value, FeatureKeys.Raffles)) {
     activeTab.value = 'raffles'
   }
 }, { immediate: true })
@@ -262,16 +268,18 @@ function applyHashNavigation() {
   }
 }
 
-onMounted(() => {
-  loadEvent()
-  loadAuctionSettings()
-  eventFeaturesStore.fetchFeatures(route.params.id).catch(() => { /* best-effort */ })
+onMounted(async () => {
+  await loadEvent()
+  if (eventId.value) {
+    loadAuctionSettings()
+    eventFeaturesStore.fetchFeatures(eventId.value).catch(() => { /* best-effort */ })
+  }
   applyHashNavigation()
   scrollToHash()
 })
 
 onBeforeUnmount(() => {
-  eventsStore.releaseEvent(route.params.id)
+  eventsStore.releaseEvent(eventId.value)
 })
 
 // When the discussion tab is activated, posts load async — retry scroll once
@@ -293,12 +301,14 @@ onBeforeRouteUpdate((to) => {
 })
 
 // Re-fetch event data when auth state changes so admin/join status updates
-watch(() => auth.isAuthenticated, (authenticated, wasAuthenticated) => {
+watch(() => auth.isAuthenticated, async (authenticated, wasAuthenticated) => {
   if (authenticated !== wasAuthenticated) {
     participantsLoaded.value = false
-    loadEvent()
-    loadAuctionSettings()
-    eventFeaturesStore.fetchFeatures(route.params.id).catch(() => { /* best-effort */ })
+    await loadEvent()
+    if (eventId.value) {
+      loadAuctionSettings()
+      eventFeaturesStore.fetchFeatures(eventId.value).catch(() => { /* best-effort */ })
+    }
   }
 })
 
@@ -526,7 +536,7 @@ watch(() => event.value?.participantCount, (newCount, oldCount) => {
           <div class="flex items-center justify-end w-full sm:w-auto">
             <RouterLink
               v-if="event.isAdmin"
-              :to="{ name: 'manage-event', params: { id: event.id } }"
+              :to="{ name: 'manage-event', params: { slug: slug } }"
               data-testid="event-manage-link"
               class="w-full sm:w-auto flex justify-center items-center gap-2 rounded-xl bg-white px-6 py-3 text-sm font-bold text-gray-700 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 hover:text-gray-900 transition-all"
             >
@@ -641,9 +651,10 @@ watch(() => event.value?.participantCount, (newCount, oldCount) => {
         </div>
 
         <!-- Tab: Raffles -->
-        <div v-if="activeTab === 'raffles' && hasParticipantAccess && eventFeaturesStore.isEnabled(route.params.id, FeatureKeys.Raffles)" class="px-6 py-5" data-testid="event-raffles-tab">
+        <div v-if="activeTab === 'raffles' && hasParticipantAccess && eventFeaturesStore.isEnabled(eventId, FeatureKeys.Raffles)" class="px-6 py-5" data-testid="event-raffles-tab">
           <RafflesSection
             :event-id="event.id"
+            :event-slug="slug"
             :is-host="event.isAdmin"
             :can-author="false"
             :currency="event.currency || ''"
@@ -651,12 +662,12 @@ watch(() => event.value?.participantCount, (newCount, oldCount) => {
         </div>
 
         <!-- Tab: Activities -->
-        <div v-if="activeTab === 'activities' && eventFeaturesStore.isEnabled(route.params.id, FeatureKeys.Activities)" class="px-6 py-5" data-testid="activities-tab">
+        <div v-if="activeTab === 'activities' && eventFeaturesStore.isEnabled(eventId, FeatureKeys.Activities)" class="px-6 py-5" data-testid="activities-tab">
           <ActivitiesSection :event-id="event.id" />
         </div>
 
         <!-- Tab: Auction -->
-        <div v-if="activeTab === 'auction' && eventFeaturesStore.isEnabled(route.params.id, FeatureKeys.Auction)" class="px-6 py-5" data-testid="event-auction-tab">
+        <div v-if="activeTab === 'auction' && eventFeaturesStore.isEnabled(eventId, FeatureKeys.Auction)" class="px-6 py-5" data-testid="event-auction-tab">
           <div class="rounded-2xl border border-indigo-100 bg-linear-to-br from-indigo-50/60 to-white p-6">
             <div class="flex items-start gap-4">
               <div class="w-12 h-12 rounded-xl bg-white border border-indigo-200/60 shadow-sm flex items-center justify-center shrink-0">

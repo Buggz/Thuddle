@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Thuddle.Api.Data;
+using Thuddle.Api.Services;
 
 namespace Thuddle.MigrationService;
 
@@ -28,6 +29,16 @@ public class MigrationWorker(
 
         try
         {
+            await BackfillEventSlugsAsync(stoppingToken);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Event slug backfill failed: {Error}", ex.Message);
+            throw;
+        }
+
+        try
+        {
             using var scope = serviceProvider.CreateScope();
             var dbContext = scope.ServiceProvider.GetRequiredService<ThuddleDbContext>();
 
@@ -45,8 +56,7 @@ public class MigrationWorker(
         }
     }
 
-    private async Task RunMigrationsAsync(ThuddleDbContext dbContext, CancellationToken ct)
-    {
+    private async Task RunMigrationsAsync(ThuddleDbContext dbContext, CancellationToken ct)    {
         var strategy = dbContext.Database.CreateExecutionStrategy();
 
         await strategy.ExecuteAsync(async () =>
@@ -61,9 +71,46 @@ public class MigrationWorker(
         });
     }
 
+    private async Task BackfillEventSlugsAsync(CancellationToken ct)
+    {
+        logger.LogInformation("Checking for events missing slugs...");
+
+        using var scope = serviceProvider.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ThuddleDbContext>();
+        var slugService = scope.ServiceProvider.GetRequiredService<SlugService>();
+
+        // Use EF.Property to query the nullable DB column without fighting the required C# property.
+        // Older events are processed first so they get the bare slug; newer ones get the -N suffix.
+        var events = await db.Events
+            .AsNoTracking()
+            .Where(e => EF.Property<string?>(e, "Slug") == null)
+            .OrderBy(e => e.CreatedAt)
+            .Select(e => new { e.Id, e.Title })
+            .ToListAsync(ct);
+
+        if (events.Count == 0)
+        {
+            logger.LogInformation("No events missing slugs; backfill skipped.");
+            return;
+        }
+
+        logger.LogInformation("Backfilling slugs for {Count} event(s)...", events.Count);
+
+        foreach (var row in events)
+        {
+            var baseSlug = slugService.Slugify(row.Title);
+            var slug = await slugService.EnsureUniqueAsync(baseSlug, excludeEventId: row.Id, ct);
+            await db.Database.ExecuteSqlAsync(
+                $"UPDATE \"Events\" SET \"Slug\" = {slug} WHERE \"Id\" = {row.Id}", ct);
+        }
+
+        logger.LogInformation("Event slug backfill complete.");
+    }
+
     private async Task RepairMigrationHistoryAsync(ThuddleDbContext dbContext, CancellationToken ct)
     {
         var conn = dbContext.Database.GetDbConnection();
+
         await conn.OpenAsync(ct);
 
         // Check if __EFMigrationsHistory exists

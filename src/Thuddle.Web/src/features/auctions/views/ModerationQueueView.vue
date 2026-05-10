@@ -2,10 +2,13 @@
 import { computed, ref, watch } from 'vue'
 import { useRoute, RouterLink } from 'vue-router'
 import { useAuctionStore } from '@/features/auctions/stores/auction'
+import { useEventsStore } from '@/features/events/stores/events'
 import ModerationQueuePanel from '../components/ModerationQueuePanel.vue'
 
 const route = useRoute()
-const eventId = computed(() => String(route.params.id))
+const eventsStore = useEventsStore()
+const slug = computed(() => String(route.params.slug))
+const eventId = computed(() => eventsStore.slugToId[slug.value] ?? null)
 const auctionStore = useAuctionStore()
 
 const accessDenied = ref(false)
@@ -33,7 +36,7 @@ watch(error, (newErr) => {
         <div class="mt-1 flex flex-col sm:mt-0 sm:flex-row sm:flex-wrap sm:space-x-6">
           <div class="mt-2 flex items-center text-sm text-gray-500">
             <RouterLink 
-              :to="{ name: 'auction', params: { id: eventId } }"
+              :to="{ name: 'auction', params: { slug: slug } }"
               class="hover:text-indigo-600 hover:underline"
             >
               &larr; Back to Auction

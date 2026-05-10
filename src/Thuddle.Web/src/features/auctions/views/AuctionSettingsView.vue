@@ -14,7 +14,8 @@ const auctionStore = useAuctionStore()
 const eventsStore = useEventsStore()
 const { byId: eventsById } = storeToRefs(eventsStore)
 const { authFetch } = useApi()
-const eventId = computed(() => String(route.params.id))
+const slug = computed(() => String(route.params.slug))
+const eventId = computed(() => eventsStore.slugToId[slug.value] ?? null)
 
 const { settingsByEvent, errorByEvent } = storeToRefs(auctionStore)
 const settings = computed(() => settingsByEvent.value[eventId.value] || null)
@@ -278,6 +279,9 @@ async function save() {
 }
 
 onMounted(async () => {
+  if (!eventId.value) {
+    await eventsStore.loadEventBySlug(slug.value)
+  }
   await auctionStore.loadAuction(eventId.value)
 })
 </script>
@@ -285,7 +289,7 @@ onMounted(async () => {
 <template>
   <div class="max-w-3xl mx-auto">
     <RouterLink
-      :to="{ name: 'event', params: { id: eventId } }"
+      :to="{ name: 'event', params: { slug: slug } }"
       class="mb-6 inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700"
     >
       <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">

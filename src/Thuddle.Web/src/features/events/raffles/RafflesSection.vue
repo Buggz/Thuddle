@@ -11,6 +11,7 @@ import { formatCurrency } from '@/shared/formatCurrency'
 
 const props = defineProps({
   eventId: { type: String, required: true },
+  eventSlug: { type: String, default: '' },
   isHost: { type: Boolean, default: false },
   // When true, show Add/Edit/Delete authoring controls. Defaults to false so
   // the section is operational-only unless the parent opts in (e.g. Manage Event).
@@ -319,6 +320,7 @@ onMounted(() => {
               <RaffleDrawConsole
                 v-if="!raffle.deletedAt"
                 :event-id="eventId"
+                :event-slug="eventSlug"
                 :raffle-id="raffle.id"
                 :raffle="raffle"
               />

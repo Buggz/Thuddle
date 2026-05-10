@@ -25,6 +25,7 @@ public class Event
     public string Currency { get; set; } = "EUR";
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
+    public required string Slug { get; set; }
 
     // Discussion settings
     public ModerationPolicy MemberPostPolicy { get; set; } = ModerationPolicy.AutoApprove;

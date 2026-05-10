@@ -27,7 +27,9 @@ const eventsStore = useEventsStore()
 const { auctions: auctionsEnabled } = useFeatureFlags()
 const eventFeaturesStore = useEventFeaturesStore()
 
-const eventId = route.params.id
+// slug from URL; eventId (GUID) resolved after first load
+const slug = route.params.slug
+const eventId = shallowRef(null)
 const { uploadImage } = useInlineImageUpload(eventId)
 const activeTab = shallowRef('about')
 
@@ -41,7 +43,7 @@ const manageTabs = computed(() => {
   ]
   for (const meta of EVENT_FEATURES) {
     if (meta.key === FeatureKeys.Auction && !auctionsEnabled.value) continue
-    if (eventFeaturesStore.isEnabled(eventId, meta.key)) {
+    if (eventFeaturesStore.isEnabled(eventId.value, meta.key)) {
       base.push({ key: meta.key, label: meta.label, icon: meta.icon, testid: `manage-tab-${meta.key}` })
     }
   }
@@ -140,7 +142,7 @@ async function confirmKick({ revokeInvitation, denyReentry }) {
   if (!kickTarget.value) return
   const targetId = kickTarget.value.userId
   try {
-    await eventsStore.kickAttendee(eventId, targetId, { revokeInvitation, denyReentry })
+    await eventsStore.kickAttendee(eventId.value, targetId, { revokeInvitation, denyReentry })
     attendees.value = attendees.value.filter(a => a.userId !== targetId)
   } catch (err) {
     attendeesError.value = err.message || 'Failed to remove attendee.'
@@ -159,7 +161,7 @@ async function rescindInvitation(email) {
   next.add(email)
   rescindingEmails.value = next
   try {
-    await eventsStore.rescindInvitation(eventId, email)
+    await eventsStore.rescindInvitation(eventId.value, email)
     pendingInvitations.value = pendingInvitations.value.filter(i => i.email !== email)
   } catch (err) {
     attendeesError.value = err.message || 'Failed to rescind invitation.'
@@ -252,7 +254,7 @@ async function inviteUsers() {
     return
   }
   try {
-    await authFetch(`/api/events/${eventId}/invitations`, {
+    await authFetch(`/api/events/${eventId.value}/invitations`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ emails })
@@ -281,7 +283,7 @@ async function onImageCrop(blob) {
   try {
     const formData = new FormData()
     formData.append('picture', blob, 'event.jpg')
-    const res = await authFetch(`/api/events/${eventId}/picture`, {
+    const res = await authFetch(`/api/events/${eventId.value}/picture`, {
       method: 'POST',
       body: formData
     })
@@ -309,8 +311,9 @@ async function loadEvent() {
   loading.value = true
   error.value = null
   try {
-    const res = await authFetch(`/api/events/${eventId}`)
+    const res = await authFetch(`/api/events/by-slug/${encodeURIComponent(slug)}`)
     const data = await res.json()
+    eventId.value = data.id
     eventData.value = data
     form.value = {
       title: data.title,
@@ -338,7 +341,7 @@ async function saveEvent() {
   saveError.value = null
   saveSuccess.value = false
   try {
-    await authFetch(`/api/events/${eventId}`, {
+    await authFetch(`/api/events/${eventId.value}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -367,7 +370,7 @@ async function loadAttendees() {
   loadingAttendees.value = true
   attendeesError.value = null
   try {
-    const res = await authFetch(`/api/events/${eventId}/attendees`)
+    const res = await authFetch(`/api/events/${eventId.value}/attendees`)
     const data = await res.json()
     attendees.value = data.attendees
     coAdmins.value = data.coAdmins
@@ -381,7 +384,7 @@ async function loadAttendees() {
 
 async function togglePaid(attendee) {
   try {
-    await authFetch(`/api/events/${eventId}/attendees/${attendee.userId}/payment`, {
+    await authFetch(`/api/events/${eventId.value}/attendees/${attendee.userId}/payment`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ hasPaid: !attendee.hasPaid })
@@ -401,7 +404,7 @@ async function onCoAdminSelect(item) {
   addingCoAdmin.value = true
   coAdminError.value = null
   try {
-    const res = await authFetch(`/api/events/${eventId}/co-admins`, {
+    const res = await authFetch(`/api/events/${eventId.value}/co-admins`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email: item.email })
@@ -417,7 +420,7 @@ async function onCoAdminSelect(item) {
 
 async function removeCoAdmin(admin) {
   try {
-    await authFetch(`/api/events/${eventId}/co-admins/${admin.userId}`, { method: 'DELETE' })
+    await authFetch(`/api/events/${eventId.value}/co-admins/${admin.userId}`, { method: 'DELETE' })
     coAdmins.value = coAdmins.value.filter(c => c.userId !== admin.userId)
   } catch (err) {
     coAdminError.value = err.message || 'Failed to remove co-admin.'
@@ -428,7 +431,7 @@ async function removeCoAdmin(admin) {
 
 async function loadDiscussionSettings() {
   try {
-    const res = await authFetch(`/api/events/${eventId}/discussion-settings`)
+    const res = await authFetch(`/api/events/${eventId.value}/discussion-settings`)
     const data = await res.json()
     discussionSettings.value = data
   } catch { /* ignore - uses defaults */ }
@@ -439,7 +442,7 @@ async function loadAuctionSettings() {
   auctionLoading.value = true
   auctionError.value = null
   try {
-    auctionSettings.value = await auctionApi.getSettings(authFetch, eventId)
+    auctionSettings.value = await auctionApi.getSettings(authFetch, eventId.value)
   } catch (err) {
     // Hide gracefully — never crash the page if the auction endpoint is unavailable.
     auctionSettings.value = { configured: false }
@@ -450,11 +453,11 @@ async function loadAuctionSettings() {
 }
 
 function goToAuctionSettings() {
-  router.push({ name: 'auction-settings', params: { id: eventId } })
+  router.push({ name: 'auction-settings', params: { slug } })
 }
 
 function goToAuctionView() {
-  router.push({ name: 'auction', params: { id: eventId } })
+  router.push({ name: 'auction', params: { slug } })
 }
 
 async function saveDiscussionSettings() {
@@ -462,7 +465,7 @@ async function saveDiscussionSettings() {
   discussionSaveError.value = null
   discussionSaveSuccess.value = false
   try {
-    await authFetch(`/api/events/${eventId}/discussion-settings`, {
+    await authFetch(`/api/events/${eventId.value}/discussion-settings`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(discussionSettings.value)
@@ -478,20 +481,20 @@ async function saveDiscussionSettings() {
 
 onMounted(async () => {
   // Side-effect: subscribes the SignalR connection to event:{eventId} so realtime broadcasts (raffles, auctions, participants, etc.) reach this view.
-  eventsStore.loadEvent(eventId)
   await loadEvent()
-  if (!error.value) {
+  if (!error.value && eventId.value) {
+    eventsStore.loadEvent(eventId.value)
     await Promise.all([
       loadAttendees(),
       loadDiscussionSettings(),
-      eventFeaturesStore.fetchFeatures(eventId).catch(() => { /* best-effort */ }),
+      eventFeaturesStore.fetchFeatures(eventId.value).catch(() => { /* best-effort */ }),
       ...(auctionsEnabled.value ? [loadAuctionSettings()] : [])
     ])
   }
 })
 
 onUnmounted(() => {
-  eventsStore.releaseEvent(eventId)
+  eventsStore.releaseEvent(eventId.value)
 })
 
 // If the active tab is a feature tab and that feature gets disabled live
@@ -507,7 +510,7 @@ watch(manageTabs, (tabs) => {
 <template>
   <div class="max-w-4xl mx-auto">
     <button
-      @click="router.push({ name: 'event', params: { id: eventId } })"
+      @click="router.push({ name: 'event', params: { slug } })"
       class="mb-6 inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700"
     >
       <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
@@ -964,6 +967,7 @@ watch(manageTabs, (tabs) => {
         <div v-if="activeTab === 'raffles'" class="p-6" data-testid="manage-raffles-tab">
           <RafflesSection
             :event-id="eventId"
+            :event-slug="slug"
             :is-host="true"
             :can-author="true"
             :currency="eventData?.currency || form.currency || ''"

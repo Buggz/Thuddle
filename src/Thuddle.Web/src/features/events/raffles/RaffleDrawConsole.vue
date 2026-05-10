@@ -6,6 +6,7 @@ import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
 
 const props = defineProps({
   eventId: { type: String, required: true },
+  eventSlug: { type: String, required: true },
   raffleId: { type: String, required: true },
   raffle: { type: Object, required: true }
 })
@@ -59,7 +60,7 @@ async function openDrawStage() {
         if (!/already.*drawing/i.test(err.message || '')) throw err
       }
     }
-    router.push({ name: 'raffle-present', params: { id: props.eventId, raffleId: props.raffleId } })
+    router.push({ name: 'raffle-present', params: { slug: props.eventSlug, raffleId: props.raffleId } })
   } catch (err) {
     openError.value = err.message || 'Failed to open draw stage.'
     opening.value = false

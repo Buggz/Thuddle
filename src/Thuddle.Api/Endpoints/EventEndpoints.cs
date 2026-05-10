@@ -12,6 +12,7 @@ public static class EventEndpoints
     public static void MapEventEndpoints(this WebApplication app)
     {
         app.MapGet("/api/events", GetEvents).AllowAnonymous();
+        app.MapGet("/api/events/by-slug/{slug}", GetEventBySlug).AllowAnonymous();
         app.MapGet("/api/events/{eventId:guid}", GetEvent).AllowAnonymous();
         app.MapPost("/api/events", CreateEvent).RequireAuthorization("events:write");
         app.MapPut("/api/events/{eventId:guid}", UpdateEvent).RequireAuthorization();
@@ -198,6 +199,7 @@ public static class EventEndpoints
             .Select(e => new
             {
                 e.Id,
+                e.Slug,
                 e.Title,
                 e.Location,
                 e.Description,
@@ -245,6 +247,7 @@ public static class EventEndpoints
             return new
             {
                 e.Id,
+                e.Slug,
                 e.Title,
                 e.Location,
                 e.Description,
@@ -281,7 +284,28 @@ public static class EventEndpoints
         });
     }
 
-    private static async Task<IResult> GetEvent(
+    private static Task<IResult> GetEvent(Guid eventId, ClaimsPrincipal user, ThuddleDbContext db, CancellationToken ct)
+        => GetEventCoreAsync(eventId, user, db, ct);
+
+    private static async Task<IResult> GetEventBySlug(
+        string slug,
+        ClaimsPrincipal user,
+        ThuddleDbContext db,
+        CancellationToken ct)
+    {
+        var eventId = await db.Events
+            .AsNoTracking()
+            .Where(e => e.Slug == slug)
+            .Select(e => (Guid?)e.Id)
+            .FirstOrDefaultAsync(ct);
+
+        if (eventId is null)
+            return Results.NotFound(new { error = "Event not found." });
+
+        return await GetEventCoreAsync(eventId.Value, user, db, ct);
+    }
+
+    private static async Task<IResult> GetEventCoreAsync(
         Guid eventId,
         ClaimsPrincipal user,
         ThuddleDbContext db,
@@ -292,6 +316,7 @@ public static class EventEndpoints
             .Select(e => new
             {
                 e.Id,
+                e.Slug,
                 e.Title,
                 e.Location,
                 e.Description,
@@ -378,6 +403,7 @@ public static class EventEndpoints
         return Results.Ok(new
         {
             evt.Id,
+            evt.Slug,
             evt.Title,
             evt.Location,
             evt.Description,
@@ -408,6 +434,7 @@ public static class EventEndpoints
         CreateEventRequest request,
         IValidator<CreateEventRequest> validator,
         ThuddleDbContext db,
+        SlugService slugService,
         IRealtimeNotifier realtime,
         CancellationToken ct)
     {
@@ -425,11 +452,15 @@ public static class EventEndpoints
             ? JoinMode.InviteOnly
             : request.JoinMode;
 
+        var title = request.Title.Trim();
+        var slug = await slugService.EnsureUniqueAsync(slugService.Slugify(title), excludeEventId: null, ct);
+
         var evt = new Event
         {
             Id = Guid.NewGuid(),
             OwnerId = dbUser.Id,
-            Title = request.Title.Trim(),
+            Title = title,
+            Slug = slug,
             Location = request.Location.Trim(),
             Description = request.Description,
             Start = request.Start,
@@ -451,6 +482,7 @@ public static class EventEndpoints
         return Results.Created($"/api/events/{evt.Id}", new
         {
             evt.Id,
+            evt.Slug,
             evt.Title,
             evt.Location,
             evt.Description,
@@ -774,6 +806,7 @@ public static class EventEndpoints
         IValidator<UpdateEventRequest> validator,
         ClaimsPrincipal user,
         ThuddleDbContext db,
+        SlugService slugService,
         IRealtimeNotifier realtime,
         CancellationToken ct)
     {
@@ -797,7 +830,11 @@ public static class EventEndpoints
             ? JoinMode.InviteOnly
             : request.JoinMode;
 
-        evt.Title = request.Title.Trim();
+        var newTitle = request.Title.Trim();
+        if (newTitle != evt.Title)
+            evt.Slug = await slugService.EnsureUniqueAsync(slugService.Slugify(newTitle), excludeEventId: evt.Id, ct);
+
+        evt.Title = newTitle;
         evt.Location = request.Location.Trim();
         evt.Description = request.Description;
         evt.Start = request.Start;
@@ -817,6 +854,7 @@ public static class EventEndpoints
         return Results.Ok(new
         {
             evt.Id,
+            evt.Slug,
             evt.Title,
             evt.Location,
             evt.Description,
