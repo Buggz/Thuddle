@@ -59,6 +59,16 @@ export async function adminApi(browser: Browser, baseURL: string): Promise<ApiCo
   return userApi(browser, baseURL, 'admin')
 }
 
+/** Resolve the current API user's database GUID via POST /api/profile/init. */
+export async function getUserIdApi(api: ApiContext): Promise<string> {
+  const resp = await api.request.post(`${api.baseURL}/api/profile/init`, {
+    headers: api.headers,
+  })
+  if (!resp.ok()) throw new Error(`Init profile failed: ${resp.status()} ${await resp.text()}`)
+  const body = await resp.json()
+  return body.id
+}
+
 // ── Event API helpers ────────────────────────────────────────────────────────
 
 export interface CreateEventPayload {
@@ -276,6 +286,7 @@ export interface CreateActivityPayload {
   startsAt?: string
   endsAt?: string | null
   maxParticipants: number
+  hiddenFromNonParticipants?: boolean
 }
 
 export async function createActivityApi(
@@ -295,6 +306,7 @@ export async function createActivityApi(
         startsAt,
         endsAt,
         maxParticipants: payload.maxParticipants,
+        hiddenFromNonParticipants: payload.hiddenFromNonParticipants ?? false,
       }),
     },
   )
@@ -311,6 +323,18 @@ export async function signupActivityApi(
   activityId: string,
 ): Promise<{ ok: boolean; status: number; body: string }> {
   const resp = await api.request.post(
+    `${api.baseURL}/api/events/${eventId}/activities/${activityId}/signup`,
+    { headers: api.headers },
+  )
+  return { ok: resp.ok(), status: resp.status(), body: await resp.text() }
+}
+
+export async function withdrawActivityApi(
+  api: FeatureApiContext,
+  eventId: string,
+  activityId: string,
+): Promise<{ ok: boolean; status: number; body: string }> {
+  const resp = await api.request.delete(
     `${api.baseURL}/api/events/${eventId}/activities/${activityId}/signup`,
     { headers: api.headers },
   )

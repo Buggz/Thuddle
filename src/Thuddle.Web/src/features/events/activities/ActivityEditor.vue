@@ -1,6 +1,8 @@
 <script setup>
 import { ref, computed, watch } from 'vue'
 import RichTextEditor from '@/shared/components/RichTextEditor.vue'
+import { useApi } from '@/shared/composables/useApi'
+import { activityApi } from '@/api'
 
 const props = defineProps({
   isOpen: { type: Boolean, required: true },
@@ -12,6 +14,8 @@ const props = defineProps({
 
 const emit = defineEmits(['update:isOpen', 'save'])
 
+const { authFetch } = useApi()
+
 const isEdit = computed(() => props.activity !== null)
 
 const title = ref('')
@@ -19,6 +23,7 @@ const description = ref('')
 const startsAt = ref('')
 const endsAt = ref('')
 const maxParticipants = ref('')
+const hiddenFromNonParticipants = ref(false)
 const localError = ref(null)
 
 function toLocalDatetime(iso) {
@@ -34,6 +39,7 @@ function snapshotFromActivity(activity) {
   startsAt.value = toLocalDatetime(activity?.startsAt)
   endsAt.value = toLocalDatetime(activity?.endsAt)
   maxParticipants.value = activity?.maxParticipants != null ? String(activity.maxParticipants) : ''
+  hiddenFromNonParticipants.value = activity?.hiddenFromNonParticipants ?? false
 }
 
 watch(() => props.isOpen, (open) => {
@@ -82,8 +88,13 @@ function buildBody() {
     description: description.value || null,
     startsAt: new Date(startsAt.value).toISOString(),
     endsAt: endsAt.value ? new Date(endsAt.value).toISOString() : null,
-    maxParticipants: maxParticipants.value !== '' ? Number(maxParticipants.value) : null
+    maxParticipants: maxParticipants.value !== '' ? Number(maxParticipants.value) : null,
+    hiddenFromNonParticipants: hiddenFromNonParticipants.value
   }
+}
+
+async function uploadImage(file) {
+  return activityApi.uploadDescriptionImage(authFetch, props.eventId, file)
 }
 
 function handleSave() {
@@ -161,7 +172,7 @@ function handleCancel() {
             <div>
               <label class="block text-sm font-semibold text-gray-700 mb-1.5">Description</label>
               <div data-testid="activity-form-description">
-                <RichTextEditor v-model="description" />
+                <RichTextEditor v-model="description" :upload-image="uploadImage" />
               </div>
             </div>
 
@@ -206,6 +217,25 @@ function handleCancel() {
                 placeholder="Leave blank for no limit"
                 class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
               />
+            </div>
+
+            <!-- Hidden from non-participants -->
+            <div class="flex items-start gap-3">
+              <div class="flex h-5 items-center">
+                <input
+                  id="activity-form-hidden-toggle"
+                  v-model="hiddenFromNonParticipants"
+                  data-testid="activity-form-hidden-toggle"
+                  type="checkbox"
+                  class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                />
+              </div>
+              <div class="min-w-0">
+                <label for="activity-form-hidden-toggle" class="text-sm font-semibold text-gray-700 cursor-pointer">
+                  Hide from people who haven't joined the event
+                </label>
+                <p class="text-xs text-gray-400 mt-0.5">Only event participants and admins will see this activity.</p>
+              </div>
             </div>
           </div>
 

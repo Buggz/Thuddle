@@ -436,5 +436,59 @@ export const activityApi = {
       const data = await res.json().catch(() => ({}))
       throw new Error(data.error || `HTTP ${res.status}`)
     }
+  },
+
+  async uploadDescriptionImage(authFetch, eventId, file) {
+    const fd = new FormData()
+    fd.append('image', file, file.name || 'image')
+    const res = await authFetch(`/api/events/${eventId}/activities/description-images`, {
+      method: 'POST',
+      body: fd
+    })
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}))
+      throw new Error(data.error || `HTTP ${res.status}`)
+    }
+    const data = await res.json()
+    return data.url
+  },
+
+  async joinWaitlist(authFetch, eventId, activityId) {
+    const res = await authFetch(`/api/events/${eventId}/activities/${activityId}/waitlist`, {
+      method: 'POST'
+    })
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}))
+      throw new Error(data.error || `HTTP ${res.status}`)
+    }
+    return res.json()
+  },
+
+  async leaveWaitlist(authFetch, eventId, activityId) {
+    const res = await authFetch(`/api/events/${eventId}/activities/${activityId}/waitlist`, {
+      method: 'DELETE'
+    })
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}))
+      throw new Error(data.error || `HTTP ${res.status}`)
+    }
+  },
+
+  async promoteFromWaitlist(authFetch, eventId, activityId, userId, allowOverflow) {
+    const res = await authFetch(
+      `/api/events/${eventId}/activities/${activityId}/waitlist/promote`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, allowOverflow })
+      }
+    )
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}))
+      const err = new Error(data.error || `HTTP ${res.status}`)
+      err.code = data.code ?? null
+      throw err
+    }
+    return res.json()
   }
 }

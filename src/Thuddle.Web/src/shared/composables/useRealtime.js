@@ -39,7 +39,8 @@ export const RealtimeEvents = Object.freeze({
   ActivityCreated: 'ActivityCreated',
   ActivityUpdated: 'ActivityUpdated',
   ActivityDeleted: 'ActivityDeleted',
-  ActivityParticipantChanged: 'ActivityParticipantChanged'
+  ActivityParticipantChanged: 'ActivityParticipantChanged',
+  ActivityWaitlistChanged: 'ActivityWaitlistChanged'
 })
 
 let connection = null

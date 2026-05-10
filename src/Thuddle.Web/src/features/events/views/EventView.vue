@@ -79,8 +79,7 @@ const visibleTabs = computed(() => {
   for (const meta of EVENT_FEATURES) {
     if (!eventFeaturesStore.isEnabled(route.params.id, meta.key)) continue
     if (meta.key === FeatureKeys.Auction && !auctionsEnabled.value) continue
-    if ((meta.key === FeatureKeys.Raffles || meta.key === FeatureKeys.Activities) &&
-        !(auth.isAuthenticated && hasParticipantAccess.value)) continue
+    if (meta.key === FeatureKeys.Raffles && !(auth.isAuthenticated && hasParticipantAccess.value)) continue
     tabs.push({ key: meta.key, label: meta.label, icon: meta.icon, testid: `event-tab-${meta.key}` })
   }
   return tabs
@@ -652,7 +651,7 @@ watch(() => event.value?.participantCount, (newCount, oldCount) => {
         </div>
 
         <!-- Tab: Activities -->
-        <div v-if="activeTab === 'activities' && eventFeaturesStore.isEnabled(route.params.id, FeatureKeys.Activities) && auth.isAuthenticated && hasParticipantAccess" class="px-6 py-5" data-testid="activities-tab">
+        <div v-if="activeTab === 'activities' && eventFeaturesStore.isEnabled(route.params.id, FeatureKeys.Activities)" class="px-6 py-5" data-testid="activities-tab">
           <ActivitiesSection :event-id="event.id" />
         </div>
 

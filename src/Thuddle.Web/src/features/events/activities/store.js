@@ -24,8 +24,10 @@ export const useActivitiesStore = defineStore('activities', () => {
   const activitiesByEvent = ref(new Map())
   // activityId → ActivityDto
   const activities = ref(new Map())
-  // activityId → ParticipantDto[] (only populated when owner/co-host fetches detail)
+  // activityId → ParticipantDto[] (populated when event participant fetches detail)
   const participants = ref(new Map())
+  // activityId → WaitlistEntryDto[] (admin only; populated via fetchActivity)
+  const waitlistByActivity = ref(new Map())
 
   // Per-activity write-sequence guard. Mirrors raffleSeq in raffles.js.
   const activitySeq = new Map()
@@ -48,6 +50,7 @@ export const useActivitiesStore = defineStore('activities', () => {
     realtime.on(RealtimeEvents.ActivityUpdated, applyRealtimeUpdated)
     realtime.on(RealtimeEvents.ActivityDeleted, applyRealtimeDeleted)
     realtime.on(RealtimeEvents.ActivityParticipantChanged, applyRealtimeParticipantChanged)
+    realtime.on(RealtimeEvents.ActivityWaitlistChanged, applyRealtimeWaitlistChanged)
   }
 
   // ── Actions ──────────────────────────────────────────────────────────────
@@ -62,7 +65,12 @@ export const useActivitiesStore = defineStore('activities', () => {
     for (const a of list) {
       const startSeq = seqsAtStart.get(a.id) ?? 0
       if (getActivitySeq(a.id) === startSeq) {
-        activities.value.set(a.id, { ...a, eventId })
+        const existing = activities.value.get(a.id)
+        activities.value.set(a.id, {
+          ...a,
+          eventId,
+          myWaitlistPosition: existing?.myWaitlistPosition ?? null
+        })
       }
       ids.push(a.id)
     }
@@ -75,6 +83,7 @@ export const useActivitiesStore = defineStore('activities', () => {
     const seqAtStart = getActivitySeq(activityId)
     const data = await activityApi.get(authFetch, eventId, activityId)
     if (getActivitySeq(activityId) !== seqAtStart) return data
+    const current = activities.value.get(activityId)
     activities.value.set(activityId, {
       id: data.id,
       eventId: data.eventId ?? eventId,
@@ -86,12 +95,19 @@ export const useActivitiesStore = defineStore('activities', () => {
       participantCount: data.participantCount,
       isFull: data.isFull,
       mySignupAt: data.mySignupAt,
+      hiddenFromNonParticipants: data.hiddenFromNonParticipants ?? false,
+      waitlistCount: data.waitlistCount ?? 0,
+      myWaitlistAt: data.myWaitlistAt ?? null,
+      myWaitlistPosition: current?.myWaitlistPosition ?? null,
       createdAt: data.createdAt,
       updatedAt: data.updatedAt
     })
     bumpActivitySeq(activityId)
     if (data.participants != null) {
       participants.value.set(activityId, data.participants)
+    }
+    if (data.waitlist != null) {
+      waitlistByActivity.value.set(activityId, data.waitlist)
     }
     return data
   }
@@ -173,6 +189,44 @@ export const useActivitiesStore = defineStore('activities', () => {
     }
   }
 
+  async function joinWaitlist(eventId, activityId) {
+    const result = await activityApi.joinWaitlist(authFetch, eventId, activityId)
+    const current = activities.value.get(activityId)
+    if (current) {
+      activities.value.set(activityId, {
+        ...current,
+        waitlistCount: result.waitlistCount ?? (current.waitlistCount + 1),
+        myWaitlistAt: result.joinedWaitlistAt ?? new Date().toISOString(),
+        myWaitlistPosition: result.position ?? null
+      })
+      bumpActivitySeq(activityId)
+    }
+    return result
+  }
+
+  async function leaveWaitlist(eventId, activityId) {
+    await activityApi.leaveWaitlist(authFetch, eventId, activityId)
+    const current = activities.value.get(activityId)
+    if (current) {
+      activities.value.set(activityId, {
+        ...current,
+        waitlistCount: Math.max(0, current.waitlistCount - 1),
+        myWaitlistAt: null,
+        myWaitlistPosition: null
+      })
+      bumpActivitySeq(activityId)
+    }
+  }
+
+  async function promoteFromWaitlist(eventId, activityId, userId, { allowOverflow = false } = {}) {
+    const result = await activityApi.promoteFromWaitlist(authFetch, eventId, activityId, userId, allowOverflow)
+    // Refetch authoritative state. Three SignalR echoes (waitlist, participant, updated) race
+    // against each other and against fetchActivity's seq guard, so the participants-list refetch
+    // can be discarded. Refetch ourselves so the admin panel reflects the new participant immediately.
+    try { await fetchActivity(eventId, activityId) } catch { /* best-effort */ }
+    return result
+  }
+
   // ── Realtime handlers ────────────────────────────────────────────────────
 
   async function applyRealtimeCreated({ eventId }) {
@@ -187,6 +241,29 @@ export const useActivitiesStore = defineStore('activities', () => {
     activities.value.delete(activityId)
     participants.value.delete(activityId)
     try { await fetchActivities(eventId) } catch { /* best-effort */ }
+  }
+
+  async function applyRealtimeWaitlistChanged({ eventId, activityId, userId, joined, waitlistCount }) {
+    const permissions = usePermissionsStore()
+    const current = activities.value.get(activityId)
+    if (current) {
+      const isMe = userId === permissions.userId
+      const myWaitlistPatch = isMe
+        ? joined
+          ? { myWaitlistAt: new Date().toISOString() }
+          : { myWaitlistAt: null, myWaitlistPosition: null }
+        : {}
+      activities.value.set(activityId, {
+        ...current,
+        waitlistCount,
+        ...myWaitlistPatch
+      })
+      bumpActivitySeq(activityId)
+    }
+    // If admin has the full waitlist cached, refresh it
+    if (waitlistByActivity.value.has(activityId)) {
+      fetchActivity(eventId, activityId).catch(() => {})
+    }
   }
 
   async function applyRealtimeParticipantChanged({ eventId, activityId, userId, joined, participantCount }) {
@@ -231,6 +308,7 @@ export const useActivitiesStore = defineStore('activities', () => {
     activitiesByEvent,
     activities,
     participants,
+    waitlistByActivity,
     activitiesFor,
     fetchActivities,
     fetchActivity,
@@ -240,10 +318,14 @@ export const useActivitiesStore = defineStore('activities', () => {
     signup,
     withdraw,
     removeParticipant,
+    joinWaitlist,
+    leaveWaitlist,
+    promoteFromWaitlist,
     applyRealtimeCreated,
     applyRealtimeUpdated,
     applyRealtimeDeleted,
     applyRealtimeParticipantChanged,
+    applyRealtimeWaitlistChanged,
     installRealtime
   }
 })

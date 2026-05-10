@@ -38,7 +38,11 @@ export function useApi() {
 
     if (!response.ok) {
       const data = await response.json().catch(() => ({}))
-      throw new Error(data.error || `HTTP ${response.status}`)
+      const err = new Error(data.error || `HTTP ${response.status}`)
+      err.status = response.status
+      err.code = data.code ?? null
+      err.body = data
+      throw err
     }
     return response
   }

@@ -125,4 +125,22 @@ public sealed class NotificationService(ThuddleDbContext db, IRealtimeNotifier r
             entityId: activityId,
             ct: ct);
     }
+
+    public async Task NotifyPromotedFromWaitlist(
+        Guid userId,
+        Guid eventId,
+        Guid activityId,
+        string activityTitle,
+        CancellationToken ct = default)
+    {
+        await CreateAsync(
+            userId: userId,
+            kind: NotificationKind.PromotedFromWaitlist,
+            title: $"You're in! {activityTitle}",
+            message: $"You were promoted from the waitlist for \"{activityTitle}\".",
+            entityType: "EventActivity",
+            eventId: eventId,
+            entityId: activityId,
+            ct: ct);
+    }
 }

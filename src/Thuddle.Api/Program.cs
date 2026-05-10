@@ -84,6 +84,7 @@ builder.Services.AddSingleton<ImageScaler>();
 builder.Services.AddSingleton<ProfilePictureStorage>();
 builder.Services.AddSingleton<EventImageStorage>();
 builder.Services.AddSingleton<AuctionImageStorage>();
+builder.Services.AddSingleton<ActivityDescriptionImageStorage>();
 builder.Services.AddSingleton<BggApiClient>();
 builder.Services.AddScoped<NotificationService>();
 builder.Services.AddHostedService<AuctionLifecycleWorker>();

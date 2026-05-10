@@ -31,6 +31,7 @@ public class ThuddleDbContext(DbContextOptions<ThuddleDbContext> options) : DbCo
     public DbSet<EventFeature> EventFeatures => Set<EventFeature>();
     public DbSet<EventActivity> EventActivities => Set<EventActivity>();
     public DbSet<EventActivityParticipant> EventActivityParticipants => Set<EventActivityParticipant>();
+    public DbSet<EventActivityWaitlistEntry> EventActivityWaitlistEntries => Set<EventActivityWaitlistEntry>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -379,6 +380,20 @@ public class ThuddleDbContext(DbContextOptions<ThuddleDbContext> options) : DbCo
                 .HasForeignKey(p => p.UserId)
                 .OnDelete(DeleteBehavior.Restrict);
             entity.HasIndex(p => new { p.EventActivityId, p.UserId }).IsUnique();
+        });
+
+        modelBuilder.Entity<EventActivityWaitlistEntry>(entity =>
+        {
+            entity.HasKey(w => w.Id);
+            entity.HasOne(w => w.Activity)
+                .WithMany(a => a.WaitlistEntries)
+                .HasForeignKey(w => w.EventActivityId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(w => w.User)
+                .WithMany()
+                .HasForeignKey(w => w.UserId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasIndex(w => new { w.EventActivityId, w.UserId }).IsUnique();
         });
     }
 }

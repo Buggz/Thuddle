@@ -3,6 +3,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useActivitiesStore } from './store'
 import ActivityEditor from './ActivityEditor.vue'
 import ActivityParticipantsList from './ActivityParticipantsList.vue'
+import ActivityWaitlistList from './ActivityWaitlistList.vue'
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
 
 const props = defineProps({
@@ -279,12 +280,22 @@ onMounted(() => {
           <Transition name="slide">
             <div
               v-if="expandedActivityId === activity.id"
-              class="border-t border-gray-100 px-5 py-4"
+              class="border-t border-gray-100 px-5 py-4 space-y-5"
             >
-              <ActivityParticipantsList
-                :event-id="eventId"
-                :activity-id="activity.id"
-              />
+              <div>
+                <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Participants</p>
+                <ActivityParticipantsList
+                  :event-id="eventId"
+                  :activity-id="activity.id"
+                />
+              </div>
+              <div v-if="(store.activities.get(activity.id)?.waitlistCount ?? 0) > 0 || store.waitlistByActivity.get(activity.id)?.length">
+                <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Waitlist</p>
+                <ActivityWaitlistList
+                  :event-id="eventId"
+                  :activity-id="activity.id"
+                />
+              </div>
             </div>
           </Transition>
         </div>
