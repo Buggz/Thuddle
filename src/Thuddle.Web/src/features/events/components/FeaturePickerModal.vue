@@ -1,7 +1,8 @@
 <script setup>
 import { ref, computed } from 'vue'
 import { useEventFeaturesStore } from '@/features/events/stores/eventFeatures'
-import { EVENT_FEATURES } from '@/features/events/featureCatalog'
+import { EVENT_FEATURES, FeatureKeys } from '@/features/events/featureCatalog'
+import { useFeatureFlags } from '@/shared/featureFlags'
 
 const props = defineProps({
   eventId: { type: String, required: true },
@@ -11,13 +12,18 @@ const props = defineProps({
 const emit = defineEmits(['update:isOpen'])
 
 const featuresStore = useEventFeaturesStore()
+const { auctions: auctionsEnabled } = useFeatureFlags()
 
 const adding = ref(new Set())
 const addErrors = ref(new Map())
 
 const availableFeatures = computed(() => {
   const enabledSet = featuresStore.enabledByEvent.get(props.eventId) ?? new Set()
-  return EVENT_FEATURES.filter((meta) => !enabledSet.has(meta.key))
+  return EVENT_FEATURES.filter((meta) => {
+    if (enabledSet.has(meta.key)) return false
+    if (meta.key === FeatureKeys.Auction && !auctionsEnabled.value) return false
+    return true
+  })
 })
 
 function close() {
