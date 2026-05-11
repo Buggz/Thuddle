@@ -204,6 +204,21 @@ public static class ActivityEndpoints
             })
             .ToListAsync(ct);
 
+        var waitlist = await db.EventActivityWaitlistEntries
+            .AsNoTracking()
+            .Where(w => w.EventActivityId == activityId)
+            .OrderBy(w => w.JoinedWaitlistAt)
+            .Select(w => new
+            {
+                w.UserId,
+                displayName = w.User.DisplayName ?? w.User.Email,
+                profilePictureUrl = w.User.ScaledPicturePath != null
+                    ? $"/api/profile/picture/{w.User.KeycloakId}"
+                    : null,
+                w.JoinedWaitlistAt
+            })
+            .ToListAsync(ct);
+
         if (!isAdmin)
         {
             return Results.Ok(new
@@ -224,24 +239,9 @@ public static class ActivityEndpoints
                 activity.CreatedAt,
                 activity.UpdatedAt,
                 participants,
-                waitlist = (object?)null
+                waitlist
             });
         }
-
-        var waitlist = await db.EventActivityWaitlistEntries
-            .AsNoTracking()
-            .Where(w => w.EventActivityId == activityId)
-            .OrderBy(w => w.JoinedWaitlistAt)
-            .Select(w => new
-            {
-                w.UserId,
-                displayName = w.User.DisplayName ?? w.User.Email,
-                profilePictureUrl = w.User.ScaledPicturePath != null
-                    ? $"/api/profile/picture/{w.User.KeycloakId}"
-                    : null,
-                w.JoinedWaitlistAt
-            })
-            .ToListAsync(ct);
 
         return Results.Ok(new
         {

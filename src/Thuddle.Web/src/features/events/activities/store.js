@@ -26,7 +26,7 @@ export const useActivitiesStore = defineStore('activities', () => {
   const activities = ref(new Map())
   // activityId → ParticipantDto[] (populated when event participant fetches detail)
   const participants = ref(new Map())
-  // activityId → WaitlistEntryDto[] (admin only; populated via fetchActivity)
+  // activityId → WaitlistEntryDto[] (populated when event participant fetches detail)
   const waitlistByActivity = ref(new Map())
 
   // Per-activity write-sequence guard. Mirrors raffleSeq in raffles.js.
@@ -268,8 +268,8 @@ export const useActivitiesStore = defineStore('activities', () => {
       })
       bumpActivitySeq(activityId)
     }
-    // If admin has the full waitlist cached, refresh it
-    if (waitlistByActivity.value.has(activityId)) {
+    // If participant detail is cached (participants and waitlist are fetched together), refresh
+    if (waitlistByActivity.value.has(activityId) || participants.value.has(activityId)) {
       fetchActivity(eventId, activityId).catch(() => {})
     }
   }

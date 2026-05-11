@@ -23,6 +23,7 @@ const signupLoading = ref(false)
 const waitlistLoading = ref(false)
 const waitlistError = ref(null)
 const joinedOpen = ref(false)
+const waitlistOpen = ref(false)
 const participantsFetched = ref(false)
 
 const removeDialogOpen = ref(false)
@@ -42,6 +43,8 @@ const participants = computed(() => {
   const list = store.participants.get(props.activity.id) ?? []
   return [...list].sort((a, b) => new Date(a.signedUpAt) - new Date(b.signedUpAt))
 })
+
+const waitlist = computed(() => store.waitlistByActivity.get(props.activity.id) ?? [])
 
 function formatActivityTime(startsAt, endsAt) {
   if (!startsAt) return ''
@@ -65,6 +68,16 @@ function capacityPercent(activity) {
 async function toggleJoined() {
   joinedOpen.value = !joinedOpen.value
   if (joinedOpen.value && !participantsFetched.value) {
+    participantsFetched.value = true
+    try {
+      await store.fetchActivity(props.eventId, props.activity.id)
+    } catch { /* best-effort */ }
+  }
+}
+
+async function toggleWaitlist() {
+  waitlistOpen.value = !waitlistOpen.value
+  if (waitlistOpen.value && !participantsFetched.value) {
     participantsFetched.value = true
     try {
       await store.fetchActivity(props.eventId, props.activity.id)
@@ -364,6 +377,60 @@ function onFallBackToRemove() {
           @fall-back-to-remove="onFallBackToRemove"
         />
       </template>
+    </div>
+
+    <!-- Waitlist disclosure (event participants / admins only, when waitlist is non-empty) -->
+    <div v-if="hasParticipantAccess && (activity.waitlistCount ?? 0) > 0" class="border-t border-gray-100">
+      <button
+        type="button"
+        :data-testid="`activity-waitlist-toggle-${activity.id}`"
+        class="w-full flex items-center justify-between px-5 py-3 text-xs font-semibold text-gray-500 hover:text-gray-700 hover:bg-gray-50 transition-colors"
+        @click="toggleWaitlist"
+      >
+        <span class="flex items-center gap-1.5">
+          <span class="inline-block w-2 h-2 rounded-full bg-amber-400 shrink-0" aria-hidden="true" />
+          Waitlist (<span class="text-amber-700">{{ activity.waitlistCount ?? 0 }}</span>)
+        </span>
+        <svg
+          class="w-4 h-4 transition-transform duration-200"
+          :class="waitlistOpen ? 'rotate-180' : ''"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          viewBox="0 0 24 24"
+        >
+          <path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+        </svg>
+      </button>
+
+      <Transition name="slide">
+        <div
+          v-if="waitlistOpen"
+          :data-testid="`activity-waitlist-list-${activity.id}`"
+          class="border-t border-gray-100 bg-amber-50/40 px-5 pb-4 pt-3 space-y-2"
+        >
+          <p v-if="!waitlist.length" class="text-sm text-gray-400">No-one waiting.</p>
+          <div
+            v-for="(entry, index) in waitlist"
+            :key="entry.userId"
+            :data-testid="`activity-waitlist-entry-${entry.userId}`"
+            class="flex items-center gap-2"
+          >
+            <span
+              :data-testid="`activity-waitlist-position-badge-${entry.userId}`"
+              class="inline-flex items-center justify-center w-6 h-6 rounded-full bg-amber-100 text-amber-800 text-xs font-bold shrink-0"
+            >
+              {{ index + 1 }}
+            </span>
+            <ParticipantChip
+              :user-id="entry.userId"
+              :display-name="entry.displayName"
+              :profile-picture-url="entry.profilePictureUrl"
+              :subline="`Joined waitlist ${formatRelative(entry.joinedWaitlistAt)}`"
+            />
+          </div>
+        </div>
+      </Transition>
     </div>
   </div>
 </template>

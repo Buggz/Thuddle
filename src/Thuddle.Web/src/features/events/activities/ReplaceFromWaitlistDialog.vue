@@ -41,7 +41,7 @@ watch(() => props.open, async (isOpen) => {
   } finally {
     loading.value = false
   }
-})
+}, { immediate: true })
 
 async function handleConfirm() {
   if (!selectedUserId.value) return
