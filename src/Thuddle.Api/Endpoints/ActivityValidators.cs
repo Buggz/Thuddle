@@ -48,3 +48,11 @@ public sealed class PromoteWaitlistRequestValidator : AbstractValidator<PromoteW
     }
 }
 
+public sealed class ReplaceParticipantRequestValidator : AbstractValidator<ReplaceParticipantRequest>
+{
+    public ReplaceParticipantRequestValidator()
+    {
+        RuleFor(x => x.PromoteUserId).NotEmpty().WithMessage("PromoteUserId is required.");
+    }
+}
+

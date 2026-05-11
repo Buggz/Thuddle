@@ -227,6 +227,14 @@ export const useActivitiesStore = defineStore('activities', () => {
     return result
   }
 
+  async function fetchWaitlist(eventId, activityId) {
+    return activityApi.getWaitlist(authFetch, eventId, activityId)
+  }
+
+  async function replaceParticipant(eventId, activityId, removeUserId, promoteUserId) {
+    return activityApi.replaceParticipant(authFetch, eventId, activityId, removeUserId, promoteUserId)
+  }
+
   // ── Realtime handlers ────────────────────────────────────────────────────
 
   async function applyRealtimeCreated({ eventId }) {
@@ -267,6 +275,8 @@ export const useActivitiesStore = defineStore('activities', () => {
   }
 
   async function applyRealtimeParticipantChanged({ eventId, activityId, userId, joined, participantCount }) {
+    // Auto-promote on self-withdraw fires two near-simultaneous events: ActivityWaitlistChanged
+    // (promoted user leaves waitlist) then ActivityParticipantChanged (same user joins participants).
     const permissions = usePermissionsStore()
     const current = activities.value.get(activityId)
     if (current) {
@@ -321,6 +331,8 @@ export const useActivitiesStore = defineStore('activities', () => {
     joinWaitlist,
     leaveWaitlist,
     promoteFromWaitlist,
+    fetchWaitlist,
+    replaceParticipant,
     applyRealtimeCreated,
     applyRealtimeUpdated,
     applyRealtimeDeleted,

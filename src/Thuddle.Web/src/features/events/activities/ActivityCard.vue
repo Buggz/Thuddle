@@ -5,6 +5,9 @@ import { useEventsStore } from '@/features/events/stores/events'
 import AddToCalendarButton from '@/features/events/components/AddToCalendarButton.vue'
 import ExpandableHtml from '@/shared/components/ExpandableHtml.vue'
 import ParticipantChip from '@/shared/components/ParticipantChip.vue'
+import RemoveParticipantDialog from './RemoveParticipantDialog.vue'
+import ReplaceFromWaitlistDialog from './ReplaceFromWaitlistDialog.vue'
+import { formatRelative } from '@/shared/utils/relativeTime'
 
 const props = defineProps({
   activity: { type: Object, required: true },
@@ -22,9 +25,18 @@ const waitlistError = ref(null)
 const joinedOpen = ref(false)
 const participantsFetched = ref(false)
 
+const removeDialogOpen = ref(false)
+const replaceDialogOpen = ref(false)
+const dialogParticipant = ref(null)
+
 const currentEvent = computed(() => eventsStore.byId?.[props.eventId])
 const isAdmin = computed(() => currentEvent.value?.isAdmin ?? false)
 const hasParticipantAccess = computed(() => (currentEvent.value?.hasJoined ?? false) || isAdmin.value)
+const isFullWithWaitlist = computed(() =>
+  props.activity.maxParticipants > 0 &&
+  props.activity.participantCount >= props.activity.maxParticipants &&
+  (props.activity.waitlistCount ?? 0) > 0
+)
 
 const participants = computed(() => {
   const list = store.participants.get(props.activity.id) ?? []
@@ -48,19 +60,6 @@ function formatActivityTime(startsAt, endsAt) {
 function capacityPercent(activity) {
   if (!activity.maxParticipants) return 0
   return Math.min(100, (activity.participantCount / activity.maxParticipants) * 100)
-}
-
-function formatRelative(iso) {
-  if (!iso) return ''
-  const diff = Date.now() - new Date(iso).getTime()
-  const min = Math.floor(diff / 60000)
-  if (min < 1) return 'just now'
-  if (min < 60) return `${min}m ago`
-  const hr = Math.floor(min / 60)
-  if (hr < 24) return `${hr}h ago`
-  const days = Math.floor(hr / 24)
-  if (days < 7) return `${days}d ago`
-  return new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })
 }
 
 async function toggleJoined() {
@@ -119,6 +118,20 @@ async function handleLeaveWaitlist() {
   } finally {
     waitlistLoading.value = false
   }
+}
+
+function openRemoveDialog(participant) {
+  dialogParticipant.value = participant
+  removeDialogOpen.value = true
+}
+
+function openReplaceDialog(participant) {
+  dialogParticipant.value = participant
+  replaceDialogOpen.value = true
+}
+
+function onFallBackToRemove() {
+  removeDialogOpen.value = true
 }
 </script>
 
@@ -310,6 +323,7 @@ async function handleLeaveWaitlist() {
           <div
             v-for="p in participants"
             :key="p.userId"
+            class="flex items-center justify-between gap-2"
           >
             <ParticipantChip
               :user-id="p.userId"
@@ -317,9 +331,39 @@ async function handleLeaveWaitlist() {
               :profile-picture-url="p.profilePictureUrl"
               :subline="`Signed up ${formatRelative(p.signedUpAt)}`"
             />
+            <button
+              v-if="isAdmin"
+              type="button"
+              :data-testid="isFullWithWaitlist ? `activity-replace-${p.userId}` : `activity-remove-${p.userId}`"
+              @click="isFullWithWaitlist ? openReplaceDialog(p) : openRemoveDialog(p)"
+              class="shrink-0 text-xs font-medium px-2 py-1 rounded-md border transition-colors"
+              :class="isFullWithWaitlist
+                ? 'border-indigo-200 text-indigo-700 bg-indigo-50 hover:bg-indigo-100'
+                : 'border-red-200 text-red-700 bg-red-50 hover:bg-red-100'"
+            >
+              {{ isFullWithWaitlist ? 'Replace with…' : 'Remove' }}
+            </button>
           </div>
         </div>
       </Transition>
+
+      <template v-if="dialogParticipant">
+        <RemoveParticipantDialog
+          v-model:open="removeDialogOpen"
+          :event-id="eventId"
+          :activity-id="activity.id"
+          :participant="dialogParticipant"
+          :activity-title="activity.title"
+        />
+        <ReplaceFromWaitlistDialog
+          v-model:open="replaceDialogOpen"
+          :event-id="eventId"
+          :activity-id="activity.id"
+          :remove-participant="dialogParticipant"
+          :activity-title="activity.title"
+          @fall-back-to-remove="onFallBackToRemove"
+        />
+      </template>
     </div>
   </div>
 </template>
