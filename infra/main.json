@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.42.1.51946",
-      "templateHash": "10817035241104288715"
+      "templateHash": "10079359398998914688"
     }
   },
   "parameters": {
@@ -125,8 +125,26 @@
         "sku": {
           "name": "PerGB2018"
         },
-        "retentionInDays": 30
+        "retentionInDays": 30,
+        "workspaceCapping": {
+          "dailyQuotaGb": 1
+        }
       }
+    },
+    {
+      "type": "Microsoft.Insights/components",
+      "apiVersion": "2020-02-02",
+      "name": "thuddle-appi",
+      "location": "[parameters('location')]",
+      "kind": "web",
+      "properties": {
+        "Application_Type": "web",
+        "WorkspaceResourceId": "[resourceId('Microsoft.OperationalInsights/workspaces', 'thuddle-logs')]",
+        "IngestionMode": "LogAnalytics"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.OperationalInsights/workspaces', 'thuddle-logs')]"
+      ]
     },
     {
       "type": "Microsoft.App/managedEnvironments",
@@ -433,6 +451,10 @@
             {
               "name": "smtp-password",
               "value": "[parameters('smtpPassword')]"
+            },
+            {
+              "name": "appinsights-connection-string",
+              "value": "[reference(resourceId('Microsoft.Insights/components', 'thuddle-appi'), '2020-02-02').ConnectionString]"
             }
           ]
         },
@@ -497,6 +519,10 @@
                 {
                   "name": "App__BaseUrl",
                   "value": "[parameters('appBaseUrl')]"
+                },
+                {
+                  "name": "APPLICATIONINSIGHTS_CONNECTION_STRING",
+                  "secretRef": "appinsights-connection-string"
                 }
               ],
               "probes": [
@@ -529,6 +555,7 @@
       },
       "dependsOn": [
         "[resourceId('Microsoft.App/managedEnvironments/managedCertificates', 'thuddle-env', replace(parameters('apiCustomDomain'), '.', '-'))]",
+        "[resourceId('Microsoft.Insights/components', 'thuddle-appi')]",
         "[resourceId('Microsoft.App/managedEnvironments', 'thuddle-env')]",
         "[resourceId('Microsoft.App/containerApps', 'thuddle-keycloak')]",
         "[resourceId('Microsoft.DBforPostgreSQL/flexibleServers', format('thuddle-pg-{0}', variables('suffix')))]",
@@ -550,6 +577,10 @@
             {
               "name": "db-connection-string",
               "value": "[format('Host={0};Database=thuddledb;Username={1};Password={2};SSL Mode=Require', reference(resourceId('Microsoft.DBforPostgreSQL/flexibleServers', format('thuddle-pg-{0}', variables('suffix'))), '2024-08-01').fullyQualifiedDomainName, variables('postgresAdminUser'), parameters('postgresAdminPassword'))]"
+            },
+            {
+              "name": "appinsights-connection-string",
+              "value": "[reference(resourceId('Microsoft.Insights/components', 'thuddle-appi'), '2020-02-02').ConnectionString]"
             }
           ]
         },
@@ -566,6 +597,10 @@
                 {
                   "name": "ConnectionStrings__thuddledb",
                   "secretRef": "db-connection-string"
+                },
+                {
+                  "name": "APPLICATIONINSIGHTS_CONNECTION_STRING",
+                  "secretRef": "appinsights-connection-string"
                 }
               ]
             }
@@ -573,6 +608,7 @@
         }
       },
       "dependsOn": [
+        "[resourceId('Microsoft.Insights/components', 'thuddle-appi')]",
         "[resourceId('Microsoft.App/managedEnvironments', 'thuddle-env')]",
         "[resourceId('Microsoft.DBforPostgreSQL/flexibleServers', format('thuddle-pg-{0}', variables('suffix')))]"
       ]
@@ -613,6 +649,10 @@
     "apiCustomDomain": {
       "type": "string",
       "value": "[parameters('apiCustomDomain')]"
+    },
+    "appInsightsName": {
+      "type": "string",
+      "value": "thuddle-appi"
     }
   }
 }

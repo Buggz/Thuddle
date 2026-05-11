@@ -4,7 +4,7 @@ using Thuddle.Api.Realtime;
 
 namespace Thuddle.Api.Services;
 
-public sealed class AuctionLifecycleWorker(
+public sealed partial class AuctionLifecycleWorker(
     IServiceScopeFactory scopeFactory,
     ILogger<AuctionLifecycleWorker> logger) : BackgroundService
 {
@@ -12,7 +12,7 @@ public sealed class AuctionLifecycleWorker(
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        logger.LogInformation("AuctionLifecycleWorker started.");
+        LogWorkerStarted(logger);
 
         while (!stoppingToken.IsCancellationRequested)
         {
@@ -26,7 +26,7 @@ public sealed class AuctionLifecycleWorker(
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, "AuctionLifecycleWorker iteration failed.");
+                LogIterationFailed(logger, ex);
             }
 
             await Task.Delay(Interval, stoppingToken);
@@ -61,7 +61,7 @@ public sealed class AuctionLifecycleWorker(
         {
             if (auction.EarliestEndsAt is null || auction.LatestEndsAt is null)
             {
-                logger.LogWarning("Skipping scheduled auction for event {EventId}: EarliestEndsAt or LatestEndsAt is null.", auction.EventId);
+                LogAuctionStartSkippedMissingDates(logger, auction.EventId);
                 continue;
             }
 
@@ -84,7 +84,7 @@ public sealed class AuctionLifecycleWorker(
             await db.SaveChangesAsync(ct);
             await realtime.AuctionStatusChangedAsync(auction.EventId, "Live", ct);
 
-            logger.LogInformation("Auto-started scheduled auction for event {EventId}. SealedEndsAt={SealedEndsAt}.", auction.EventId, auction.SealedEndsAt);
+            LogAuctionAutoStarted(logger, auction.EventId, auction.SealedEndsAt);
         }
     }
 
@@ -162,7 +162,7 @@ public sealed class AuctionLifecycleWorker(
                 await realtime.AuctionEndedAsync(auction.EventId, ct);
             });
 
-            logger.LogInformation("Finalized auction for event {EventId}.", auction.EventId);
+            LogAuctionFinalized(logger, auction.EventId);
         }
     }
 
@@ -230,4 +230,22 @@ public sealed class AuctionLifecycleWorker(
                 ct: ct);
         }
     }
+}
+
+partial class AuctionLifecycleWorker
+{
+    [LoggerMessage(Level = LogLevel.Information, Message = "AuctionLifecycleWorker started.")]
+    private static partial void LogWorkerStarted(ILogger logger);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "AuctionLifecycleWorker iteration failed.")]
+    private static partial void LogIterationFailed(ILogger logger, Exception ex);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Skipping scheduled auction for event {EventId}: EarliestEndsAt or LatestEndsAt is null.")]
+    private static partial void LogAuctionStartSkippedMissingDates(ILogger logger, Guid eventId);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Auto-started scheduled auction for event {EventId}. SealedEndsAt={SealedEndsAt}.")]
+    private static partial void LogAuctionAutoStarted(ILogger logger, Guid eventId, DateTime? sealedEndsAt);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Finalized auction for event {EventId}.")]
+    private static partial void LogAuctionFinalized(ILogger logger, Guid eventId);
 }

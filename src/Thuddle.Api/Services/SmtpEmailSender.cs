@@ -42,5 +42,6 @@ public sealed class SmtpEmailSender
             IsBodyHtml = true
         };
         await client.SendMailAsync(mail);
+        _logger.LogInformation("Email sent — To: {To}, Subject: {Subject}", to, subject);
     }
 }

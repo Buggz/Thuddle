@@ -62,6 +62,22 @@ resource logAnalytics 'Microsoft.OperationalInsights/workspaces@2023-09-01' = {
       name: 'PerGB2018'
     }
     retentionInDays: 30
+    workspaceCapping: {
+      dailyQuotaGb: 1
+    }
+  }
+}
+
+// ─── Application Insights ────────────────────────────────────────────────────
+
+resource appInsights 'Microsoft.Insights/components@2020-02-02' = {
+  name: 'thuddle-appi'
+  location: location
+  kind: 'web'
+  properties: {
+    Application_Type: 'web'
+    WorkspaceResourceId: logAnalytics.id
+    IngestionMode: 'LogAnalytics'
   }
 }
 
@@ -324,6 +340,10 @@ resource apiApp 'Microsoft.App/containerApps@2024-03-01' = {
           name: 'smtp-password'
           value: smtpPassword
         }
+        {
+          name: 'appinsights-connection-string'
+          value: appInsights.properties.ConnectionString
+        }
       ]
     }
     template: {
@@ -351,6 +371,7 @@ resource apiApp 'Microsoft.App/containerApps@2024-03-01' = {
             { name: 'Smtp__Username', secretRef: 'smtp-username' }
             { name: 'Smtp__Password', secretRef: 'smtp-password' }
             { name: 'App__BaseUrl', value: appBaseUrl }
+            { name: 'APPLICATIONINSIGHTS_CONNECTION_STRING', secretRef: 'appinsights-connection-string' }
           ]
           probes: [
             {
@@ -398,6 +419,10 @@ resource migrationsJob 'Microsoft.App/jobs@2024-03-01' = {
           name: 'db-connection-string'
           value: 'Host=${postgresServer.properties.fullyQualifiedDomainName};Database=thuddledb;Username=${postgresAdminUser};Password=${postgresAdminPassword};SSL Mode=Require'
         }
+        {
+          name: 'appinsights-connection-string'
+          value: appInsights.properties.ConnectionString
+        }
       ]
     }
     template: {
@@ -411,6 +436,7 @@ resource migrationsJob 'Microsoft.App/jobs@2024-03-01' = {
           }
           env: [
             { name: 'ConnectionStrings__thuddledb', secretRef: 'db-connection-string' }
+            { name: 'APPLICATIONINSIGHTS_CONNECTION_STRING', secretRef: 'appinsights-connection-string' }
           ]
         }
       ]
@@ -438,3 +464,4 @@ output staticWebAppName string = staticWebApp.name
 output staticWebAppDefaultHostname string = staticWebApp.properties.defaultHostname
 output keycloakCustomDomain string = keycloakCustomDomain
 output apiCustomDomain string = apiCustomDomain
+output appInsightsName string = appInsights.name

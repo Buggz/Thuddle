@@ -140,12 +140,14 @@ $apiFqdn = $outputs.apiFqdn.value
 $keycloakFqdn = $outputs.keycloakFqdn.value
 $swaName = $outputs.staticWebAppName.value
 $swaHostname = $outputs.staticWebAppDefaultHostname.value
+$appInsightsName = $outputs.appInsightsName.value
 
 Write-Host "`nInfrastructure deployed successfully!" -ForegroundColor Green
-Write-Host "  API:      https://$apiFqdn" -ForegroundColor White
-Write-Host "  Keycloak: https://$keycloakFqdn" -ForegroundColor White
-Write-Host "  Web:      https://$swaHostname" -ForegroundColor White
-Write-Host "  SWA Name: $swaName" -ForegroundColor White
+Write-Host "  API:             https://$apiFqdn" -ForegroundColor White
+Write-Host "  Keycloak:        https://$keycloakFqdn" -ForegroundColor White
+Write-Host "  Web:             https://$swaHostname" -ForegroundColor White
+Write-Host "  SWA Name:        $swaName" -ForegroundColor White
+Write-Host "  App Insights:    $appInsightsName" -ForegroundColor White
 
 # ─── Write outputs to file for use by deploy script ──────────────────────────
 
@@ -157,6 +159,7 @@ $outputFile = Join-Path $PSScriptRoot '.deploy-outputs.json'
     keycloakCustomDomain = $outputs.keycloakCustomDomain.value
     swaName              = $swaName
     swaHostname          = $swaHostname
+    appInsightsName      = $appInsightsName
 } | ConvertTo-Json | Set-Content $outputFile -Encoding UTF8
 
 Write-Host "`nOutputs saved to $outputFile" -ForegroundColor Gray
