@@ -48,6 +48,7 @@ test.describe('Discussion', () => {
       await goToDiscussion(page, eventUrl)
 
       await page.getByTestId('discussion-new-post-btn').click()
+      await expect(page.getByLabel(/email attendees/i)).toHaveCount(0)
       // Type into the TipTap rich text editor
       await page.locator('.ProseMirror').click()
       const postText = `Hello from admin ${uid()}`

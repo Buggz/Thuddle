@@ -218,8 +218,7 @@ public static class DiscussionEndpoints
         if (isApproved)
             await realtime.DiscussionActivityAsync(eventId, ct);
 
-        // Send email if requested and user is admin
-        if (request.SendEmail && isAdmin)
+        if (isAdmin)
         {
             _ = Task.Run(async () =>
             {
@@ -227,7 +226,18 @@ public static class DiscussionEndpoints
                 var scopedDb = scope.ServiceProvider.GetRequiredService<ThuddleDbContext>();
                 var scopedEmailSender = scope.ServiceProvider.GetRequiredService<SmtpEmailSender>();
                 var scopedConfig = scope.ServiceProvider.GetRequiredService<IConfiguration>();
-                await SendPostEmailAsync(evt, post, dbUser, scopedDb, scopedEmailSender, scopedConfig, logger);
+                await SendPostEmailToAttendeesAsync(evt, post, dbUser, scopedDb, scopedEmailSender, scopedConfig, logger);
+            }, CancellationToken.None);
+        }
+        else
+        {
+            _ = Task.Run(async () =>
+            {
+                using var scope = serviceProvider.CreateScope();
+                var scopedDb = scope.ServiceProvider.GetRequiredService<ThuddleDbContext>();
+                var scopedEmailSender = scope.ServiceProvider.GetRequiredService<SmtpEmailSender>();
+                var scopedConfig = scope.ServiceProvider.GetRequiredService<IConfiguration>();
+                await SendPostEmailToHostsAsync(evt, post, dbUser, scopedDb, scopedEmailSender, scopedConfig, logger);
             }, CancellationToken.None);
         }
 
@@ -245,21 +255,65 @@ public static class DiscussionEndpoints
         });
     }
 
-    private static async Task SendPostEmailAsync(
+    private static string BuildPostEmailHtml(Event evt, DiscussionPost post, User author, string baseUrl)
+    {
+        var eventUrl = $"{baseUrl}/events/{evt.Id}";
+        var authorName = author.DisplayName ?? author.Email;
+        var emailContent = post.Content;
+        var hasImages = Regex.IsMatch(emailContent, @"<img\b", RegexOptions.IgnoreCase);
+        if (hasImages)
+            emailContent = Regex.Replace(emailContent, @"<img\b[^>]*>", "<p style=\"color:#6b7280; font-style:italic;\">[image]</p>", RegexOptions.IgnoreCase);
+        var imageHint = hasImages
+            ? $"""<p style="margin-top:12px;"><a href="{eventUrl}" style="color:#4f46e5; text-decoration:underline;">View the full post with images</a></p>"""
+            : "";
+        return $"""
+            <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f4f7; padding:40px 0; font-family: sans-serif;">
+                <tr>
+                    <td align="center">
+                        <table width="560" cellpadding="0" cellspacing="0" style="background-color:#ffffff; border-radius:12px; overflow:hidden; box-shadow:0 1px 3px rgba(0,0,0,0.08);">
+                            <tr>
+                                <td style="background-color:#4f46e5; padding:28px 40px; text-align:center;">
+                                    <a href="{baseUrl}" style="text-decoration:none;"><h1 style="margin:0; font-size:26px; font-weight:700; color:#ffffff; letter-spacing:-0.5px;">Thuddle</h1></a>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td style="padding:36px 40px 40px;">
+                                    <h2 style="margin-top:0; color: #4f46e5;"><a href="{eventUrl}" style="color:#4f46e5; text-decoration:none;">New update in {System.Net.WebUtility.HtmlEncode(evt.Title)}</a></h2>
+                                    <p style="color: #6b7280;">Posted by {System.Net.WebUtility.HtmlEncode(authorName)}</p>
+                                    <div style="padding: 16px; background: #f9fafb; border-radius: 8px; margin: 16px 0;">
+                                        {emailContent}
+                                    </div>
+                                    {imageHint}
+                                </td>
+                            </tr>
+                            <tr>
+                                <td style="padding:20px 40px 28px; border-top:1px solid #e5e7eb; text-align:center;">
+                                    <p style="margin:0; font-size:13px; color:#9ca3af; line-height:1.5;">
+                                        This email was sent by <a href="{baseUrl}" style="color:#4f46e5; text-decoration:none;">Thuddle</a>.<br>
+                                        If you didn't request this, you can safely ignore it.
+                                    </p>
+                                </td>
+                            </tr>
+                        </table>
+                    </td>
+                </tr>
+            </table>
+            """;
+    }
+
+    private static async Task SendPostEmailToAttendeesAsync(
         Event evt, DiscussionPost post, User author,
         ThuddleDbContext db, SmtpEmailSender emailSender, IConfiguration config,
         ILogger logger)
     {
         try
         {
-            // Get attendee emails
             var emails = await db.EventParticipants
                 .AsNoTracking()
                 .Where(p => p.EventId == evt.Id)
                 .Select(p => p.User.Email)
                 .ToListAsync();
 
-            // Include invitees for invite-only events
             if (evt.JoinMode == JoinMode.InviteOnly)
             {
                 var inviteeEmails = await db.EventInvitations
@@ -270,55 +324,52 @@ public static class DiscussionEndpoints
                 emails.AddRange(inviteeEmails);
             }
 
+            var hostEmails = await db.Users
+                .AsNoTracking()
+                .Where(u => u.Id == evt.OwnerId || db.EventCoAdmins.Any(c => c.EventId == evt.Id && c.UserId == u.Id))
+                .Select(u => u.Email)
+                .ToListAsync();
+            emails.AddRange(hostEmails);
+
             emails = emails.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
 
             var baseUrl = config["App:BaseUrl"] ?? "https://thuddle.app";
-            var eventUrl = $"{baseUrl}/events/{evt.Id}";
             var authorName = author.DisplayName ?? author.Email;
             var subject = $"[{evt.Title}] New update from {authorName}";
+            var htmlBody = BuildPostEmailHtml(evt, post, author, baseUrl);
 
-            var emailContent = post.Content;
-            var hasImages = Regex.IsMatch(emailContent, @"<img\b", RegexOptions.IgnoreCase);
-            if (hasImages)
-                emailContent = Regex.Replace(emailContent, @"<img\b[^>]*>", "<p style=\"color:#6b7280; font-style:italic;\">[image]</p>", RegexOptions.IgnoreCase);
+            logger.LogInformation("Dispatching discussion post email for post {PostId} in event {EventId} to {RecipientCount} recipients ({Audience})", post.Id, evt.Id, emails.Count, "attendees");
 
-            var imageHint = hasImages
-                ? $"""<p style="margin-top:12px;"><a href="{eventUrl}" style="color:#4f46e5; text-decoration:underline;">View the full post with images</a></p>"""
-                : "";
+            foreach (var email in emails)
+            {
+                try { await emailSender.SendEmailAsync(email, subject, htmlBody); }
+                catch (Exception ex) { logger.LogWarning(ex, "Failed to send discussion email to {Email} for post {PostId} in event {EventId}", email, post.Id, evt.Id); }
+            }
+        }
+        catch (Exception ex) { logger.LogError(ex, "Failed to send discussion post emails for post {PostId} in event {EventId}", post.Id, evt.Id); }
+    }
 
-            var htmlBody = $"""
-                <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f4f7; padding:40px 0; font-family: sans-serif;">
-                    <tr>
-                        <td align="center">
-                            <table width="560" cellpadding="0" cellspacing="0" style="background-color:#ffffff; border-radius:12px; overflow:hidden; box-shadow:0 1px 3px rgba(0,0,0,0.08);">
-                                <tr>
-                                    <td style="background-color:#4f46e5; padding:28px 40px; text-align:center;">
-                                        <a href="{baseUrl}" style="text-decoration:none;"><h1 style="margin:0; font-size:26px; font-weight:700; color:#ffffff; letter-spacing:-0.5px;">Thuddle</h1></a>
-                                    </td>
-                                </tr>
-                                <tr>
-                                    <td style="padding:36px 40px 40px;">
-                                        <h2 style="margin-top:0; color: #4f46e5;"><a href="{eventUrl}" style="color:#4f46e5; text-decoration:none;">New update in {System.Net.WebUtility.HtmlEncode(evt.Title)}</a></h2>
-                                        <p style="color: #6b7280;">Posted by {System.Net.WebUtility.HtmlEncode(authorName)}</p>
-                                        <div style="padding: 16px; background: #f9fafb; border-radius: 8px; margin: 16px 0;">
-                                            {emailContent}
-                                        </div>
-                                        {imageHint}
-                                    </td>
-                                </tr>
-                                <tr>
-                                    <td style="padding:20px 40px 28px; border-top:1px solid #e5e7eb; text-align:center;">
-                                        <p style="margin:0; font-size:13px; color:#9ca3af; line-height:1.5;">
-                                            This email was sent by <a href="{baseUrl}" style="color:#4f46e5; text-decoration:none;">Thuddle</a>.<br>
-                                            If you didn't request this, you can safely ignore it.
-                                        </p>
-                                    </td>
-                                </tr>
-                            </table>
-                        </td>
-                    </tr>
-                </table>
-                """;
+    private static async Task SendPostEmailToHostsAsync(
+        Event evt, DiscussionPost post, User author,
+        ThuddleDbContext db, SmtpEmailSender emailSender, IConfiguration config,
+        ILogger logger)
+    {
+        try
+        {
+            var emails = await db.Users
+                .AsNoTracking()
+                .Where(u => u.Id == evt.OwnerId || db.EventCoAdmins.Any(c => c.EventId == evt.Id && c.UserId == u.Id))
+                .Select(u => u.Email)
+                .ToListAsync();
+
+            emails = emails.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+
+            var baseUrl = config["App:BaseUrl"] ?? "https://thuddle.app";
+            var authorName = author.DisplayName ?? author.Email;
+            var subject = $"[{evt.Title}] New update from {authorName}";
+            var htmlBody = BuildPostEmailHtml(evt, post, author, baseUrl);
+
+            logger.LogInformation("Dispatching discussion post email for post {PostId} in event {EventId} to {RecipientCount} recipients ({Audience})", post.Id, evt.Id, emails.Count, "hosts-only");
 
             foreach (var email in emails)
             {
@@ -611,7 +662,7 @@ public static class DiscussionEndpoints
     }
 }
 
-public record CreatePostRequest(string Content, bool SendEmail);
+public record CreatePostRequest(string Content);
 public record ApprovePostRequest(bool Approved);
 public record CreateCommentRequest(string Content);
 public record UpdateDiscussionSettingsRequest(

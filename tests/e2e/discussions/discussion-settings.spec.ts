@@ -1,5 +1,5 @@
 import { test, expect } from '../helpers/fixtures'
-import { STORAGE_STATE, uid, futureDates, contextAs, expectJson } from '../helpers/auth'
+import { uid, futureDates, contextAs, expectJson } from '../helpers/auth'
 
 /** Admin creates a public open event and returns its URL + id. */
 async function createEvent(

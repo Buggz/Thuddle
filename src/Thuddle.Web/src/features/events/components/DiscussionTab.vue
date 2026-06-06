@@ -28,7 +28,6 @@ const error = shallowRef(null)
 // New post form
 const showNewPost = shallowRef(false)
 const newPostContent = ref('')
-const sendEmail = shallowRef(false)
 const posting = shallowRef(false)
 
 // Delete confirmation
@@ -89,15 +88,11 @@ async function createPost() {
     const res = await authFetch(`/api/events/${props.eventId}/discussion`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        content: newPostContent.value,
-        sendEmail: sendEmail.value
-      })
+      body: JSON.stringify({ content: newPostContent.value })
     })
     const post = await res.json()
     posts.value.unshift(post)
     newPostContent.value = ''
-    sendEmail.value = false
     showNewPost.value = false
   } catch (err) {
     error.value = err.message || 'Failed to create post.'
@@ -333,23 +328,22 @@ onBeforeUnmount(() => {
 
         <div v-else class="rounded-2xl border border-slate-200 bg-slate-50/50 p-5 shadow-sm">
           <RichTextEditor v-model="newPostContent" :upload-image="uploadImage" class="bg-white" />
-          <div class="flex items-center justify-between mt-4">
-            <label v-if="isAdmin" class="flex items-center gap-2 text-sm font-bold text-slate-600 cursor-pointer">
-              <input type="checkbox" v-model="sendEmail"
-                class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer" />
-              Email attendees
-            </label>
-            <span v-else />
-            <div class="flex items-center gap-3">
-              <button data-testid="discussion-cancel-post-btn" @click="showNewPost = false; newPostContent = ''"
-                class="px-4 py-2 text-[13px] font-bold text-slate-500 hover:text-slate-800 transition-colors">
-                Cancel
-              </button>
-              <button data-testid="discussion-submit-post-btn" @click="createPost" :disabled="posting || !newPostContent.trim()"
-                class="px-6 py-2 text-[13px] font-bold rounded-xl bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 transition-all shadow-sm">
-                {{ posting ? 'Posting…' : 'Post' }}
-              </button>
-            </div>
+          <p
+            v-if="isAdmin"
+            data-testid="discussion-notification-hint"
+            class="mt-3 text-xs text-slate-500"
+          >
+            All attendees will be notified by email.
+          </p>
+          <div class="flex items-center justify-end gap-3 mt-4">
+            <button data-testid="discussion-cancel-post-btn" @click="showNewPost = false; newPostContent = ''"
+              class="px-4 py-2 text-[13px] font-bold text-slate-500 hover:text-slate-800 transition-colors">
+              Cancel
+            </button>
+            <button data-testid="discussion-submit-post-btn" @click="createPost" :disabled="posting || !newPostContent.trim()"
+              class="px-6 py-2 text-[13px] font-bold rounded-xl bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 transition-all shadow-sm">
+              {{ posting ? 'Posting…' : 'Post' }}
+            </button>
           </div>
         </div>
       </div>
