@@ -494,5 +494,32 @@ export const activityApi = {
       throw err
     }
     return res.json()
+  },
+
+  async getWaitlist(authFetch, eventId, activityId) {
+    const res = await authFetch(`/api/events/${eventId}/activities/${activityId}/waitlist`)
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}))
+      throw new Error(data.error || `HTTP ${res.status}`)
+    }
+    return res.json()
+  },
+
+  async replaceParticipant(authFetch, eventId, activityId, removeUserId, promoteUserId) {
+    const res = await authFetch(
+      `/api/events/${eventId}/activities/${activityId}/participants/${removeUserId}/replace`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ promoteUserId })
+      }
+    )
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}))
+      const err = new Error(data.error || `HTTP ${res.status}`)
+      err.code = data.code
+      throw err
+    }
+    return res.json()
   }
 }

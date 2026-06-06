@@ -329,6 +329,18 @@ export async function signupActivityApi(
   return { ok: resp.ok(), status: resp.status(), body: await resp.text() }
 }
 
+export async function joinWaitlistApi(
+  api: FeatureApiContext,
+  eventId: string,
+  activityId: string,
+): Promise<{ ok: boolean; status: number; body: string }> {
+  const resp = await api.request.post(
+    `${api.baseURL}/api/events/${eventId}/activities/${activityId}/waitlist`,
+    { headers: api.headers },
+  )
+  return { ok: resp.ok(), status: resp.status(), body: await resp.text() }
+}
+
 export async function withdrawActivityApi(
   api: FeatureApiContext,
   eventId: string,

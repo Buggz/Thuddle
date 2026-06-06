@@ -5,6 +5,9 @@ import { useEventsStore } from '@/features/events/stores/events'
 import AddToCalendarButton from '@/features/events/components/AddToCalendarButton.vue'
 import ExpandableHtml from '@/shared/components/ExpandableHtml.vue'
 import ParticipantChip from '@/shared/components/ParticipantChip.vue'
+import RemoveParticipantDialog from './RemoveParticipantDialog.vue'
+import ReplaceFromWaitlistDialog from './ReplaceFromWaitlistDialog.vue'
+import { formatRelative } from '@/shared/utils/relativeTime'
 
 const props = defineProps({
   activity: { type: Object, required: true },
@@ -20,16 +23,28 @@ const signupLoading = ref(false)
 const waitlistLoading = ref(false)
 const waitlistError = ref(null)
 const joinedOpen = ref(false)
+const waitlistOpen = ref(false)
 const participantsFetched = ref(false)
+
+const removeDialogOpen = ref(false)
+const replaceDialogOpen = ref(false)
+const dialogParticipant = ref(null)
 
 const currentEvent = computed(() => eventsStore.byId?.[props.eventId])
 const isAdmin = computed(() => currentEvent.value?.isAdmin ?? false)
 const hasParticipantAccess = computed(() => (currentEvent.value?.hasJoined ?? false) || isAdmin.value)
+const isFullWithWaitlist = computed(() =>
+  props.activity.maxParticipants > 0 &&
+  props.activity.participantCount >= props.activity.maxParticipants &&
+  (props.activity.waitlistCount ?? 0) > 0
+)
 
 const participants = computed(() => {
   const list = store.participants.get(props.activity.id) ?? []
   return [...list].sort((a, b) => new Date(a.signedUpAt) - new Date(b.signedUpAt))
 })
+
+const waitlist = computed(() => store.waitlistByActivity.get(props.activity.id) ?? [])
 
 function formatActivityTime(startsAt, endsAt) {
   if (!startsAt) return ''
@@ -50,22 +65,19 @@ function capacityPercent(activity) {
   return Math.min(100, (activity.participantCount / activity.maxParticipants) * 100)
 }
 
-function formatRelative(iso) {
-  if (!iso) return ''
-  const diff = Date.now() - new Date(iso).getTime()
-  const min = Math.floor(diff / 60000)
-  if (min < 1) return 'just now'
-  if (min < 60) return `${min}m ago`
-  const hr = Math.floor(min / 60)
-  if (hr < 24) return `${hr}h ago`
-  const days = Math.floor(hr / 24)
-  if (days < 7) return `${days}d ago`
-  return new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })
-}
-
 async function toggleJoined() {
   joinedOpen.value = !joinedOpen.value
   if (joinedOpen.value && !participantsFetched.value) {
+    participantsFetched.value = true
+    try {
+      await store.fetchActivity(props.eventId, props.activity.id)
+    } catch { /* best-effort */ }
+  }
+}
+
+async function toggleWaitlist() {
+  waitlistOpen.value = !waitlistOpen.value
+  if (waitlistOpen.value && !participantsFetched.value) {
     participantsFetched.value = true
     try {
       await store.fetchActivity(props.eventId, props.activity.id)
@@ -119,6 +131,20 @@ async function handleLeaveWaitlist() {
   } finally {
     waitlistLoading.value = false
   }
+}
+
+function openRemoveDialog(participant) {
+  dialogParticipant.value = participant
+  removeDialogOpen.value = true
+}
+
+function openReplaceDialog(participant) {
+  dialogParticipant.value = participant
+  replaceDialogOpen.value = true
+}
+
+function onFallBackToRemove() {
+  removeDialogOpen.value = true
 }
 </script>
 
@@ -310,12 +336,97 @@ async function handleLeaveWaitlist() {
           <div
             v-for="p in participants"
             :key="p.userId"
+            class="flex items-center justify-between gap-2"
           >
             <ParticipantChip
               :user-id="p.userId"
               :display-name="p.displayName"
               :profile-picture-url="p.profilePictureUrl"
               :subline="`Signed up ${formatRelative(p.signedUpAt)}`"
+            />
+            <button
+              v-if="isAdmin"
+              type="button"
+              :data-testid="isFullWithWaitlist ? `activity-replace-${p.userId}` : `activity-remove-${p.userId}`"
+              @click="isFullWithWaitlist ? openReplaceDialog(p) : openRemoveDialog(p)"
+              class="shrink-0 text-xs font-medium px-2 py-1 rounded-md border transition-colors"
+              :class="isFullWithWaitlist
+                ? 'border-indigo-200 text-indigo-700 bg-indigo-50 hover:bg-indigo-100'
+                : 'border-red-200 text-red-700 bg-red-50 hover:bg-red-100'"
+            >
+              {{ isFullWithWaitlist ? 'Replace with…' : 'Remove' }}
+            </button>
+          </div>
+        </div>
+      </Transition>
+
+      <template v-if="dialogParticipant">
+        <RemoveParticipantDialog
+          v-model:open="removeDialogOpen"
+          :event-id="eventId"
+          :activity-id="activity.id"
+          :participant="dialogParticipant"
+          :activity-title="activity.title"
+        />
+        <ReplaceFromWaitlistDialog
+          v-model:open="replaceDialogOpen"
+          :event-id="eventId"
+          :activity-id="activity.id"
+          :remove-participant="dialogParticipant"
+          :activity-title="activity.title"
+          @fall-back-to-remove="onFallBackToRemove"
+        />
+      </template>
+    </div>
+
+    <!-- Waitlist disclosure (event participants / admins only, when waitlist is non-empty) -->
+    <div v-if="hasParticipantAccess && (activity.waitlistCount ?? 0) > 0" class="border-t border-gray-100">
+      <button
+        type="button"
+        :data-testid="`activity-waitlist-toggle-${activity.id}`"
+        class="w-full flex items-center justify-between px-5 py-3 text-xs font-semibold text-gray-500 hover:text-gray-700 hover:bg-gray-50 transition-colors"
+        @click="toggleWaitlist"
+      >
+        <span class="flex items-center gap-1.5">
+          <span class="inline-block w-2 h-2 rounded-full bg-amber-400 shrink-0" aria-hidden="true" />
+          Waitlist (<span class="text-amber-700">{{ activity.waitlistCount ?? 0 }}</span>)
+        </span>
+        <svg
+          class="w-4 h-4 transition-transform duration-200"
+          :class="waitlistOpen ? 'rotate-180' : ''"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          viewBox="0 0 24 24"
+        >
+          <path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+        </svg>
+      </button>
+
+      <Transition name="slide">
+        <div
+          v-if="waitlistOpen"
+          :data-testid="`activity-waitlist-list-${activity.id}`"
+          class="border-t border-gray-100 bg-amber-50/40 px-5 pb-4 pt-3 space-y-2"
+        >
+          <p v-if="!waitlist.length" class="text-sm text-gray-400">No-one waiting.</p>
+          <div
+            v-for="(entry, index) in waitlist"
+            :key="entry.userId"
+            :data-testid="`activity-waitlist-entry-${entry.userId}`"
+            class="flex items-center gap-2"
+          >
+            <span
+              :data-testid="`activity-waitlist-position-badge-${entry.userId}`"
+              class="inline-flex items-center justify-center w-6 h-6 rounded-full bg-amber-100 text-amber-800 text-xs font-bold shrink-0"
+            >
+              {{ index + 1 }}
+            </span>
+            <ParticipantChip
+              :user-id="entry.userId"
+              :display-name="entry.displayName"
+              :profile-picture-url="entry.profilePictureUrl"
+              :subline="`Joined waitlist ${formatRelative(entry.joinedWaitlistAt)}`"
             />
           </div>
         </div>

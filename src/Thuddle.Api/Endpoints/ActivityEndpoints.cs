@@ -21,9 +21,11 @@ public static class ActivityEndpoints
         app.MapPost("/api/events/{eventId:guid}/activities/{activityId:guid}/signup", SignUp).RequireAuthorization();
         app.MapDelete("/api/events/{eventId:guid}/activities/{activityId:guid}/signup", WithdrawSignup).RequireAuthorization();
         app.MapDelete("/api/events/{eventId:guid}/activities/{activityId:guid}/participants/{userId:guid}", RemoveParticipant).RequireAuthorization();
+        app.MapGet("/api/events/{eventId:guid}/activities/{activityId:guid}/waitlist", ListWaitlist).RequireAuthorization();
         app.MapPost("/api/events/{eventId:guid}/activities/{activityId:guid}/waitlist", JoinWaitlist).RequireAuthorization();
         app.MapDelete("/api/events/{eventId:guid}/activities/{activityId:guid}/waitlist", LeaveWaitlist).RequireAuthorization();
         app.MapPost("/api/events/{eventId:guid}/activities/{activityId:guid}/waitlist/promote", PromoteWaitlist).RequireAuthorization();
+        app.MapPost("/api/events/{eventId:guid}/activities/{activityId:guid}/participants/{userId:guid}/replace", ReplaceParticipant).RequireAuthorization();
     }
 
     private static string? GetKeycloakId(ClaimsPrincipal user) => EventAuthorization.GetKeycloakId(user);
@@ -202,6 +204,21 @@ public static class ActivityEndpoints
             })
             .ToListAsync(ct);
 
+        var waitlist = await db.EventActivityWaitlistEntries
+            .AsNoTracking()
+            .Where(w => w.EventActivityId == activityId)
+            .OrderBy(w => w.JoinedWaitlistAt)
+            .Select(w => new
+            {
+                w.UserId,
+                displayName = w.User.DisplayName ?? w.User.Email,
+                profilePictureUrl = w.User.ScaledPicturePath != null
+                    ? $"/api/profile/picture/{w.User.KeycloakId}"
+                    : null,
+                w.JoinedWaitlistAt
+            })
+            .ToListAsync(ct);
+
         if (!isAdmin)
         {
             return Results.Ok(new
@@ -222,24 +239,9 @@ public static class ActivityEndpoints
                 activity.CreatedAt,
                 activity.UpdatedAt,
                 participants,
-                waitlist = (object?)null
+                waitlist
             });
         }
-
-        var waitlist = await db.EventActivityWaitlistEntries
-            .AsNoTracking()
-            .Where(w => w.EventActivityId == activityId)
-            .OrderBy(w => w.JoinedWaitlistAt)
-            .Select(w => new
-            {
-                w.UserId,
-                displayName = w.User.DisplayName ?? w.User.Email,
-                profilePictureUrl = w.User.ScaledPicturePath != null
-                    ? $"/api/profile/picture/{w.User.KeycloakId}"
-                    : null,
-                w.JoinedWaitlistAt
-            })
-            .ToListAsync(ct);
 
         return Results.Ok(new
         {
@@ -539,13 +541,20 @@ public static class ActivityEndpoints
         ClaimsPrincipal user,
         ThuddleDbContext db,
         IRealtimeNotifier realtime,
+        NotificationService notifications,
+        ILoggerFactory loggerFactory,
         CancellationToken ct)
     {
+        var logger = loggerFactory.CreateLogger("ActivityEndpoints");
         var keycloakId = GetKeycloakId(user);
         if (keycloakId is null) return Results.Unauthorized();
 
         var dbUser = await db.Users.FirstOrDefaultAsync(u => u.KeycloakId == keycloakId, ct);
         if (dbUser is null) return Results.Unauthorized();
+
+        var activity = await db.EventActivities.AsNoTracking()
+            .FirstOrDefaultAsync(a => a.Id == activityId && a.EventId == eventId, ct);
+        if (activity is null) return Results.NotFound(new { error = "Activity not found." });
 
         var participant = await db.EventActivityParticipants.AsTracking()
             .FirstOrDefaultAsync(p => p.EventActivityId == activityId && p.UserId == dbUser.Id, ct);
@@ -558,6 +567,56 @@ public static class ActivityEndpoints
             .CountAsync(p => p.EventActivityId == activityId, ct);
 
         await realtime.ActivityParticipantChangedAsync(eventId, activityId, dbUser.Id, joined: false, participantCount, ct);
+
+        if (activity.MaxParticipants.HasValue && participantCount < activity.MaxParticipants.Value)
+        {
+            var nextWaitlistEntry = await db.EventActivityWaitlistEntries
+                .Where(w => w.EventActivityId == activityId)
+                .OrderBy(w => w.JoinedWaitlistAt)
+                .AsTracking()
+                .FirstOrDefaultAsync(ct);
+
+            if (nextWaitlistEntry is not null)
+            {
+                var promotedUserId = nextWaitlistEntry.UserId;
+                var promotedParticipant = new EventActivityParticipant
+                {
+                    Id = Guid.NewGuid(),
+                    EventActivityId = activityId,
+                    UserId = promotedUserId,
+                    SignedUpAt = DateTime.UtcNow
+                };
+
+                db.EventActivityWaitlistEntries.Remove(nextWaitlistEntry);
+                db.EventActivityParticipants.Add(promotedParticipant);
+
+                try
+                {
+                    await db.SaveChangesAsync(ct);
+
+                    var newParticipantCount = await db.EventActivityParticipants
+                        .CountAsync(p => p.EventActivityId == activityId, ct);
+                    var newWaitlistCount = await db.EventActivityWaitlistEntries
+                        .CountAsync(w => w.EventActivityId == activityId, ct);
+
+                    await notifications.NotifyPromotedFromWaitlist(promotedUserId, eventId, activityId, activity.Title, ct);
+                    await realtime.ActivityWaitlistChangedAsync(eventId, activityId, promotedUserId, joined: false, newWaitlistCount, ct);
+                    await realtime.ActivityParticipantChangedAsync(eventId, activityId, promotedUserId, joined: true, newParticipantCount, ct);
+
+                    logger.LogInformation(
+                        "Auto-promoted user {UserId} from waitlist into activity {ActivityId} in event {EventId} after withdraw by user {WithdrawingUserId}.",
+                        promotedUserId, activityId, eventId, dbUser.Id);
+                }
+                catch (DbUpdateException ex)
+                {
+                    logger.LogWarning(ex,
+                        "Auto-promote race: failed to promote waitlist user {UserId} into activity {ActivityId} in event {EventId}.",
+                        promotedUserId, activityId, eventId);
+                    db.Entry(nextWaitlistEntry).State = EntityState.Detached;
+                    db.Entry(promotedParticipant).State = EntityState.Detached;
+                }
+            }
+        }
 
         return Results.NoContent();
     }
@@ -642,6 +701,49 @@ public static class ActivityEndpoints
         {
             return Results.BadRequest(new { error = ex.Message });
         }
+    }
+
+    // ─── GET /api/events/{eventId}/activities/{activityId}/waitlist ───────────
+
+    private static async Task<IResult> ListWaitlist(
+        Guid eventId,
+        Guid activityId,
+        ClaimsPrincipal user,
+        ThuddleDbContext db,
+        CancellationToken ct)
+    {
+        var keycloakId = GetKeycloakId(user);
+        if (keycloakId is null) return Results.Unauthorized();
+
+        var dbUser = await db.Users.AsNoTracking()
+            .Where(u => u.KeycloakId == keycloakId)
+            .Select(u => new { u.Id })
+            .FirstOrDefaultAsync(ct);
+        if (dbUser is null) return Results.Unauthorized();
+
+        if (!await IsEventAdmin(db, eventId, dbUser.Id, ct))
+            return Results.Forbid();
+
+        var activityExists = await db.EventActivities
+            .AnyAsync(a => a.Id == activityId && a.EventId == eventId, ct);
+        if (!activityExists) return Results.NotFound(new { error = "Activity not found." });
+
+        var waitlist = await db.EventActivityWaitlistEntries
+            .AsNoTracking()
+            .Where(w => w.EventActivityId == activityId)
+            .OrderBy(w => w.JoinedWaitlistAt)
+            .Select(w => new
+            {
+                w.UserId,
+                displayName = w.User.DisplayName ?? w.User.Email,
+                avatarUrl = w.User.ScaledPicturePath != null
+                    ? $"/api/profile/picture/{w.User.KeycloakId}"
+                    : null,
+                w.JoinedWaitlistAt
+            })
+            .ToListAsync(ct);
+
+        return Results.Ok(waitlist);
     }
 
     // ─── POST /api/events/{eventId}/activities/{activityId}/waitlist ──────────
@@ -825,6 +927,97 @@ public static class ActivityEndpoints
 
         return Results.Ok(new { userId = request.UserId, signedUpAt = now, participantCount, waitlistCount });
     }
+
+    // ─── POST /api/events/{eventId}/activities/{activityId}/participants/{userId}/replace ──
+
+    private static async Task<IResult> ReplaceParticipant(
+        Guid eventId,
+        Guid activityId,
+        Guid userId,
+        ReplaceParticipantRequest request,
+        IValidator<ReplaceParticipantRequest> validator,
+        ClaimsPrincipal user,
+        ThuddleDbContext db,
+        IRealtimeNotifier realtime,
+        NotificationService notifications,
+        ILoggerFactory loggerFactory,
+        CancellationToken ct)
+    {
+        var logger = loggerFactory.CreateLogger("ActivityEndpoints");
+        var keycloakId = GetKeycloakId(user);
+        if (keycloakId is null) return Results.Unauthorized();
+
+        var dbUser = await db.Users.FirstOrDefaultAsync(u => u.KeycloakId == keycloakId, ct);
+        if (dbUser is null) return Results.Unauthorized();
+
+        if (!await IsEventAdmin(db, eventId, dbUser.Id, ct))
+            return Results.Forbid();
+
+        if (ValidationError(await validator.ValidateAsync(request, ct)) is { } err)
+            return err;
+
+        var activity = await db.EventActivities.AsNoTracking()
+            .FirstOrDefaultAsync(a => a.Id == activityId && a.EventId == eventId, ct);
+        if (activity is null) return Results.NotFound(new { error = "Activity not found." });
+
+        var participant = await db.EventActivityParticipants.AsTracking()
+            .FirstOrDefaultAsync(p => p.EventActivityId == activityId && p.UserId == userId, ct);
+        if (participant is null) return Results.NotFound(new { error = "Participant not found." });
+
+        var waitlistEntry = await db.EventActivityWaitlistEntries.AsTracking()
+            .FirstOrDefaultAsync(w => w.EventActivityId == activityId && w.UserId == request.PromoteUserId, ct);
+        if (waitlistEntry is null)
+            return Results.Conflict(new { error = "That user is no longer on the waitlist.", code = "waitlist_entry_gone" });
+
+        if (request.PromoteUserId == userId)
+            return Results.BadRequest(new { error = "Cannot replace a user with themselves." });
+
+        var alreadyParticipant = await db.EventActivityParticipants
+            .AnyAsync(p => p.EventActivityId == activityId && p.UserId == request.PromoteUserId, ct);
+        if (alreadyParticipant)
+            return Results.Conflict(new { error = "That user is already a participant of this activity." });
+
+        var now = DateTime.UtcNow;
+        var promotedParticipant = new EventActivityParticipant
+        {
+            Id = Guid.NewGuid(),
+            EventActivityId = activityId,
+            UserId = request.PromoteUserId,
+            SignedUpAt = now
+        };
+
+        db.EventActivityParticipants.Remove(participant);
+        db.EventActivityWaitlistEntries.Remove(waitlistEntry);
+        db.EventActivityParticipants.Add(promotedParticipant);
+
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException)
+        {
+            return Results.Conflict(new { error = "A concurrent change prevented the replace. Please try again.", code = "replace_conflict" });
+        }
+
+        var participantCount = await db.EventActivityParticipants
+            .CountAsync(p => p.EventActivityId == activityId, ct);
+        var waitlistCount = await db.EventActivityWaitlistEntries
+            .CountAsync(w => w.EventActivityId == activityId, ct);
+
+        if (dbUser.Id != userId)
+            await notifications.NotifyRemovedFromActivity(userId, eventId, activityId, activity.Title, ct);
+        await notifications.NotifyPromotedFromWaitlist(request.PromoteUserId, eventId, activityId, activity.Title, ct);
+
+        await realtime.ActivityParticipantChangedAsync(eventId, activityId, userId, joined: false, participantCount, ct);
+        await realtime.ActivityWaitlistChangedAsync(eventId, activityId, request.PromoteUserId, joined: false, waitlistCount, ct);
+        await realtime.ActivityParticipantChangedAsync(eventId, activityId, request.PromoteUserId, joined: true, participantCount, ct);
+
+        logger.LogInformation(
+            "Replaced user {RemovedUserId} with waitlist user {PromotedUserId} in activity {ActivityId} of event {EventId} (by admin {AdminUserId}).",
+            userId, request.PromoteUserId, activityId, eventId, dbUser.Id);
+
+        return Results.Ok(new { removedUserId = userId, promotedUserId = request.PromoteUserId, participantCount, waitlistCount });
+    }
 }
 
 // ─── Request records ──────────────────────────────────────────────────────────
@@ -846,3 +1039,5 @@ public record UpdateActivityRequest(
     bool? HiddenFromNonParticipants);
 
 public record PromoteWaitlistRequest(Guid UserId, bool AllowOverflow);
+
+public record ReplaceParticipantRequest(Guid PromoteUserId);
